@@ -126,6 +126,48 @@ class ErinnerungAusloesenTest {
     }
 
     @Test
+    fun `eine ausgelassene Faelligkeit erzeugt keine Benachrichtigung`() = runTest {
+        val ausgelassen = morgens.copy(status = FaelligkeitStatus.AUSGELASSEN)
+        val erinnerungen = FakeErinnerungRepository(
+            listOf(Erinnerung(id = 1, faelligkeitId = 10, zeitpunkt = LocalDateTime.of(2026, 3, 2, 8, 0))),
+        )
+        val anzeige = FakeAnzeige()
+        val use = ErinnerungAusloesen(
+            erinnerungen = erinnerungen,
+            faelligkeiten = FakeFaelligkeitRepository(listOf(ausgelassen)),
+            aktivitaeten = FakeAktivitaetRepository(listOf(tabletten)),
+            anzeige = anzeige,
+            uhr = uhrUm(8, 0),
+        )
+
+        use()
+
+        assertEquals(emptyList(), anzeige.gezeigt)
+        assertEquals(true, erinnerungen.stand.value.single().ausgeloest)
+    }
+
+    @Test
+    fun `eine verpasste Faelligkeit erzeugt keine Benachrichtigung`() = runTest {
+        val verpasst = morgens.copy(status = FaelligkeitStatus.VERPASST)
+        val erinnerungen = FakeErinnerungRepository(
+            listOf(Erinnerung(id = 1, faelligkeitId = 10, zeitpunkt = LocalDateTime.of(2026, 3, 2, 8, 0))),
+        )
+        val anzeige = FakeAnzeige()
+        val use = ErinnerungAusloesen(
+            erinnerungen = erinnerungen,
+            faelligkeiten = FakeFaelligkeitRepository(listOf(verpasst)),
+            aktivitaeten = FakeAktivitaetRepository(listOf(tabletten)),
+            anzeige = anzeige,
+            uhr = uhrUm(8, 0),
+        )
+
+        use()
+
+        assertEquals(emptyList(), anzeige.gezeigt)
+        assertEquals(true, erinnerungen.stand.value.single().ausgeloest)
+    }
+
+    @Test
     fun `noch nicht faellige Erinnerungen bleiben unberuehrt`() = runTest {
         val erinnerungen = FakeErinnerungRepository(
             listOf(Erinnerung(id = 1, faelligkeitId = 10, zeitpunkt = LocalDateTime.of(2026, 3, 2, 20, 0))),
@@ -158,5 +200,30 @@ class ErinnerungAusloesenTest {
         use(10)
 
         assertEquals(LocalDateTime.of(2026, 3, 2, 8, 20), erinnerungen.stand.value.single().zeitpunkt)
+    }
+
+    @Test
+    fun `Spaeter loescht nur die noch nicht ausgeloesten Erinnerungen`() = runTest {
+        val erinnerungen = FakeErinnerungRepository(
+            listOf(
+                Erinnerung(id = 1, faelligkeitId = 10, zeitpunkt = LocalDateTime.of(2026, 3, 2, 8, 0), ausgeloest = true),
+                Erinnerung(id = 2, faelligkeitId = 10, zeitpunkt = LocalDateTime.of(2026, 3, 2, 8, 0), ausgeloest = false),
+            ),
+        )
+        val use = ErinnerungSpaeter(
+            erinnerungen = erinnerungen,
+            faelligkeiten = FakeFaelligkeitRepository(listOf(morgens)),
+            aktivitaeten = FakeAktivitaetRepository(listOf(tabletten)),
+            uhr = uhrUm(8, 5),
+        )
+
+        use(10)
+
+        val ergebnis = erinnerungen.stand.value
+        assertEquals(2, ergebnis.size, "Es sollten genau 2 Erinnerungen vorhanden sein")
+        val ausgeloest = ergebnis.find { it.id == 1L }
+        val spaeter = ergebnis.find { it.zeitpunkt == LocalDateTime.of(2026, 3, 2, 8, 20) }
+        assertEquals(true, ausgeloest?.ausgeloest, "Die ausgelöste Erinnerung sollte noch vorhanden sein")
+        assertEquals(LocalDateTime.of(2026, 3, 2, 8, 20), spaeter?.zeitpunkt, "Die neue Erinnerung sollte verschoben sein")
     }
 }

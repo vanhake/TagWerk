@@ -166,7 +166,7 @@ class FakeErinnerungRepository(start: List<Erinnerung> = emptyList()) : Erinneru
     }
 
     override suspend fun entfernenFuerFaelligkeit(faelligkeitId: Long) {
-        stand.value = stand.value.filterNot { it.faelligkeitId == faelligkeitId }
+        stand.value = stand.value.filterNot { it.faelligkeitId == faelligkeitId && !it.ausgeloest }
     }
 }
 
