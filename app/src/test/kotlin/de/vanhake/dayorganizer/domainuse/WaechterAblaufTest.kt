@@ -75,19 +75,43 @@ class WaechterAblaufTest {
     }
 
     @Test
-    fun `eine heute frueh angelegte Faelligkeit wird nicht sofort verpasst`() = runTest {
-        val faelligkeiten = FakeFaelligkeitRepository()
+    fun `eine heute faellige Aufgabe bleibt bis Mitternacht offen`() = runTest {
+        // Uhr steht auf 12:00, drei Stunden nach der geplanten Zeit (08:00) der Aktivitaet.
+        // Die heutige Faelligkeit existiert schon vor diesem Lauf - so, wie sie eine
+        // fruehere Materialisierung (z.B. der letzte naechtliche Lauf) angelegt haette.
+        // Nur so trifft der Verpasst-Check in diesem Lauf ueberhaupt auf sie: WaechterAblauf
+        // schliesst zuerst und materialisiert erst danach, eine in diesem Lauf frisch
+        // angelegte Faelligkeit wuerde vom Schliessen-Schritt gar nicht mehr gesehen -
+        // unabhaengig davon, wonach er filtert. Die Kulanzregel: solange die Periode
+        // (heute) noch nicht vorbei ist, gilt eine Faelligkeit nicht als verpasst, auch
+        // wenn ihr Zielzeitpunkt schon verstrichen ist.
+        val nachmittagsUhr = Clock.fixed(
+            LocalDateTime.of(2026, 3, 2, 12, 0).atZone(zone).toInstant(),
+            zone,
+        )
+        val heutigeFaelligkeit = Faelligkeit(
+            id = 1,
+            aktivitaetId = 1,
+            periodeVon = LocalDate.of(2026, 3, 2),
+            periodeBis = LocalDate.of(2026, 3, 2),
+            geplantFuer = LocalDateTime.of(2026, 3, 2, 8, 0),
+            sollAnzahl = 1,
+        )
+        val faelligkeiten = FakeFaelligkeitRepository(listOf(heutigeFaelligkeit))
         val aktivitaeten = FakeAktivitaetRepository(listOf(tabletten))
         val ablauf = WaechterAblauf(
-            verpassteAbschliessen = VerpassteAbschliessen(faelligkeiten, uhr),
+            verpassteAbschliessen = VerpassteAbschliessen(faelligkeiten, nachmittagsUhr),
             materialisieren = FaelligkeitenMaterialisieren(
-                aktivitaeten, faelligkeiten, FakeErinnerungRepository(), ZeitplanRechner(), uhr,
+                aktivitaeten, faelligkeiten, FakeErinnerungRepository(), ZeitplanRechner(), nachmittagsUhr,
             ),
             alarmNeuPlanen = {},
         )
 
         ablauf()
 
-        assertTrue(faelligkeiten.stand.value.all { it.status == FaelligkeitStatus.OFFEN })
+        assertEquals(
+            FaelligkeitStatus.OFFEN,
+            faelligkeiten.stand.value.first { it.id == 1L }.status,
+        )
     }
 }
