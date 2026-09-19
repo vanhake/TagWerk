@@ -4,9 +4,11 @@ import de.vanhake.dayorganizer.platform.alarm.AlarmPlaner
 import javax.inject.Inject
 
 /**
- * Die Selbstheilung der App. Reihenfolge ist bindend: erst abgelaufene
- * Faelligkeiten schliessen, dann den Vorausblick auffuellen, dann den
- * naechsten Alarm setzen.
+ * Die Selbstheilung der App: Faelligkeiten schliessen, Vorausblick auffuellen,
+ * Alarm neu planen. Die Reihenfolge ist bewusst, aber derzeit nicht zwingend:
+ * VerpassteAbschliessen arbeitet auf Tagen, nicht Zeitpunkten, daher beruehrt es
+ * nicht, was gerade fuer heute angelegt wurde. Schliessen zuerst bleibt sicherer,
+ * falls die Pruefung irgendwann zeitgenau wird.
  */
 class WaechterAblauf(
     private val verpassteAbschliessen: VerpassteAbschliessen,
