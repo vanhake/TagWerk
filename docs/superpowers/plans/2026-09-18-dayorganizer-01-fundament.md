@@ -2627,9 +2627,12 @@ interface FaelligkeitDao {
     @Query("SELECT * FROM faelligkeit WHERE id = :id")
     suspend fun nachId(id: Long): FaelligkeitEntity?
 
+    // Dieselbe Sortierkonvention wie beobachteTag: terminierte Eintraege nach
+    // Uhrzeit, Zaehlziele ohne Sollzeitpunkt dahinter. Ohne "geplantFuer IS NULL"
+    // sortiert SQLite NULL nach vorn -- also genau andersherum.
     @Query(
         "SELECT * FROM faelligkeit WHERE periodeBis >= :von AND periodeVon <= :bis " +
-            "ORDER BY periodeVon, geplantFuer",
+            "ORDER BY periodeVon, geplantFuer IS NULL, geplantFuer",
     )
     suspend fun fuerZeitraum(von: LocalDate, bis: LocalDate): List<FaelligkeitEntity>
 
@@ -2727,8 +2730,18 @@ abstract class DayOrganizerDatenbank : RoomDatabase() {
 
 - [ ] **Step 5: Test laufen lassen und grünen Lauf bestätigen**
 
+Zwei Tests gehören noch dazu, weil sie Zusagen festnageln, die sonst nur in
+der SQL stehen:
+
+- `Zaehlziele_stehen_hinter_den_terminierten_Eintraegen_des_Tages` — drei
+  Fälligkeiten eines Tages in der Reihenfolge 20:00, Zählziel, 08:00 anlegen
+  und prüfen, dass `fuerZeitraum` sie als 08:00, 20:00, Zählziel liefert. Gegen
+  ein schlichtes `ORDER BY periodeVon, geplantFuer` schlägt der Test fehl.
+- `leeres_Journal_hat_Kontostand_null` — `kontostandJetzt()` auf einer frischen
+  Datenbank ist 0, nicht null.
+
 Run: `./gradlew :app:testDebugUnitTest --tests "*DaoTest*"`
-Expected: `BUILD SUCCESSFUL`, 4 Tests bestanden. Die Datei `app/schemas/de.vanhake.dayorganizer.data.db.DayOrganizerDatenbank/1.json` ist entstanden.
+Expected: `BUILD SUCCESSFUL`, 6 Tests bestanden. Die Datei `app/schemas/de.vanhake.dayorganizer.data.db.DayOrganizerDatenbank/1.json` ist entstanden und wird mit eingecheckt — der Migrationstest in Task 14 liest sie.
 
 - [ ] **Step 6: Commit**
 
