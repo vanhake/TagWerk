@@ -3,6 +3,7 @@ package de.vanhake.dayorganizer.domain.rechner
 import de.vanhake.dayorganizer.domain.model.Aktivitaet
 import de.vanhake.dayorganizer.domain.model.Faelligkeit
 import de.vanhake.dayorganizer.domain.model.Zeitplan
+import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalDate
 
@@ -20,7 +21,8 @@ class ZeitplanRechner {
     ): List<Faelligkeit> = when (val plan = aktivitaet.zeitplan) {
         is Zeitplan.FesteZeiten -> festeZeiten(aktivitaet, plan, von, bis)
         is Zeitplan.Intervall -> intervall(aktivitaet, plan, von, bis)
-        else -> emptyList()
+        is Zeitplan.Tagesziel -> tagesziel(aktivitaet, plan, von, bis)
+        is Zeitplan.Wochenziel -> wochenziel(aktivitaet, plan, von, bis)
     }
 
     private fun festeZeiten(
@@ -70,6 +72,44 @@ class ZeitplanRechner {
                     }
                     .toList()
             }
+    }
+
+    private fun tagesziel(
+        aktivitaet: Aktivitaet,
+        plan: Zeitplan.Tagesziel,
+        von: LocalDate,
+        bis: LocalDate,
+    ): List<Faelligkeit> = tageIm(von, bis)
+        .filter { it.dayOfWeek in plan.wochentage }
+        .map { tag ->
+            Faelligkeit(
+                aktivitaetId = aktivitaet.id,
+                periodeVon = tag,
+                periodeBis = tag,
+                geplantFuer = null,
+                sollAnzahl = plan.anzahl,
+            )
+        }
+
+    private fun wochenziel(
+        aktivitaet: Aktivitaet,
+        plan: Zeitplan.Wochenziel,
+        von: LocalDate,
+        bis: LocalDate,
+    ): List<Faelligkeit> {
+        val ersterMontag = von.with(java.time.temporal.TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+        return generateSequence(ersterMontag) { it.plusWeeks(1) }
+            .takeWhile { !it.isAfter(bis) }
+            .map { montag ->
+                Faelligkeit(
+                    aktivitaetId = aktivitaet.id,
+                    periodeVon = montag,
+                    periodeBis = montag.plusDays(6),
+                    geplantFuer = null,
+                    sollAnzahl = plan.anzahl,
+                )
+            }
+            .toList()
     }
 
     private fun tageIm(von: LocalDate, bis: LocalDate): List<LocalDate> =
