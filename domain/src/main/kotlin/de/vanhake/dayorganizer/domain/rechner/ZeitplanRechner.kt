@@ -31,7 +31,7 @@ class ZeitplanRechner {
     fun anstossZeitpunkteFuer(
         aktivitaet: Aktivitaet,
         faelligkeit: Faelligkeit,
-    ): List<java.time.LocalDateTime> = when (val plan = aktivitaet.zeitplan) {
+    ): List<LocalDateTime> = when (val plan = aktivitaet.zeitplan) {
         is Zeitplan.FesteZeiten, is Zeitplan.Intervall ->
             listOfNotNull(faelligkeit.geplantFuer)
 
@@ -41,7 +41,7 @@ class ZeitplanRechner {
         is Zeitplan.Wochenziel ->
             plan.anstoss
                 .map { faelligkeit.periodeVon.with(
-                    java.time.temporal.TemporalAdjusters.nextOrSame(it.tag),
+                    TemporalAdjusters.nextOrSame(it.tag),
                 ).atTime(it.zeit) }
                 .filter { !it.toLocalDate().isAfter(faelligkeit.periodeBis) }
                 .sorted()
@@ -119,7 +119,7 @@ class ZeitplanRechner {
         von: LocalDate,
         bis: LocalDate,
     ): List<Faelligkeit> {
-        val ersterMontag = von.with(java.time.temporal.TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+        val ersterMontag = von.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
         return generateSequence(ersterMontag) { it.plusWeeks(1) }
             .takeWhile { !it.isAfter(bis) }
             .map { montag ->

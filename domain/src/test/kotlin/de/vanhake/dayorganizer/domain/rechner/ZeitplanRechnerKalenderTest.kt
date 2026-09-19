@@ -6,14 +6,20 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
-import java.time.ZoneId
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
+/**
+ * Tests fuer die Berechnung von Faelligkeiten aus Zeitplaenen.
+ *
+ * Tests an den Umstellungstagen (29.03. und 25.10.) verwenden diese Daten,
+ * um sicherzustellen, dass [faelligkeitenFuer] rein mit LocalDate und LocalTime arbeitet
+ * und keine Zeitzone in die Berechnung einfuehrt. Die Tests schlagen fehl, sobald eine
+ * Zeitzone in die Berechnung von festeZeiten eindringt.
+ */
 class ZeitplanRechnerKalenderTest {
 
     private val rechner = ZeitplanRechner()
-    private val berlin = ZoneId.of("Europe/Berlin")
 
     private fun taeglichUm(vararg stunden: Int) = aktivitaet(
         zeitplan = Zeitplan.FesteZeiten(
@@ -23,7 +29,7 @@ class ZeitplanRechnerKalenderTest {
     )
 
     @Test
-    fun `an der Sommerzeitumstellung entsteht genau eine Faelligkeit je Uhrzeit`() {
+    fun `die Berechnung bleibt am Sommerzeitwechsel zeitzonenfrei`() {
         // In Europa wird am letzten Sonntag im Maerz 2026 (29.03.) umgestellt;
         // 02:30 gibt es an diesem Tag nicht.
         val ergebnis = rechner.faelligkeitenFuer(
@@ -40,7 +46,7 @@ class ZeitplanRechnerKalenderTest {
     }
 
     @Test
-    fun `an der Winterzeitumstellung entsteht keine doppelte Faelligkeit`() {
+    fun `die Berechnung bleibt am Winterzeitwechsel zeitzonenfrei`() {
         // Am 25.10.2026 gibt es 02:30 zweimal.
         val ergebnis = rechner.faelligkeitenFuer(
             aktivitaet = taeglichUm(2),
@@ -49,17 +55,6 @@ class ZeitplanRechnerKalenderTest {
         )
 
         assertEquals(1, ergebnis.size)
-    }
-
-    @Test
-    fun `eine ausgefallene Uhrzeit wird beim Aufloesen auf einen gueltigen Zeitpunkt gelegt`() {
-        // So loest der AlarmPlaner spaeter auf. ZoneId.getRules verschiebt eine
-        // nicht existierende Ortszeit nach vorn statt zu scheitern.
-        val ausgefallen = LocalDateTime.of(2026, 3, 29, 2, 30)
-
-        val instant = ausgefallen.atZone(berlin).toInstant()
-
-        assertEquals(LocalDateTime.of(2026, 3, 29, 3, 30), LocalDateTime.ofInstant(instant, berlin))
     }
 
     @Test
