@@ -19,6 +19,8 @@ class BerechtigungsPruefer @Inject constructor(
     @ApplicationContext private val kontext: Context,
 ) {
     fun stand(): BerechtigungsStand = BerechtigungsStand(
+        // Wenn ein Service nicht verfuegbar ist: lieber warnen als schweigen.
+        // Eine fehlende Erinnerung ist schlimmer als ein abgelentes Banner.
         benachrichtigungenErlaubt = ContextCompat.checkSelfPermission(
             kontext,
             Manifest.permission.POST_NOTIFICATIONS,
@@ -26,7 +28,7 @@ class BerechtigungsPruefer @Inject constructor(
         exakteAlarmeErlaubt = kontext.getSystemService<AlarmManager>()
             ?.canScheduleExactAlarms() ?: false,
         akkuOptimierungAktiv = kontext.getSystemService<PowerManager>()
-            ?.isIgnoringBatteryOptimizations(kontext.packageName)?.not() ?: false,
+            ?.isIgnoringBatteryOptimizations(kontext.packageName)?.not() ?: true,
     )
 }
 
