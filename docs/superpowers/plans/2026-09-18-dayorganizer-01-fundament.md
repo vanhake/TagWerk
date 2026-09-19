@@ -5063,7 +5063,37 @@ class AlarmPlanerZeitzoneTest {
 Run: `./gradlew :app:testDebugUnitTest --tests "*AlarmPlanerZeitzoneTest*"`
 Expected: `BUILD SUCCESSFUL`, 3 Tests bestanden.
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 10: Den rollierenden Alarm selbst festnageln**
+
+`alsEpochMillis` ist geprüft, `neuPlanen` bisher nicht — und genau dort steht
+die zentrale Zusage des Designs. Bricht später jemand die `PendingIntent`-
+Gleichheit zwischen Setz- und Abbruchpfad, feuert ein verwaister Alarm für
+immer weiter, ohne dass ein Test das bemerkt.
+
+Schreibe `app/src/test/kotlin/de/vanhake/dayorganizer/platform/alarm/AlarmPlanerTest.kt`
+als Robolectric-Test (`@Config(sdk = [33])`), mit
+`ApplicationProvider.getApplicationContext<Context>()`, einem
+`FakeErinnerungRepository` und fester Uhr. `org.robolectric.Shadows.shadowOf`
+liefert einen `ShadowAlarmManager`, über den sich die gesetzten Alarme lesen
+lassen. Abgedeckt gehören:
+
+- genau ein Alarm, und zwar auf die **frühere** von zwei Erinnerungen
+- zweimal `neuPlanen()` ergibt weiterhin genau einen Alarm, nicht zwei
+- nach `alsAusgeloestMarkieren` der frühesten zeigt der Alarm auf die nächste
+- ohne fällige Erinnerung wird der Alarm abgebrochen — erst einen setzen, dann
+  leeren und neu planen, damit der Test das Abbrechen belegt und nicht nur die
+  Abwesenheit
+- bereits ausgelöste Erinnerungen werden übersprungen
+
+Dazu in `ErinnerungenMaterialisierenTest` noch
+`ein Wochenziel mit Anstoss erzeugt beim zweiten Lauf keine doppelte Erinnerung` —
+Zählziele laufen über `anstossZeitpunkteFuer` und haben `geplantFuer == null`,
+also genau den Fall, für den es den `ZIEL`-Platzhalter gibt.
+
+Run: `./gradlew :app:testDebugUnitTest --tests "*AlarmPlanerTest*"`
+Expected: `BUILD SUCCESSFUL`, 5 Tests bestanden.
+
+- [ ] **Step 11: Commit**
 
 ```bash
 git add app/ domain/
