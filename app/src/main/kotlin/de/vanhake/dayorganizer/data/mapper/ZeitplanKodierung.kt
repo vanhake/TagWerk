@@ -67,8 +67,8 @@ object ZeitplanKodierung {
 
         INTERVALL -> Zeitplan.Intervall(
             alleNStunden = requireNotNull(felder.intervallStunden) { "Intervall ohne Stundenwert" },
-            von = LocalTime.parse(requireNotNull(felder.fensterVon)),
-            bis = LocalTime.parse(requireNotNull(felder.fensterBis)),
+            von = parseZeit(requireNotNull(felder.fensterVon) { "Intervall ohne Fenster-Start" }, "Intervall.fensterVon"),
+            bis = parseZeit(requireNotNull(felder.fensterBis) { "Intervall ohne Fenster-Ende" }, "Intervall.fensterBis"),
             wochentage = dekodiereTage(felder.wochentage),
         )
 
@@ -82,10 +82,7 @@ object ZeitplanKodierung {
             anzahl = requireNotNull(felder.zielAnzahl) { "Wochenziel ohne Anzahl" },
             anstoss = felder.anstoss.split(",")
                 .filter { it.isNotBlank() }
-                .map {
-                    val (tag, zeit) = it.split("@", limit = 2)
-                    Anstoss(DayOfWeek.valueOf(tag), LocalTime.parse(zeit))
-                },
+                .map { dekodiereAnstoss(it) },
         )
 
         else -> error("Unbekannter Zeitplantyp: ${felder.typ}")
@@ -95,17 +92,50 @@ object ZeitplanKodierung {
         schwellen.joinToString(",") { "${it.perioden}:${it.bonus}" }
 
     fun dekodiereSchwellen(text: String): List<SerienSchwelle> =
-        text.split(",").filter { it.isNotBlank() }.map {
-            val (perioden, bonus) = it.split(":", limit = 2)
-            SerienSchwelle(perioden.toInt(), bonus.toInt())
+        text.split(",").filter { it.isNotBlank() }.map { eintrag ->
+            val teile = eintrag.split(":", limit = 2)
+            require(teile.size == 2) { "Ungueltiger Serienschwellen-Eintrag: \"$eintrag\"" }
+            SerienSchwelle(
+                perioden = parseZahl(teile[0], eintrag),
+                bonus = parseZahl(teile[1], eintrag),
+            )
         }
+
+    private fun dekodiereAnstoss(eintrag: String): Anstoss {
+        val teile = eintrag.split("@", limit = 2)
+        require(teile.size == 2) { "Ungueltiger Anstoss-Eintrag: \"$eintrag\"" }
+        return Anstoss(
+            tag = parseTag(teile[0], eintrag),
+            zeit = parseZeit(teile[1], eintrag),
+        )
+    }
 
     private fun kodiereTage(tage: Set<DayOfWeek>): String =
         tage.sorted().joinToString(",") { it.name }
 
     private fun dekodiereTage(text: String): Set<DayOfWeek> =
-        text.split(",").filter { it.isNotBlank() }.map { DayOfWeek.valueOf(it) }.toSet()
+        text.split(",").filter { it.isNotBlank() }.map { parseTag(it, it) }.toSet()
 
     private fun dekodiereZeiten(text: String): List<LocalTime> =
-        text.split(",").filter { it.isNotBlank() }.map { LocalTime.parse(it) }
+        text.split(",").filter { it.isNotBlank() }.map { parseZeit(it, it) }
+
+    /** Wandelt [text] in einen [DayOfWeek], mit [quelle] (Eintrag oder Feldname) in der Fehlermeldung. */
+    private fun parseTag(text: String, quelle: String): DayOfWeek =
+        try {
+            DayOfWeek.valueOf(text)
+        } catch (e: IllegalArgumentException) {
+            throw IllegalArgumentException("Ungueltiger Wochentag \"$text\" in \"$quelle\"", e)
+        }
+
+    /** Wandelt [text] in eine [LocalTime], mit [quelle] (Eintrag oder Feldname) in der Fehlermeldung. */
+    private fun parseZeit(text: String, quelle: String): LocalTime =
+        try {
+            LocalTime.parse(text)
+        } catch (e: java.time.format.DateTimeParseException) {
+            throw IllegalArgumentException("Ungueltige Uhrzeit \"$text\" in \"$quelle\"", e)
+        }
+
+    /** Wandelt [text] in eine Zahl, mit [quelle] (der ganze Eintrag) in der Fehlermeldung. */
+    private fun parseZahl(text: String, quelle: String): Int =
+        text.toIntOrNull() ?: throw IllegalArgumentException("Ungueltige Zahl \"$text\" in \"$quelle\"")
 }

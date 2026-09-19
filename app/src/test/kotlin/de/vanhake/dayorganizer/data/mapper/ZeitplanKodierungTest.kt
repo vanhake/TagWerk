@@ -7,6 +7,8 @@ import java.time.DayOfWeek
 import java.time.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class ZeitplanKodierungTest {
 
@@ -75,5 +77,82 @@ class ZeitplanKodierungTest {
             ZeitplanKodierung.dekodiereSchwellen(ZeitplanKodierung.kodiereSchwellen(schwellen)),
         )
         assertEquals(emptyList(), ZeitplanKodierung.dekodiereSchwellen(""))
+    }
+
+    @Test
+    fun `leere Wochentage bei festen Zeiten ueberstehen den Rundlauf`() {
+        rundlauf(
+            Zeitplan.FesteZeiten(
+                zeiten = listOf(LocalTime.of(8, 0)),
+                wochentage = emptySet(),
+            ),
+        )
+    }
+
+    @Test
+    fun `Uhrzeit mit Sekunden uebersteht den Rundlauf`() {
+        rundlauf(
+            Zeitplan.FesteZeiten(
+                zeiten = listOf(LocalTime.of(8, 0, 30)),
+                wochentage = setOf(DayOfWeek.MONDAY),
+            ),
+        )
+    }
+
+    @Test
+    fun `unbekannter Typ scheitert mit sprechender Meldung`() {
+        val fehler = assertFailsWith<IllegalStateException> {
+            ZeitplanKodierung.dekodiere(ZeitplanFelder(typ = "UNSINN"))
+        }
+        assertTrue(fehler.message.orEmpty().contains("UNSINN"))
+    }
+
+    @Test
+    fun `Intervall ohne Stundenwert scheitert`() {
+        assertFailsWith<IllegalArgumentException> {
+            ZeitplanKodierung.dekodiere(
+                ZeitplanFelder(
+                    typ = "INTERVALL",
+                    intervallStunden = null,
+                    fensterVon = "08:00",
+                    fensterBis = "20:00",
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun `Tagesziel ohne Anzahl scheitert`() {
+        assertFailsWith<IllegalArgumentException> {
+            ZeitplanKodierung.dekodiere(
+                ZeitplanFelder(typ = "TAGESZIEL", zielAnzahl = null),
+            )
+        }
+    }
+
+    @Test
+    fun `Anstoss ohne Trenner scheitert mit sprechender Meldung`() {
+        val fehler = assertFailsWith<IllegalArgumentException> {
+            ZeitplanKodierung.dekodiere(
+                ZeitplanFelder(typ = "WOCHENZIEL", zielAnzahl = 3, anstoss = "MONDAY18:00"),
+            )
+        }
+        assertTrue(fehler.message.orEmpty().contains("MONDAY18:00"))
+    }
+
+    @Test
+    fun `Serienschwelle ohne Trenner scheitert mit sprechender Meldung`() {
+        val fehler = assertFailsWith<IllegalArgumentException> {
+            ZeitplanKodierung.dekodiereSchwellen("7-10")
+        }
+        assertTrue(fehler.message.orEmpty().contains("7-10"))
+    }
+
+    @Test
+    fun `Serienschwelle mit ungueltiger Zahl scheitert mit sprechender Meldung`() {
+        val fehler = assertFailsWith<IllegalArgumentException> {
+            ZeitplanKodierung.dekodiereSchwellen("sieben:10")
+        }
+        assertTrue(fehler.message.orEmpty().contains("sieben"))
     }
 }
