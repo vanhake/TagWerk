@@ -6988,6 +6988,11 @@ data class AktivitaetEntwurf(
     val serienSchwellen: List<SerienSchwelle> = listOf(SerienSchwelle(7, 10)),
     val nachfassAnzahlText: String = "2",
     val nachfassAbstandText: String = "15",
+    // Nicht im Formular sichtbar, aber sie muessen den Rundlauf ueberleben:
+    // sonst holt ein Speichern eine archivierte Aktivitaet zurueck und loescht
+    // das Archivdatum -- @Update ersetzt die ganze Zeile.
+    val aktiv: Boolean = true,
+    val archiviertAm: LocalDate? = null,
 ) {
 
     private val basisPunkte: Int get() = basisPunkteText.toIntOrNull() ?: 0
@@ -7042,6 +7047,8 @@ data class AktivitaetEntwurf(
         serienSchwellen = serienSchwellen,
         nachfassAnzahl = nachfassAnzahlText.toIntOrNull() ?: 0,
         nachfassAbstandMinuten = nachfassAbstandText.toIntOrNull() ?: 15,
+        aktiv = aktiv,
+        archiviertAm = archiviertAm,
         erstelltAm = erstelltAm,
     )
 
@@ -7058,6 +7065,8 @@ data class AktivitaetEntwurf(
                 serienSchwellen = aktivitaet.serienSchwellen,
                 nachfassAnzahlText = aktivitaet.nachfassAnzahl.toString(),
                 nachfassAbstandText = aktivitaet.nachfassAbstandMinuten.toString(),
+                aktiv = aktivitaet.aktiv,
+                archiviertAm = aktivitaet.archiviertAm,
             )
             return when (val plan = aktivitaet.zeitplan) {
                 is Zeitplan.FesteZeiten -> basis.copy(
@@ -7091,8 +7100,12 @@ data class AktivitaetEntwurf(
 
 - [ ] **Step 4: Test laufen lassen und grünen Lauf bestätigen**
 
+Zwei Tests kommen dazu, weil der Rundlauf sonst stillschweigend Felder verliert:
+`ein archivierter Entwurf bleibt beim Rundlauf archiviert` und ein Test, der für
+eine aktive Aktivität `aus(x).zuAktivitaet(...) == x` prüft.
+
 Run: `./gradlew :app:testDebugUnitTest --tests "*AktivitaetEntwurfTest*"`
-Expected: `BUILD SUCCESSFUL`, 7 Tests bestanden.
+Expected: `BUILD SUCCESSFUL`, 9 Tests bestanden.
 
 - [ ] **Step 5: ViewModels anlegen**
 
@@ -7179,9 +7192,14 @@ class AktivitaetBearbeitenViewModel @Inject constructor(
 
         aktivitaeten.speichern(_entwurf.value.zuAktivitaet(LocalDate.now(uhr)))
         // Ohne diese beiden Zeilen wirkt eine neue Aktivitaet erst nach dem
-        // naechtlichen Waechterlauf.
-        materialisieren()
-        alarmPlaner.neuPlanen()
+        // naechtlichen Waechterlauf. Sie sind reine Optimierung: schlagen sie
+        // fehl, holt der Waechter es nach -- sie duerfen den Speichervorgang
+        // also nicht mitreissen. Das Schreiben selbst bleibt ungeschuetzt:
+        // scheitert es, darf der Aufrufer kein true sehen.
+        runCatching {
+            materialisieren()
+            alarmPlaner.neuPlanen()
+        }.onFailure { Log.w(TAG, "Nachbereitung nach dem Speichern fehlgeschlagen", it) }
         return true
     }
 }
