@@ -1305,6 +1305,14 @@ Diese Fälle sind der Grund, warum Zeitpläne als `LocalTime` gespeichert werden
 Ohne diese Tests fällt ein Fehler erst im März oder Oktober auf — und dann bei
 einer Medikamentenerinnerung.
 
+Was diese Tests leisten und was nicht, ehrlich benannt: `faelligkeitenFuer`
+rechnet ausschließlich mit `LocalDate` und `LocalTime` und berührt keine
+Zeitzone. Die beiden Umstellungstage liefern deshalb dasselbe Ergebnis wie
+jeder andere Tag — und genau das ist die Zusage, die sie bewachen. Fügt jemand
+später eine `ZoneId`-Auflösung in `festeZeiten` ein, schlagen sie fehl. Die
+eigentliche Auflösung von Ortszeit zu Instant passiert im `AlarmPlaner` in
+Task 14 und wird dort geprüft, nicht hier.
+
 `domain/src/test/kotlin/de/vanhake/dayorganizer/domain/rechner/ZeitplanRechnerKalenderTest.kt`:
 
 ```kotlin
@@ -1333,7 +1341,7 @@ class ZeitplanRechnerKalenderTest {
     )
 
     @Test
-    fun `an der Sommerzeitumstellung entsteht genau eine Faelligkeit je Uhrzeit`() {
+    fun `die Berechnung bleibt am Sommerzeitwechsel zeitzonenfrei`() {
         // In Europa wird am letzten Sonntag im Maerz 2026 (29.03.) umgestellt;
         // 02:30 gibt es an diesem Tag nicht.
         val ergebnis = rechner.faelligkeitenFuer(
@@ -1350,7 +1358,7 @@ class ZeitplanRechnerKalenderTest {
     }
 
     @Test
-    fun `an der Winterzeitumstellung entsteht keine doppelte Faelligkeit`() {
+    fun `die Berechnung bleibt am Winterzeitwechsel zeitzonenfrei`() {
         // Am 25.10.2026 gibt es 02:30 zweimal.
         val ergebnis = rechner.faelligkeitenFuer(
             aktivitaet = taeglichUm(2),
@@ -1359,17 +1367,6 @@ class ZeitplanRechnerKalenderTest {
         )
 
         assertEquals(1, ergebnis.size)
-    }
-
-    @Test
-    fun `eine ausgefallene Uhrzeit wird beim Aufloesen auf einen gueltigen Zeitpunkt gelegt`() {
-        // So loest der AlarmPlaner spaeter auf. ZoneId.getRules verschiebt eine
-        // nicht existierende Ortszeit nach vorn statt zu scheitern.
-        val ausgefallen = LocalDateTime.of(2026, 3, 29, 2, 30)
-
-        val instant = ausgefallen.atZone(berlin).toInstant()
-
-        assertEquals(LocalDateTime.of(2026, 3, 29, 3, 30), LocalDateTime.ofInstant(instant, berlin))
     }
 
     @Test
@@ -1400,7 +1397,7 @@ class ZeitplanRechnerKalenderTest {
 ```
 
 Run: `./gradlew :domain:test --tests "*ZeitplanRechnerKalenderTest*"`
-Expected: `BUILD SUCCESSFUL`, 5 Tests bestanden. Schlägt einer fehl, liegt der
+Expected: `BUILD SUCCESSFUL`, 4 Tests bestanden. Schlägt einer fehl, liegt der
 Fehler im `ZeitplanRechner` und nicht im Test — die erwarteten Werte sind die
 fachlich richtigen.
 
@@ -4778,7 +4775,73 @@ direkten Test: eine Version-1-Datenbank mit explizitem `CREATE TABLE` anlegen,
 `MIGRATION_1_2.migrate(db)` aufrufen und das Vorhandensein der Tabelle prüfen.
 Das prüft dieselbe Zusage und hängt an keinem Asset.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 9: Auflösung über die Zeitumstellung absichern**
+
+Der `AlarmPlaner` ist die einzige Stelle, an der Ortszeit zu einem Instant
+wird. Genau hier schlägt die Zeitumstellung zu: am 29.03.2026 existiert 02:30
+in Europa/Berlin nicht, am 25.10.2026 gibt es sie zweimal. Diese Zusage gehört
+geprüft, und zwar hier statt im `ZeitplanRechner`, der gar keine Zeitzone kennt.
+
+Ziehe die Umrechnung dafür in eine eigene, testbare Funktion in
+`platform/alarm/AlarmPlaner.kt` auf Dateiebene:
+
+```kotlin
+/**
+ * Ortszeit zu Instant. Faellt die Ortszeit durch die Sommerzeitumstellung aus,
+ * nimmt die Zone den naechsten gueltigen Zeitpunkt; gibt es sie doppelt, den
+ * ersten. Beides ist besser als ein Alarm, der gar nicht feuert.
+ */
+internal fun alsEpochMillis(zeitpunkt: LocalDateTime, zone: ZoneId): Long =
+    zeitpunkt.atZone(zone).toInstant().toEpochMilli()
+```
+
+und rufe sie aus `neuPlanen()` auf, statt dort direkt umzurechnen. Dazu der Test
+`app/src/test/kotlin/de/vanhake/dayorganizer/platform/alarm/AlarmPlanerZeitzoneTest.kt`:
+
+```kotlin
+package de.vanhake.dayorganizer.platform.alarm
+
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
+import kotlin.test.Test
+import kotlin.test.assertEquals
+
+class AlarmPlanerZeitzoneTest {
+
+    private val berlin = ZoneId.of("Europe/Berlin")
+
+    @Test
+    fun `eine ausgefallene Ortszeit wird auf den naechsten gueltigen Zeitpunkt gelegt`() {
+        val millis = alsEpochMillis(LocalDateTime.of(2026, 3, 29, 2, 30), berlin)
+
+        assertEquals(
+            LocalDateTime.of(2026, 3, 29, 3, 30),
+            LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), berlin),
+        )
+    }
+
+    @Test
+    fun `eine doppelte Ortszeit nimmt den ersten Durchgang`() {
+        val millis = alsEpochMillis(LocalDateTime.of(2026, 10, 25, 2, 30), berlin)
+
+        // Der erste Durchgang liegt noch in der Sommerzeit, also UTC+2.
+        assertEquals(Instant.parse("2026-10-25T00:30:00Z"), Instant.ofEpochMilli(millis))
+    }
+
+    @Test
+    fun `eine gewoehnliche Ortszeit bleibt unveraendert`() {
+        val millis = alsEpochMillis(LocalDateTime.of(2026, 3, 2, 8, 0), berlin)
+
+        assertEquals(Instant.parse("2026-03-02T07:00:00Z"), Instant.ofEpochMilli(millis))
+    }
+}
+```
+
+Run: `./gradlew :app:testDebugUnitTest --tests "*AlarmPlanerZeitzoneTest*"`
+Expected: `BUILD SUCCESSFUL`, 3 Tests bestanden.
+
+- [ ] **Step 10: Commit**
 
 ```bash
 git add app/ domain/
