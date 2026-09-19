@@ -2228,12 +2228,38 @@ object ZeitplanKodierung {
 }
 ```
 
-- [ ] **Step 4: Test laufen lassen und grünen Lauf bestätigen**
+- [ ] **Step 4: Fehlerfälle diagnostizierbar machen und festnageln**
+
+Die sechs Rundlauftests oben decken nur den guten Fall ab. Der Grund für die
+lesbare Kodierung ist aber der schlechte Fall — und der muss sagen, was kaputt
+ist. Rohes `val (tag, zeit) = it.split("@")` wirft eine
+`IndexOutOfBoundsException` ohne Feldnamen und ohne den Wert; damit ist man
+genau da, wo man ohne lesbare Kodierung auch wäre.
+
+Ergänze deshalb kleine Parse-Hilfen, die Wert **und** Feldnamen in die Meldung
+schreiben, etwa `Ungueltiger Wochentag "MONTAG" in "wochentage"`, und zwar für
+den Wochentag (`DayOfWeek.valueOf`), die Uhrzeit (`LocalTime.parse`), die Zahl
+(`toInt`) sowie für beide Trennzeichen-Splits (`@` und `:`). Nichts davon darf
+einen Fehler schlucken und einen Vorgabewert zurückgeben.
+
+Dazu zwölf weitere Tests: unbekannter `typ`; `INTERVALL` ohne
+`intervallStunden`; `TAGESZIEL` ohne `zielAnzahl`; Anstoss ohne `@`;
+Serienschwelle ohne `:`; Serienschwelle mit unlesbarer Zahl; ungültiger
+Wochentag in `wochentage`; ungültiger Wochentag im Anstoss; ungültige Uhrzeit
+in `zeiten`; ungültige Uhrzeit in `fensterVon`; dazu zwei positive Fälle,
+`FesteZeiten` mit leerer Wochentagsmenge und eine `LocalTime` mit Sekunden.
+
+Bei den Wochentagstests reicht es **nicht**, auf den Wert zu prüfen: die
+JDK-Meldung `No enum constant java.time.DayOfWeek.MONTAG` enthält ihn schon und
+ist derselbe Ausnahmetyp. Prüfe auf den Feldnamen — sonst besteht der Test auch
+ohne den Wrapper, den er bewachen soll.
+
+- [ ] **Step 5: Test laufen lassen und grünen Lauf bestätigen**
 
 Run: `./gradlew :app:testDebugUnitTest --tests "*ZeitplanKodierungTest*"`
-Expected: `BUILD SUCCESSFUL`, 6 Tests bestanden.
+Expected: `BUILD SUCCESSFUL`, 18 Tests bestanden.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add app/
