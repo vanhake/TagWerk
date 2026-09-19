@@ -6148,12 +6148,12 @@ git commit -m "feat(ui): Berechtigungspruefung und Warnbanner"
 - Test: `app/src/test/kotlin/de/vanhake/dayorganizer/ui/heute/HeuteViewModelTest.kt`
 
 **Interfaces:**
-- Consumes: `FaelligkeitRepository.beobachteTag`, `AktivitaetRepository.beobachteAktive`, `BuchungRepository.beobachteKontostand` aus Task 10, `FaelligkeitErledigen` und `FaelligkeitAuslassen` aus Task 12
+- Consumes: `FaelligkeitRepository.beobachteTag`, `AktivitaetRepository.beobachteAktive`, `BuchungRepository.beobachteKontostand` aus Task 10, `FaelligkeitErledigen` und `FaelligkeitAuslassen` aus Task 12, `BerechtigungsPruefer`, `BerechtigungsHinweise` und `WarnBanner` aus Task 17
 - Produces:
   - `HeuteEintrag(faelligkeitId: Long, aktivitaetName: String, farbe: Int, zeitText: String?, sollAnzahl: Int, istAnzahl: Int, status: FaelligkeitStatus, ueberfaellig: Boolean)`
   - `HeuteZustand(kontostand: Int, erledigtHeute: Int, gesamtHeute: Int, ueberfaellig: List<HeuteEintrag>, anstehend: List<HeuteEintrag>, spaeter: List<HeuteEintrag>, abgeschlossen: List<HeuteEintrag>)`
   - `HeuteZusammenstellung.aus(faelligkeiten, aktivitaeten, kontostand, jetzt): HeuteZustand` — reine Funktion
-  - `HeuteViewModel.zustand: StateFlow<HeuteZustand>`, `.erledigen(id)`, `.auslassen(id)`
+  - `HeuteViewModel.zustand: StateFlow<HeuteZustand>`, `.erledigen(id)`, `.auslassen(id)`, `.berechtigungenPruefen()`
 
 Die Einteilung: *überfällig* sind offene Fälligkeiten mit Sollzeitpunkt in der Vergangenheit. *Anstehend* sind offene mit Sollzeitpunkt innerhalb der nächsten zwei Stunden sowie alle Zählziele ohne Sollzeitpunkt. *Später* ist der Rest der offenen. *Abgeschlossen* sind erledigte, ausgelassene und verpasste.
 
@@ -6449,6 +6449,7 @@ class HeuteViewModelTest {
             ),
             auslassenUseCase = FaelligkeitAuslassen(faelligkeiten, uhr),
             alarmNeuPlanen = {},
+            hinweiseLesen = { emptyList() },
             uhr = uhr,
         )
     }
@@ -6518,6 +6519,7 @@ class HeuteViewModel(
     private val erledigenUseCase: FaelligkeitErledigen,
     private val auslassenUseCase: FaelligkeitAuslassen,
     private val alarmNeuPlanen: suspend () -> Unit,
+    private val hinweiseLesen: () -> List<Hinweis>,
     private val uhr: Clock,
 ) : ViewModel() {
 
@@ -6529,19 +6531,33 @@ class HeuteViewModel(
         erledigenUseCase: FaelligkeitErledigen,
         auslassenUseCase: FaelligkeitAuslassen,
         alarmPlaner: AlarmPlaner,
+        pruefer: BerechtigungsPruefer,
         uhr: Clock,
     ) : this(
         aktivitaeten, faelligkeiten, buchungen, erledigenUseCase, auslassenUseCase,
-        { alarmPlaner.neuPlanen() }, uhr,
+        { alarmPlaner.neuPlanen() }, { BerechtigungsHinweise.fuer(pruefer.stand()) }, uhr,
     )
+
+    private val hinweise = MutableStateFlow<List<Hinweis>>(emptyList())
 
     val zustand: StateFlow<HeuteZustand> = combine(
         faelligkeiten.beobachteTag(LocalDate.now(uhr)),
         aktivitaeten.beobachteAktive(),
         buchungen.beobachteKontostand(),
-    ) { faelligkeiten, aktivitaeten, kontostand ->
+        hinweise,
+    ) { faelligkeiten, aktivitaeten, kontostand, hinweise ->
         HeuteZusammenstellung.aus(faelligkeiten, aktivitaeten, kontostand, LocalDateTime.now(uhr))
+            .copy(hinweise = hinweise)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HeuteZustand())
+
+    /**
+     * Wird bei jedem Sichtbarwerden des Screens aufgerufen, nicht nur einmal:
+     * der Nutzer kommt aus den Systemeinstellungen zurueck, und dann muss der
+     * Banner verschwinden.
+     */
+    fun berechtigungenPruefen() {
+        hinweise.value = hinweiseLesen()
+    }
 
     // Property und Methode heissen bewusst unterschiedlich: gleiche Namen
     // kompilieren zwar, lesen sich aber wie ein Selbstaufruf.
@@ -6616,18 +6632,41 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.vanhake.dayorganizer.R
+import de.vanhake.dayorganizer.platform.permission.Hinweis
+import de.vanhake.dayorganizer.platform.permission.einstellungsIntent
+import de.vanhake.dayorganizer.ui.gemeinsam.WarnBanner
 
 @Composable
 fun HeuteScreen(viewModel: HeuteViewModel = hiltViewModel()) {
     val zustand by viewModel.zustand.collectAsStateWithLifecycle()
+    val kontext = LocalContext.current
+
+    // Bei jedem Sichtbarwerden neu pruefen: der Nutzer kommt aus den
+    // Systemeinstellungen zurueck, und dann muss der Banner verschwinden.
+    LifecycleResumeEffect(Unit) {
+        viewModel.berechtigungenPruefen()
+        onPauseOrDispose { }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxWidth().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        items(zustand.hinweise, key = { it.name }) { hinweis ->
+            WarnBanner(
+                hinweis = hinweis,
+                beheben = {
+                    ContextCompat.startActivity(kontext, hinweis.einstellungsIntent(kontext), null)
+                },
+            )
+        }
+
         item { Kopf(zustand) }
 
         abschnitt(R.string.abschnitt_ueberfaellig, zustand.ueberfaellig, viewModel)
