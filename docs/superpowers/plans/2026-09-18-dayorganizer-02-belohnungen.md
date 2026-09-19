@@ -16,6 +16,7 @@
 - Der Kontostand bleibt die Summe des Buchungsjournals. Eine Einlösung ist eine `EINLOESUNG`-Buchung mit negativem Betrag — nie ein direktes Herabsetzen eines Zählers.
 - Eine Einlösung hält Name und Preis als Momentaufnahme fest, damit die Historie lesbar bleibt, wenn die Belohnung später umbenannt oder archiviert wird.
 - Datenbankversion steigt in diesem Plan von 2 auf 3. Die Migration wird mit einem Test abgesichert.
+- Es gibt kein Gerät und keinen Emulator. Datenbanktests laufen unter Robolectric als JVM-Tests im `test`-Quellverzeichnis.
 
 ## File Structure
 
@@ -280,7 +281,7 @@ git commit -m "feat(domain): Belohnungsmodell und Pruefung der Einloesbarkeit"
 - Modify: `app/src/main/kotlin/de/vanhake/dayorganizer/di/DatenModul.kt`
 - Create: `app/src/main/kotlin/de/vanhake/dayorganizer/data/repository/BelohnungRepository.kt`
 - Test: `app/src/test/kotlin/de/vanhake/dayorganizer/data/mapper/BelohnungMapperTest.kt`
-- Test: `app/src/androidTest/kotlin/de/vanhake/dayorganizer/data/db/MigrationTest.kt` (erweitern)
+- Test: `app/src/test/kotlin/de/vanhake/dayorganizer/data/db/MigrationTest.kt` (erweitern)
 
 **Interfaces:**
 - Consumes: `Belohnung`, `Belohnungsbedingung`, `Einloesung` aus Task 1
@@ -629,7 +630,7 @@ In `MigrationTest.kt` ergänzen:
     }
 ```
 
-Run: `./gradlew :app:connectedDebugAndroidTest --tests "*MigrationTest*"`
+Run: `./gradlew :app:testDebugUnitTest --tests "*MigrationTest*"`
 Expected: `BUILD SUCCESSFUL`, 3 Tests bestanden.
 
 - [ ] **Step 7: Commit**
@@ -2953,5 +2954,5 @@ Die Punkte haben jetzt ein Ziel und der Fortschritt ist sichtbar. Es fehlen noch
 Vollständiger Durchlauf vor dem Übergang:
 
 ```bash
-./gradlew clean :domain:test :app:testDebugUnitTest :app:connectedDebugAndroidTest :app:assembleDebug
+./gradlew clean :domain:test :app:testDebugUnitTest :app:assembleDebug
 ```

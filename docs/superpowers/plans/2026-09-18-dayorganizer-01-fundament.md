@@ -19,6 +19,9 @@
 - Zeitpläne werden als `LocalTime`/`DayOfWeek`/`LocalDate` gespeichert, niemals als absoluter Zeitstempel. Auflösung zu einem Instant passiert ausschließlich im `AlarmPlaner`.
 - Commit-Nachrichten im Conventional-Commits-Stil (`feat:`, `test:`, `chore:`, `fix:`).
 - Die Versionen in `gradle/libs.versions.toml` sind der Startpunkt. Schlägt die Auflösung fehl, nimm die neueste kompatible Version und halte Kotlin- und KSP-Version paarweise passend.
+- Es gibt **kein Gerät und keinen Emulator**. Alle Tests laufen auf der JVM. Datenbanktests, die einen Android-Kontext brauchen, laufen unter Robolectric im `test`-Quellverzeichnis; ein `androidTest`-Quellverzeichnis wird nicht angelegt.
+- Der Gradle-Wrapper wird auf **8.9** festgelegt (liegt im lokalen Cache und erfüllt die Mindestanforderung von AGP 8.7.3).
+- `local.properties` mit `sdk.dir=/home/jan-lin/.local/opt/android-sdk` wird angelegt und ist über `.gitignore` ausgeschlossen.
 
 ## File Structure
 
@@ -53,8 +56,8 @@ app/src/main/kotlin/de/vanhake/dayorganizer/
     ui/heute/                    HeuteViewModel, HeuteScreen
     ui/aktivitaeten/             AktivitaetenViewModel, AktivitaetenScreen, AktivitaetBearbeitenScreen
     ui/theme/                    Farben, Typografie
-app/src/androidTest/kotlin/...   Room-DAO- und Migrationstests
-app/src/test/kotlin/...          ViewModel- und Use-Case-Tests
+app/src/test/kotlin/...          ViewModel-, Use-Case- und (unter
+                                 Robolectric) Room-DAO- und Migrationstests
 ```
 
 ---
@@ -146,6 +149,8 @@ turbine = "1.2.0"
 junit = "4.13.2"
 androidxTestRunner = "1.6.2"
 androidxTestExt = "1.2.1"
+androidxTestCore = "1.6.1"
+robolectric = "4.14.1"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -177,6 +182,8 @@ turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
 junit = { module = "junit:junit", version.ref = "junit" }
 androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidxTestRunner" }
 androidx-test-ext-junit = { module = "androidx.test.ext:junit", version.ref = "androidxTestExt" }
+androidx-test-core = { module = "androidx.test:core", version.ref = "androidxTestCore" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -278,7 +285,17 @@ android {
     sourceSets {
         getByName("main").java.srcDirs("src/main/kotlin")
         getByName("test").java.srcDirs("src/test/kotlin")
-        getByName("androidTest").java.srcDirs("src/androidTest/kotlin")
+        // Die exportierten Room-Schemas liegen als Assets nur im Debug-Build.
+        // MigrationTestHelper liest sie ueber den Asset-Manager; das Release-APK
+        // bleibt davon frei.
+        getByName("debug").assets.srcDirs("$projectDir/schemas")
+    }
+
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
     }
 
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
@@ -319,11 +336,13 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
 
-    androidTestImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.test.runner)
-    androidTestImplementation(libs.androidx.test.ext.junit)
-    androidTestImplementation(libs.room.testing)
-    androidTestImplementation(libs.kotlinx.coroutines.test)
+    // Datenbanktests laufen als JVM-Tests unter Robolectric statt auf einem
+    // Geraet. Ohne das waeren Migrationen nur dann geprueft, wenn gerade ein
+    // Emulator laeuft -- also fast nie.
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.test.ext.junit)
+    testImplementation(libs.room.testing)
 }
 ```
 
@@ -2160,7 +2179,7 @@ git commit -m "feat(data): lesbare Textkodierung der Zeitplaene"
 - Create: `app/src/main/kotlin/de/vanhake/dayorganizer/data/db/FaelligkeitDao.kt`
 - Create: `app/src/main/kotlin/de/vanhake/dayorganizer/data/db/BuchungDao.kt`
 - Create: `app/src/main/kotlin/de/vanhake/dayorganizer/data/db/DayOrganizerDatenbank.kt`
-- Test: `app/src/androidTest/kotlin/de/vanhake/dayorganizer/data/db/DaoTest.kt`
+- Test: `app/src/test/kotlin/de/vanhake/dayorganizer/data/db/DaoTest.kt`
 
 **Interfaces:**
 - Consumes: `ZeitplanFelder` aus Task 8
@@ -2171,28 +2190,34 @@ git commit -m "feat(data): lesbare Textkodierung der Zeitplaene"
 
 - [ ] **Step 1: Fehlschlagenden Test schreiben**
 
-`app/src/androidTest/kotlin/de/vanhake/dayorganizer/data/db/DaoTest.kt`:
+`app/src/test/kotlin/de/vanhake/dayorganizer/data/db/DaoTest.kt`:
 
 ```kotlin
 package de.vanhake.dayorganizer.data.db
 
+import android.content.Context
 import androidx.room.Room
-import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import java.time.LocalDate
 import java.time.LocalDateTime
 import kotlin.test.assertEquals
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [33])
 class DaoTest {
 
     private lateinit var db: DayOrganizerDatenbank
 
     @Before
     fun aufbauen() {
-        val kontext = InstrumentationRegistry.getInstrumentation().targetContext
+        val kontext = ApplicationProvider.getApplicationContext<Context>()
         db = Room.inMemoryDatabaseBuilder(kontext, DayOrganizerDatenbank::class.java)
             .allowMainThreadQueries()
             .build()
@@ -2308,9 +2333,7 @@ class DaoTest {
 
 - [ ] **Step 2: Test laufen lassen und Fehlschlag bestätigen**
 
-Ein Gerät oder Emulator mit API 33+ muss verbunden sein (`adb devices` zeigt es an).
-
-Run: `./gradlew :app:connectedDebugAndroidTest --tests "*DaoTest*"`
+Run: `./gradlew :app:testDebugUnitTest --tests "*DaoTest*"`
 Expected: Kompilierfehler `Unresolved reference: DayOrganizerDatenbank`.
 
 - [ ] **Step 3: Converters und Entities anlegen**
@@ -2604,7 +2627,7 @@ abstract class DayOrganizerDatenbank : RoomDatabase() {
 
 - [ ] **Step 5: Test laufen lassen und grünen Lauf bestätigen**
 
-Run: `./gradlew :app:connectedDebugAndroidTest --tests "*DaoTest*"`
+Run: `./gradlew :app:testDebugUnitTest --tests "*DaoTest*"`
 Expected: `BUILD SUCCESSFUL`, 4 Tests bestanden. Die Datei `app/schemas/de.vanhake.dayorganizer.data.db.DayOrganizerDatenbank/1.json` ist entstanden.
 
 - [ ] **Step 6: Commit**
@@ -4098,7 +4121,7 @@ Hier entsteht der Kern des Erinnerungsmotors. Erinnerungstermine werden als eige
 - Modify: `app/src/main/kotlin/de/vanhake/dayorganizer/domainuse/FaelligkeitenMaterialisieren.kt`
 - Create: `app/src/main/kotlin/de/vanhake/dayorganizer/platform/alarm/AlarmPlaner.kt`
 - Test: `app/src/test/kotlin/de/vanhake/dayorganizer/domainuse/ErinnerungenMaterialisierenTest.kt`
-- Test: `app/src/androidTest/kotlin/de/vanhake/dayorganizer/data/db/MigrationTest.kt`
+- Test: `app/src/test/kotlin/de/vanhake/dayorganizer/data/db/MigrationTest.kt`
 
 **Interfaces:**
 - Consumes: `ZeitplanRechner.anstossZeitpunkteFuer` aus Task 5, `FaelligkeitenMaterialisieren` aus Task 11
@@ -4679,7 +4702,7 @@ Im Manifest innerhalb von `<application>` registrieren:
 
 - [ ] **Step 8: Migrationstest schreiben und laufen lassen**
 
-`app/src/androidTest/kotlin/de/vanhake/dayorganizer/data/db/MigrationTest.kt`:
+`app/src/test/kotlin/de/vanhake/dayorganizer/data/db/MigrationTest.kt`:
 
 ```kotlin
 package de.vanhake.dayorganizer.data.db
@@ -4689,8 +4712,13 @@ import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Rule
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import kotlin.test.assertEquals
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [33])
 class MigrationTest {
 
     @get:Rule
@@ -4720,8 +4748,14 @@ class MigrationTest {
 }
 ```
 
-Run: `./gradlew :app:connectedDebugAndroidTest --tests "*MigrationTest*"`
+Run: `./gradlew :app:testDebugUnitTest --tests "*MigrationTest*"`
 Expected: `BUILD SUCCESSFUL`, 1 Test bestanden.
+
+Findet `MigrationTestHelper` die exportierten Schemas unter Robolectric nicht,
+liegt es am Asset-Pfad. Fällt der Versuch aus, ersetze den Helfer durch einen
+direkten Test: eine Version-1-Datenbank mit explizitem `CREATE TABLE` anlegen,
+`MIGRATION_1_2.migrate(db)` aufrufen und das Vorhandensein der Tabelle prüfen.
+Das prüft dieselbe Zusage und hängt an keinem Asset.
 
 - [ ] **Step 9: Commit**
 
@@ -7174,5 +7208,5 @@ Nach Task 19 steht eine benutzbare App: Aktivitäten anlegen, zuverlässig erinn
 Vor dem Übergang einmal vollständig prüfen:
 
 ```bash
-./gradlew clean :domain:test :app:testDebugUnitTest :app:connectedDebugAndroidTest :app:assembleDebug
+./gradlew clean :domain:test :app:testDebugUnitTest :app:assembleDebug
 ```

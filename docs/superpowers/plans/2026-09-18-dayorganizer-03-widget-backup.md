@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Alle Constraints aus Plan 1 und 2 gelten weiter.
+- Alle Constraints aus Plan 1 und 2 gelten weiter, insbesondere: kein Gerät, kein Emulator, Datenbanktests unter Robolectric im `test`-Quellverzeichnis.
 - Das Backup trägt eine `schemaVersion`. Der Import lehnt eine unbekannte Version rundheraus ab, statt einen Teilimport zu versuchen — eine halb importierte Datenbank wäre schlimmer als gar kein Import.
 - Der Import ersetzt den gesamten Bestand, er mischt nicht. Mischen würde bei Punktbuchungen zu Doppelzählungen führen.
 - Das Widget schreibt ausschließlich über bestehende Use Cases. Direkter DAO-Zugriff aus dem Widget ist ein Designfehler.
@@ -512,7 +512,7 @@ git commit -m "feat(backup): versioniertes JSON-Modell fuer den Datenexport"
 - Modify: `app/src/main/kotlin/de/vanhake/dayorganizer/data/repository/Repositories.kt` und die Room-Implementierungen
 - Modify: `app/src/main/kotlin/de/vanhake/dayorganizer/ui/einstellungen/EinstellungenViewModel.kt` und `EinstellungenScreen.kt`
 - Modify: `app/src/main/res/values/strings.xml`
-- Test: `app/src/androidTest/kotlin/de/vanhake/dayorganizer/backup/BackupDienstTest.kt`
+- Test: `app/src/test/kotlin/de/vanhake/dayorganizer/backup/BackupDienstTest.kt`
 
 **Interfaces:**
 - Consumes: `BackupUmwandlung` aus Task 1, alle Repositories
@@ -595,25 +595,31 @@ schlechtere Tausch.
 
 - [ ] **Step 2: Fehlschlagenden Test schreiben**
 
-`app/src/androidTest/kotlin/de/vanhake/dayorganizer/backup/BackupDienstTest.kt`:
+`app/src/test/kotlin/de/vanhake/dayorganizer/backup/BackupDienstTest.kt`:
 
 ```kotlin
 package de.vanhake.dayorganizer.backup
 
+import android.content.Context
 import androidx.room.Room
-import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.core.app.ApplicationProvider
 import de.vanhake.dayorganizer.data.db.AktivitaetEntity
 import de.vanhake.dayorganizer.data.db.DayOrganizerDatenbank
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.time.LocalDate
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [33])
 class BackupDienstTest {
 
     private lateinit var db: DayOrganizerDatenbank
@@ -621,7 +627,7 @@ class BackupDienstTest {
 
     @Before
     fun aufbauen() {
-        val kontext = InstrumentationRegistry.getInstrumentation().targetContext
+        val kontext = ApplicationProvider.getApplicationContext<Context>()
         db = Room.inMemoryDatabaseBuilder(kontext, DayOrganizerDatenbank::class.java)
             .allowMainThreadQueries()
             .build()
@@ -698,7 +704,7 @@ class BackupDienstTest {
 
 - [ ] **Step 3: Test laufen lassen und Fehlschlag bestätigen**
 
-Run: `./gradlew :app:connectedDebugAndroidTest --tests "*BackupDienstTest*"`
+Run: `./gradlew :app:testDebugUnitTest --tests "*BackupDienstTest*"`
 Expected: Kompilierfehler `Unresolved reference: BackupDienst`.
 
 - [ ] **Step 4: Dienst implementieren**
@@ -815,7 +821,7 @@ Für die Hilt-Bereitstellung in `DatenModul.kt`:
 
 - [ ] **Step 5: Test laufen lassen und grünen Lauf bestätigen**
 
-Run: `./gradlew :app:connectedDebugAndroidTest --tests "*BackupDienstTest*"`
+Run: `./gradlew :app:testDebugUnitTest --tests "*BackupDienstTest*"`
 Expected: `BUILD SUCCESSFUL`, 4 Tests bestanden.
 
 - [ ] **Step 6: Oberfläche anbinden**
@@ -1428,7 +1434,7 @@ git commit -m "feat(widget): Abhaken vom Startbildschirm und Aktualisierung alle
 Damit ist der Funktionsumfang aus dem Design-Dokument vollständig. Abschließender Durchlauf:
 
 ```bash
-./gradlew clean :domain:test :app:testDebugUnitTest :app:connectedDebugAndroidTest :app:assembleRelease
+./gradlew clean :domain:test :app:testDebugUnitTest :app:assembleRelease
 ```
 
 Nicht umgesetzt und bewusst zurückgestellt: Notiz zur einzelnen Erledigung, Mengen- und Dauerziele, Pause- und Urlaubsmodus, Cooldown auf Belohnungen, Cloud-Synchronisation, Vollbild-Alarm, Minuspunkte, getrennte Punktetöpfe, mehrsprachige Oberfläche.
