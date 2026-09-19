@@ -6,6 +6,8 @@ import de.vanhake.dayorganizer.domain.model.Zeitplan
 import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.temporal.TemporalAdjusters
 
 /**
  * Bildet einen Zeitplan auf konkrete Faelligkeiten ab.
@@ -23,6 +25,26 @@ class ZeitplanRechner {
         is Zeitplan.Intervall -> intervall(aktivitaet, plan, von, bis)
         is Zeitplan.Tagesziel -> tagesziel(aktivitaet, plan, von, bis)
         is Zeitplan.Wochenziel -> wochenziel(aktivitaet, plan, von, bis)
+    }
+
+    /** Zeitpunkte, zu denen fuer diese Faelligkeit erinnert werden soll. */
+    fun anstossZeitpunkteFuer(
+        aktivitaet: Aktivitaet,
+        faelligkeit: Faelligkeit,
+    ): List<java.time.LocalDateTime> = when (val plan = aktivitaet.zeitplan) {
+        is Zeitplan.FesteZeiten, is Zeitplan.Intervall ->
+            listOfNotNull(faelligkeit.geplantFuer)
+
+        is Zeitplan.Tagesziel ->
+            plan.anstossZeiten.sorted().map { faelligkeit.periodeVon.atTime(it) }
+
+        is Zeitplan.Wochenziel ->
+            plan.anstoss
+                .map { faelligkeit.periodeVon.with(
+                    java.time.temporal.TemporalAdjusters.nextOrSame(it.tag),
+                ).atTime(it.zeit) }
+                .filter { !it.toLocalDate().isAfter(faelligkeit.periodeBis) }
+                .sorted()
     }
 
     private fun festeZeiten(
