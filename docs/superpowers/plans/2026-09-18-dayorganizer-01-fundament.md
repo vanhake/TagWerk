@@ -3545,7 +3545,10 @@ git commit -m "feat(domainuse): Faelligkeiten fuer den Vorausblick materialisier
 Der wichtigste Use Case der App. Er ist idempotent, damit Widget, Benachrichtigung und Oberfläche nicht doppelt buchen können.
 
 **Files:**
+- Create: `app/src/main/kotlin/de/vanhake/dayorganizer/data/repository/Transaktionen.kt`
 - Create: `app/src/main/kotlin/de/vanhake/dayorganizer/domainuse/FaelligkeitErledigen.kt`
+- Modify: `app/src/main/kotlin/de/vanhake/dayorganizer/di/DatenModul.kt` — `Transaktionen` binden
+- Modify: `app/src/test/kotlin/de/vanhake/dayorganizer/Fakes.kt` — `FakeTransaktionen`
 - Create: `app/src/main/kotlin/de/vanhake/dayorganizer/domainuse/FaelligkeitAuslassen.kt`
 - Create: `app/src/main/kotlin/de/vanhake/dayorganizer/domainuse/VerpassteAbschliessen.kt`
 - Modify: `domain/src/main/kotlin/de/vanhake/dayorganizer/domain/rechner/PunkteRechner.kt` — `istPuenktlich` von `private` auf öffentlich heben
@@ -3554,12 +3557,67 @@ Der wichtigste Use Case der App. Er ist idempotent, damit Widget, Benachrichtigu
 **Interfaces:**
 - Consumes: alle Repositories aus Task 10, `PunkteRechner`, `SerienRechner`, `ErledigungsKontext` aus Tasks 6 und 7, `EinstellungenSpeicher` aus Task 10
 - Produces:
-  - `enum ErledigungsErgebnis { GEBUCHT, BEREITS_ERLEDIGT, UNBEKANNT }`
+  - `interface Transaktionen { suspend fun <T> inTransaktion(block: suspend () -> T): T }` mit `RaumTransaktionen` dahinter
+  - `enum ErledigungsErgebnis { GEBUCHT, NICHT_OFFEN, UNBEKANNT }`
   - `FaelligkeitErledigen.invoke(faelligkeitId: Long): ErledigungsErgebnis`
   - `FaelligkeitAuslassen.invoke(faelligkeitId: Long)`
   - `VerpassteAbschliessen.invoke()` — setzt alle offenen Fälligkeiten, deren Periode vor heute endet, auf `VERPASST`
 
-- [ ] **Step 1: `istPuenktlich` öffentlich machen**
+- [ ] **Step 1: Transaktionsgrenze anlegen**
+
+Das Design verspricht: *"Das Abhaken läuft in einer Transaktion und ist
+idempotent: eine Fälligkeit kann nur einmal gebucht werden, auch wenn Widget,
+Benachrichtigung und App gleichzeitig zugreifen."* Ohne Transaktion ist die
+Statusprüfung der einzige Schutz — und zwei gleichzeitige Aufrufer lesen beide
+`OFFEN`, bevor einer schreibt. Beide buchen.
+
+Der Use Case arbeitet bewusst gegen schmale Schnittstellen statt gegen Room,
+damit er ohne Emulator testbar bleibt. Die Transaktionsgrenze bekommt deshalb
+ebenfalls eine Schnittstelle.
+
+`data/repository/Transaktionen.kt`:
+
+```kotlin
+package de.vanhake.dayorganizer.data.repository
+
+import androidx.room.withTransaction
+import de.vanhake.dayorganizer.data.db.DayOrganizerDatenbank
+import javax.inject.Inject
+
+/**
+ * Klammert mehrere Schreibvorgaenge zu einer Einheit. Ohne sie waere die
+ * Statuspruefung im Erledigen-Use-Case die einzige Absicherung gegen
+ * Doppelbuchungen -- und die greift nicht, wenn zwei Aufrufer gleichzeitig
+ * lesen, bevor einer schreibt.
+ */
+interface Transaktionen {
+    suspend fun <T> inTransaktion(block: suspend () -> T): T
+}
+
+class RaumTransaktionen @Inject constructor(
+    private val db: DayOrganizerDatenbank,
+) : Transaktionen {
+    override suspend fun <T> inTransaktion(block: suspend () -> T): T =
+        db.withTransaction(block)
+}
+```
+
+In `RepositoryModul` binden:
+
+```kotlin
+    @Binds abstract fun transaktionen(impl: RaumTransaktionen): Transaktionen
+```
+
+In `Fakes.kt` ergänzen:
+
+```kotlin
+/** Fuehrt den Block direkt aus. Die Fakes sind ohnehin single-threaded. */
+class FakeTransaktionen : Transaktionen {
+    override suspend fun <T> inTransaktion(block: suspend () -> T): T = block()
+}
+```
+
+- [ ] **Step 2: `istPuenktlich` öffentlich machen**
 
 In `PunkteRechner.kt` die Signatur ändern, damit der Use Case dieselbe Regel benutzt statt sie zu wiederholen:
 
@@ -3571,7 +3629,7 @@ In `PunkteRechner.kt` die Signatur ändern, damit der Use Case dieselbe Regel be
     }
 ```
 
-- [ ] **Step 2: Fehlschlagenden Test schreiben**
+- [ ] **Step 3: Fehlschlagenden Test schreiben**
 
 ```kotlin
 package de.vanhake.dayorganizer.domainuse
@@ -3662,7 +3720,7 @@ class FaelligkeitErledigenTest {
         val use = useCase(uhrUm(8, 10), FakeAktivitaetRepository(listOf(tabletten)), f, b)
 
         use(10)
-        assertEquals(ErledigungsErgebnis.BEREITS_ERLEDIGT, use(10))
+        assertEquals(ErledigungsErgebnis.NICHT_OFFEN, use(10))
 
         assertEquals(15, b.stand.value.sumOf { it.betrag })
     }
@@ -3779,12 +3837,12 @@ class FaelligkeitErledigenTest {
 }
 ```
 
-- [ ] **Step 3: Test laufen lassen und Fehlschlag bestätigen**
+- [ ] **Step 4: Test laufen lassen und Fehlschlag bestätigen**
 
 Run: `./gradlew :app:testDebugUnitTest --tests "*FaelligkeitErledigenTest*"`
 Expected: Kompilierfehler `Unresolved reference: FaelligkeitErledigen`.
 
-- [ ] **Step 4: Implementieren**
+- [ ] **Step 5: Implementieren**
 
 `domainuse/FaelligkeitErledigen.kt`:
 
@@ -3806,7 +3864,13 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import javax.inject.Inject
 
-enum class ErledigungsErgebnis { GEBUCHT, BEREITS_ERLEDIGT, UNBEKANNT }
+/**
+ * NICHT_OFFEN deckt alles ab, was nicht mehr angefasst werden darf: bereits
+ * erledigt, bewusst ausgelassen, oder vom Waechter als verpasst geschlossen.
+ * Eine Sperre nur auf ERLEDIGT wuerde ein ausgelassenes Mittagessen beim
+ * naechsten Widget-Tipp nachtraeglich bezahlen.
+ */
+enum class ErledigungsErgebnis { GEBUCHT, NICHT_OFFEN, UNBEKANNT }
 
 /**
  * Der primaere Konstruktor nimmt die Einstellungen als Funktion entgegen, damit
@@ -3820,6 +3884,7 @@ class FaelligkeitErledigen(
     private val punkteRechner: PunkteRechner,
     private val serienRechner: SerienRechner,
     private val einstellungenLesen: suspend () -> Einstellungen,
+    private val transaktionen: Transaktionen,
     private val uhr: Clock,
 ) {
 
@@ -3831,15 +3896,21 @@ class FaelligkeitErledigen(
         punkteRechner: PunkteRechner,
         serienRechner: SerienRechner,
         speicher: EinstellungenSpeicher,
+        transaktionen: Transaktionen,
         uhr: Clock,
     ) : this(
         aktivitaeten, faelligkeiten, buchungen, punkteRechner, serienRechner,
-        { speicher.lesen() }, uhr,
+        { speicher.lesen() }, transaktionen, uhr,
     )
 
-    suspend operator fun invoke(faelligkeitId: Long): ErledigungsErgebnis {
+    // Lesen, Pruefen, Schreiben und Buchen liegen zusammen in der Transaktion.
+    // Nur so trennt die Statuspruefung zwei gleichzeitige Aufrufer.
+    suspend operator fun invoke(faelligkeitId: Long): ErledigungsErgebnis =
+        transaktionen.inTransaktion { erledige(faelligkeitId) }
+
+    private suspend fun erledige(faelligkeitId: Long): ErledigungsErgebnis {
         val vorher = faelligkeiten.nachId(faelligkeitId) ?: return ErledigungsErgebnis.UNBEKANNT
-        if (vorher.status == FaelligkeitStatus.ERLEDIGT) return ErledigungsErgebnis.BEREITS_ERLEDIGT
+        if (vorher.status != FaelligkeitStatus.OFFEN) return ErledigungsErgebnis.NICHT_OFFEN
         val aktivitaet = aktivitaeten.nachId(vorher.aktivitaetId)
             ?: return ErledigungsErgebnis.UNBEKANNT
 
@@ -3936,12 +4007,24 @@ class VerpassteAbschliessen @Inject constructor(
 }
 ```
 
-- [ ] **Step 5: Test laufen lassen und grünen Lauf bestätigen**
+- [ ] **Step 6: Test laufen lassen und grünen Lauf bestätigen**
+
+Drei Tests kommen zu den acht oben dazu, weil sie genau die Zusage prüfen, an
+der der Plan zuerst vorbeigeschrieben hat:
+
+- `eine ausgelassene Faelligkeit wird nicht nachtraeglich bezahlt` — auslassen,
+  dann erledigen. Erwartet: `NICHT_OFFEN`, Status bleibt `AUSGELASSEN`, keine
+  Buchung.
+- `eine verpasste Faelligkeit wird nicht nachtraeglich bezahlt` — Status
+  `VERPASST`, dann erledigen. Erwartet: `NICHT_OFFEN`, Status bleibt, keine
+  Buchung.
+- `alles laeuft in einer Transaktion` — ein `FakeTransaktionen`, das mitzählt,
+  belegt, dass `invoke` seinen Rumpf genau einmal in `inTransaktion` ausführt.
 
 Run: `./gradlew :app:testDebugUnitTest --tests "*FaelligkeitErledigenTest*"`
-Expected: `BUILD SUCCESSFUL`, 8 Tests bestanden.
+Expected: `BUILD SUCCESSFUL`, 11 Tests bestanden.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add app/ domain/
