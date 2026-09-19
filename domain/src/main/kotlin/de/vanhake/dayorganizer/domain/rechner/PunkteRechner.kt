@@ -56,7 +56,7 @@ class PunkteRechner {
         }
     }
 
-    private fun istPuenktlich(kontext: ErledigungsKontext): Boolean {
+    fun istPuenktlich(kontext: ErledigungsKontext): Boolean {
         val soll = kontext.faelligkeitVorher.geplantFuer ?: return false
         val abweichung = abs(Duration.between(soll, kontext.zeitpunkt).toMinutes())
         return abweichung <= kontext.aktivitaet.kulanzMinuten
