@@ -184,4 +184,58 @@ class PunkteRechnerTest {
 
         assertEquals(setOf(BuchungsArt.ERLEDIGUNG, BuchungsArt.PUENKTLICHKEITSBONUS), b.map { it.art }.toSet())
     }
+
+    @Test
+    fun `mehrere auf einmal erreichte Schwellen werden aufsteigend gebucht`() {
+        val mitSchwellen = tabletten.copy(
+            puenktlichkeitsBonus = 0,
+            serienSchwellen = listOf(SerienSchwelle(30, 50), SerienSchwelle(7, 10)),
+        )
+
+        val b = rechner.buchungen(
+            kontext(
+                LocalDateTime.of(2026, 3, 2, 8, 5),
+                serieNachher = 30,
+                gebuchteSchwellen = emptySet(),
+                aktivitaet = mitSchwellen,
+            ),
+        )
+
+        assertEquals(
+            listOf(BuchungsArt.ERLEDIGUNG, BuchungsArt.SERIENBONUS, BuchungsArt.SERIENBONUS),
+            b.map { it.art },
+        )
+        assertEquals(listOf(7, 30), b.filter { it.art == BuchungsArt.SERIENBONUS }.map { it.schwelle })
+        assertEquals(70, b.sumOf { it.betrag })
+    }
+
+    @Test
+    fun `genau am Rand des Kulanzfensters gibt es den Bonus noch`() {
+        val b = rechner.buchungen(kontext(LocalDateTime.of(2026, 3, 2, 9, 0)))
+
+        assertEquals(listOf(BuchungsArt.ERLEDIGUNG, BuchungsArt.PUENKTLICHKEITSBONUS), b.map { it.art })
+        assertEquals(15, b.sumOf { it.betrag })
+    }
+
+    @Test
+    fun `eine Minute nach dem Kulanzfenster gibt es ihn nicht mehr`() {
+        val b = rechner.buchungen(kontext(LocalDateTime.of(2026, 3, 2, 9, 1)))
+
+        assertEquals(listOf(BuchungsArt.ERLEDIGUNG), b.map { it.art })
+        assertEquals(10, b.single().betrag)
+    }
+
+    @Test
+    fun `ein Tag ohne Faelligkeiten bekommt keinen Tagesbonus`() {
+        val b = rechner.buchungen(
+            kontext(
+                LocalDateTime.of(2026, 3, 2, 8, 5),
+                tagesFaelligkeitenNachher = emptyList(),
+                tagesbonusPunkte = 15,
+            ),
+        )
+
+        assertEquals(false, b.any { it.art == BuchungsArt.TAGESBONUS })
+        assertEquals(setOf(BuchungsArt.ERLEDIGUNG, BuchungsArt.PUENKTLICHKEITSBONUS), b.map { it.art }.toSet())
+    }
 }
