@@ -1,6 +1,7 @@
 package de.vanhake.dayorganizer.domainuse
 
 import de.vanhake.dayorganizer.FakeAktivitaetRepository
+import de.vanhake.dayorganizer.FakeErinnerungRepository
 import de.vanhake.dayorganizer.FakeFaelligkeitRepository
 import de.vanhake.dayorganizer.domain.model.Aktivitaet
 import de.vanhake.dayorganizer.domain.model.Faelligkeit
@@ -43,6 +44,7 @@ class FaelligkeitenMaterialisierenTest {
         val use = FaelligkeitenMaterialisieren(
             aktivitaeten = FakeAktivitaetRepository(listOf(tabletten)),
             faelligkeiten = faelligkeiten,
+            erinnerungen = FakeErinnerungRepository(),
             zeitplanRechner = ZeitplanRechner(),
             uhr = uhr,
         )
@@ -60,6 +62,7 @@ class FaelligkeitenMaterialisierenTest {
         val use = FaelligkeitenMaterialisieren(
             aktivitaeten = FakeAktivitaetRepository(listOf(tabletten)),
             faelligkeiten = faelligkeiten,
+            erinnerungen = FakeErinnerungRepository(),
             zeitplanRechner = ZeitplanRechner(),
             uhr = uhr,
         )
@@ -76,7 +79,13 @@ class FaelligkeitenMaterialisierenTest {
         val aktivitaeten = FakeAktivitaetRepository(
             listOf(tabletten.copy(aktiv = false, archiviertAm = LocalDate.of(2026, 2, 1))),
         )
-        val use = FaelligkeitenMaterialisieren(aktivitaeten, faelligkeiten, ZeitplanRechner(), uhr)
+        val use = FaelligkeitenMaterialisieren(
+            aktivitaeten,
+            faelligkeiten,
+            FakeErinnerungRepository(),
+            ZeitplanRechner(),
+            uhr,
+        )
 
         use(vorausTage = 6)
 
@@ -94,6 +103,7 @@ class FaelligkeitenMaterialisierenTest {
         val use = FaelligkeitenMaterialisieren(
             aktivitaeten = FakeAktivitaetRepository(listOf(sport)),
             faelligkeiten = faelligkeiten,
+            erinnerungen = FakeErinnerungRepository(),
             zeitplanRechner = ZeitplanRechner(),
             uhr = uhr,
         )

@@ -2,11 +2,13 @@ package de.vanhake.dayorganizer
 
 import de.vanhake.dayorganizer.data.repository.AktivitaetRepository
 import de.vanhake.dayorganizer.data.repository.BuchungRepository
+import de.vanhake.dayorganizer.data.repository.ErinnerungRepository
 import de.vanhake.dayorganizer.data.repository.FaelligkeitRepository
 import de.vanhake.dayorganizer.data.repository.Transaktionen
 import de.vanhake.dayorganizer.domain.model.Aktivitaet
 import de.vanhake.dayorganizer.domain.model.Buchung
 import de.vanhake.dayorganizer.domain.model.BuchungsArt
+import de.vanhake.dayorganizer.domain.model.Erinnerung
 import de.vanhake.dayorganizer.domain.model.Faelligkeit
 import de.vanhake.dayorganizer.domain.model.FaelligkeitStatus
 import kotlinx.coroutines.flow.Flow
@@ -136,6 +138,36 @@ class FakeBuchungRepository(start: List<Buchung> = emptyList()) : BuchungReposit
         stand.value.any {
             it.art == BuchungsArt.TAGESBONUS && it.zeitpunkt.toLocalDate() == tag
         }
+}
+
+class FakeErinnerungRepository(start: List<Erinnerung> = emptyList()) : ErinnerungRepository {
+    val stand = MutableStateFlow(start)
+    private var naechsteId = (start.maxOfOrNull { it.id } ?: 0L) + 1
+
+    private fun schluessel(e: Erinnerung) = "${e.faelligkeitId}|${e.zeitpunkt}|${e.versuch}"
+
+    override suspend fun anlegenFallsNeu(neue: List<Erinnerung>) {
+        val vorhanden = stand.value.map(::schluessel).toMutableSet()
+        val ergaenzt = stand.value.toMutableList()
+        neue.forEach { e -> if (vorhanden.add(schluessel(e))) ergaenzt += e.copy(id = naechsteId++) }
+        stand.value = ergaenzt.sortedBy { it.zeitpunkt }
+    }
+
+    override suspend fun naechsteAb(zeitpunkt: LocalDateTime): Erinnerung? =
+        stand.value.filter { !it.ausgeloest && !it.zeitpunkt.isBefore(zeitpunkt) }
+            .minByOrNull { it.zeitpunkt }
+
+    override suspend fun faelligeBis(zeitpunkt: LocalDateTime): List<Erinnerung> =
+        stand.value.filter { !it.ausgeloest && !it.zeitpunkt.isAfter(zeitpunkt) }
+            .sortedBy { it.zeitpunkt }
+
+    override suspend fun alsAusgeloestMarkieren(id: Long) {
+        stand.value = stand.value.map { if (it.id == id) it.copy(ausgeloest = true) else it }
+    }
+
+    override suspend fun entfernenFuerFaelligkeit(faelligkeitId: Long) {
+        stand.value = stand.value.filterNot { it.faelligkeitId == faelligkeitId }
+    }
 }
 
 /** Fuehrt den Block direkt aus. Die Fakes sind ohnehin single-threaded. */
