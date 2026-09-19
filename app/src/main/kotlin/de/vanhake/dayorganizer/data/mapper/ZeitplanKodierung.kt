@@ -61,21 +61,21 @@ object ZeitplanKodierung {
 
     fun dekodiere(felder: ZeitplanFelder): Zeitplan = when (felder.typ) {
         FESTE_ZEITEN -> Zeitplan.FesteZeiten(
-            zeiten = dekodiereZeiten(felder.zeiten),
-            wochentage = dekodiereTage(felder.wochentage),
+            zeiten = dekodiereZeiten(felder.zeiten, "zeiten"),
+            wochentage = dekodiereTage(felder.wochentage, "wochentage"),
         )
 
         INTERVALL -> Zeitplan.Intervall(
             alleNStunden = requireNotNull(felder.intervallStunden) { "Intervall ohne Stundenwert" },
             von = parseZeit(requireNotNull(felder.fensterVon) { "Intervall ohne Fenster-Start" }, "Intervall.fensterVon"),
             bis = parseZeit(requireNotNull(felder.fensterBis) { "Intervall ohne Fenster-Ende" }, "Intervall.fensterBis"),
-            wochentage = dekodiereTage(felder.wochentage),
+            wochentage = dekodiereTage(felder.wochentage, "wochentage"),
         )
 
         TAGESZIEL -> Zeitplan.Tagesziel(
             anzahl = requireNotNull(felder.zielAnzahl) { "Tagesziel ohne Anzahl" },
-            wochentage = dekodiereTage(felder.wochentage),
-            anstossZeiten = dekodiereZeiten(felder.zeiten),
+            wochentage = dekodiereTage(felder.wochentage, "wochentage"),
+            anstossZeiten = dekodiereZeiten(felder.zeiten, "zeiten"),
         )
 
         WOCHENZIEL -> Zeitplan.Wochenziel(
@@ -105,19 +105,19 @@ object ZeitplanKodierung {
         val teile = eintrag.split("@", limit = 2)
         require(teile.size == 2) { "Ungueltiger Anstoss-Eintrag: \"$eintrag\"" }
         return Anstoss(
-            tag = parseTag(teile[0], eintrag),
-            zeit = parseZeit(teile[1], eintrag),
+            tag = parseTag(teile[0], "Anstoss"),
+            zeit = parseZeit(teile[1], "Anstoss"),
         )
     }
 
     private fun kodiereTage(tage: Set<DayOfWeek>): String =
         tage.sorted().joinToString(",") { it.name }
 
-    private fun dekodiereTage(text: String): Set<DayOfWeek> =
-        text.split(",").filter { it.isNotBlank() }.map { parseTag(it, it) }.toSet()
+    private fun dekodiereTage(text: String, fieldName: String): Set<DayOfWeek> =
+        text.split(",").filter { it.isNotBlank() }.map { parseTag(it, fieldName) }.toSet()
 
-    private fun dekodiereZeiten(text: String): List<LocalTime> =
-        text.split(",").filter { it.isNotBlank() }.map { parseZeit(it, it) }
+    private fun dekodiereZeiten(text: String, fieldName: String): List<LocalTime> =
+        text.split(",").filter { it.isNotBlank() }.map { parseZeit(it, fieldName) }
 
     /** Wandelt [text] in einen [DayOfWeek], mit [quelle] (Eintrag oder Feldname) in der Fehlermeldung. */
     private fun parseTag(text: String, quelle: String): DayOfWeek =

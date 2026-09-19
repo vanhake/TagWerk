@@ -155,4 +155,61 @@ class ZeitplanKodierungTest {
         }
         assertTrue(fehler.message.orEmpty().contains("sieben"))
     }
+
+    @Test
+    fun `ungueltiger Wochentag in wochentage scheitert mit sprechender Meldung`() {
+        val fehler = assertFailsWith<IllegalArgumentException> {
+            ZeitplanKodierung.dekodiere(
+                ZeitplanFelder(
+                    typ = "FESTE_ZEITEN",
+                    zeiten = "08:00",
+                    wochentage = "MONTAG",
+                ),
+            )
+        }
+        assertTrue(fehler.message.orEmpty().contains("MONTAG"))
+    }
+
+    @Test
+    fun `ungueltiger Wochentag in Wochenziel-Anstoss scheitert mit sprechender Meldung`() {
+        val fehler = assertFailsWith<IllegalArgumentException> {
+            ZeitplanKodierung.dekodiere(
+                ZeitplanFelder(
+                    typ = "WOCHENZIEL",
+                    zielAnzahl = 3,
+                    anstoss = "MONTAG@18:00",
+                ),
+            )
+        }
+        assertTrue(fehler.message.orEmpty().contains("MONTAG"))
+    }
+
+    @Test
+    fun `ungueltige Uhrzeit in zeiten scheitert mit sprechender Meldung`() {
+        val fehler = assertFailsWith<IllegalArgumentException> {
+            ZeitplanKodierung.dekodiere(
+                ZeitplanFelder(
+                    typ = "FESTE_ZEITEN",
+                    zeiten = "25:99",
+                    wochentage = "MONDAY",
+                ),
+            )
+        }
+        assertTrue(fehler.message.orEmpty().contains("25:99"))
+    }
+
+    @Test
+    fun `ungueltige Uhrzeit in Intervall-fensterVon scheitert mit sprechender Meldung`() {
+        val fehler = assertFailsWith<IllegalArgumentException> {
+            ZeitplanKodierung.dekodiere(
+                ZeitplanFelder(
+                    typ = "INTERVALL",
+                    intervallStunden = 3,
+                    fensterVon = "25:99",
+                    fensterBis = "20:00",
+                ),
+            )
+        }
+        assertTrue(fehler.message.orEmpty().contains("25:99"))
+    }
 }
