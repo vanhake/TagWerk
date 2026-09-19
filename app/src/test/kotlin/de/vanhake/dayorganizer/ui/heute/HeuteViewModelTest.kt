@@ -30,6 +30,13 @@ import java.time.ZoneId
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
+/** Ein Clock, dessen Instant sich waehrend des Tests verschieben laesst. */
+private class VerstellbareUhr(var instant: java.time.Instant, private val zone: ZoneId) : Clock() {
+    override fun getZone(): ZoneId = zone
+    override fun withZone(zone: ZoneId): Clock = VerstellbareUhr(instant, zone)
+    override fun instant(): java.time.Instant = instant
+}
+
 class HeuteViewModelTest {
 
     private val zone = ZoneId.of("Europe/Berlin")
@@ -59,6 +66,7 @@ class HeuteViewModelTest {
     private fun viewModel(
         faelligkeiten: FakeFaelligkeitRepository,
         buchungen: FakeBuchungRepository,
+        uhr: Clock = this.uhr,
     ): HeuteViewModel {
         val aktivitaeten = FakeAktivitaetRepository(listOf(tabletten))
         return HeuteViewModel(
@@ -85,6 +93,44 @@ class HeuteViewModelTest {
             val gefuellt = awaitItem()
             assertEquals(1, gefuellt.gesamtHeute)
             assertEquals(listOf(10L), gefuellt.ueberfaellig.map { it.faelligkeitId })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `nach Mitternacht zeigt der Screen den neuen Tag`() = runTest(dispatcher) {
+        val gestern = Faelligkeit(
+            id = 20, aktivitaetId = 1,
+            periodeVon = LocalDate.of(2026, 3, 2), periodeBis = LocalDate.of(2026, 3, 2),
+            geplantFuer = LocalDateTime.of(2026, 3, 2, 8, 0), sollAnzahl = 1,
+        )
+        val heute = Faelligkeit(
+            id = 21, aktivitaetId = 1,
+            periodeVon = LocalDate.of(2026, 3, 3), periodeBis = LocalDate.of(2026, 3, 3),
+            geplantFuer = LocalDateTime.of(2026, 3, 3, 8, 0), sollAnzahl = 1,
+        )
+        val verstellbareUhr = VerstellbareUhr(
+            LocalDateTime.of(2026, 3, 2, 23, 59).atZone(zone).toInstant(),
+            zone,
+        )
+        val vm = viewModel(
+            FakeFaelligkeitRepository(listOf(gestern, heute)),
+            FakeBuchungRepository(),
+            uhr = verstellbareUhr,
+        )
+
+        vm.zustand.test {
+            assertEquals(HeuteZustand(), awaitItem())
+            val vorMitternacht = awaitItem()
+            assertEquals(listOf(20L), vorMitternacht.ueberfaellig.map { it.faelligkeitId })
+
+            verstellbareUhr.instant = LocalDateTime.of(2026, 3, 3, 0, 1)
+                .atZone(zone).toInstant()
+            vm.beimSichtbarwerden()
+
+            val nachMitternacht = awaitItem()
+            assertEquals(1, nachMitternacht.gesamtHeute)
+            assertEquals(listOf(21L), nachMitternacht.spaeter.map { it.faelligkeitId })
             cancelAndIgnoreRemainingEvents()
         }
     }

@@ -9,8 +9,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -38,7 +38,7 @@ fun HeuteScreen(viewModel: HeuteViewModel = hiltViewModel()) {
     // Bei jedem Sichtbarwerden neu pruefen: der Nutzer kommt aus den
     // Systemeinstellungen zurueck, und dann muss der Banner verschwinden.
     LifecycleResumeEffect(Unit) {
-        viewModel.berechtigungenPruefen()
+        viewModel.beimSichtbarwerden()
         onPauseOrDispose { }
     }
 
@@ -91,17 +91,24 @@ private fun Kopf(zustand: HeuteZustand) {
                 stringResource(R.string.punktestand, zustand.kontostand),
                 style = MaterialTheme.typography.headlineSmall,
             )
-            Text(
-                stringResource(R.string.tagesfortschritt, zustand.erledigtHeute, zustand.gesamtHeute),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            LinearProgressIndicator(
-                progress = {
-                    if (zustand.gesamtHeute == 0) 0f
-                    else zustand.erledigtHeute.toFloat() / zustand.gesamtHeute
-                },
+            Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            )
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                CircularProgressIndicator(
+                    progress = {
+                        val anteil =
+                            if (zustand.gesamtHeute == 0) 0f
+                            else zustand.erledigtHeute.toFloat() / zustand.gesamtHeute
+                        anteil.coerceIn(0f, 1f)
+                    },
+                )
+                Text(
+                    stringResource(R.string.tagesfortschritt, zustand.erledigtHeute, zustand.gesamtHeute),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
         }
     }
 }

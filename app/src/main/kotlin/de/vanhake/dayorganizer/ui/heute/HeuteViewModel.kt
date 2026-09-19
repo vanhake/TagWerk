@@ -12,10 +12,12 @@ import de.vanhake.dayorganizer.platform.alarm.AlarmPlaner
 import de.vanhake.dayorganizer.platform.permission.BerechtigungsHinweise
 import de.vanhake.dayorganizer.platform.permission.BerechtigungsPruefer
 import de.vanhake.dayorganizer.platform.permission.Hinweis
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Clock
@@ -51,9 +53,11 @@ class HeuteViewModel(
     )
 
     private val hinweise = MutableStateFlow<List<Hinweis>>(emptyList())
+    private val tag = MutableStateFlow(LocalDate.now(uhr))
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     val zustand: StateFlow<HeuteZustand> = combine(
-        faelligkeiten.beobachteTag(LocalDate.now(uhr)),
+        tag.flatMapLatest { faelligkeiten.beobachteTag(it) },
         aktivitaeten.beobachteAktive(),
         buchungen.beobachteKontostand(),
         hinweise,
@@ -65,9 +69,11 @@ class HeuteViewModel(
     /**
      * Wird bei jedem Sichtbarwerden des Screens aufgerufen, nicht nur einmal:
      * der Nutzer kommt aus den Systemeinstellungen zurueck, und dann muss der
-     * Banner verschwinden.
+     * Banner verschwinden. Ausserdem kann seit dem letzten Sichtbarwerden
+     * Mitternacht vergangen sein, also wird auch der beobachtete Tag neu gelesen.
      */
-    fun berechtigungenPruefen() {
+    fun beimSichtbarwerden() {
+        tag.value = LocalDate.now(uhr)
         hinweise.value = hinweiseLesen()
     }
 
