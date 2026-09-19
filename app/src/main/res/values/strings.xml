@@ -8,4 +8,11 @@
     <string name="aktion_ausgelassen">Ausgelassen</string>
     <string name="erinnerung_jetzt_faellig">Jetzt fällig</string>
     <string name="erinnerung_noch_offen">Noch %1$d von %2$d offen</string>
+    <string name="warnung_benachrichtigungen_titel">Benachrichtigungen sind aus</string>
+    <string name="warnung_benachrichtigungen_text">Ohne Benachrichtigungen erinnert dich die App an nichts.</string>
+    <string name="warnung_exakte_alarme_titel">Exakte Alarme sind nicht erlaubt</string>
+    <string name="warnung_exakte_alarme_text">Erinnerungen können dadurch deutlich verspätet kommen.</string>
+    <string name="warnung_akku_titel">Akkuoptimierung ist aktiv</string>
+    <string name="warnung_akku_text">Das System kann Erinnerungen unterdrücken. Nimm DayOrganizer von der Optimierung aus.</string>
+    <string name="warnung_beheben">Einstellung öffnen</string>
 </resources>
