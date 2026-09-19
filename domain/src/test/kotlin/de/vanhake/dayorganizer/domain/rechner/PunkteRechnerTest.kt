@@ -1,0 +1,187 @@
+package de.vanhake.dayorganizer.domain.rechner
+
+import de.vanhake.dayorganizer.domain.aktivitaet
+import de.vanhake.dayorganizer.domain.model.BuchungsArt
+import de.vanhake.dayorganizer.domain.model.Faelligkeit
+import de.vanhake.dayorganizer.domain.model.FaelligkeitStatus
+import de.vanhake.dayorganizer.domain.model.SerienSchwelle
+import de.vanhake.dayorganizer.domain.model.Zeitplan
+import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
+import kotlin.test.Test
+import kotlin.test.assertEquals
+
+class PunkteRechnerTest {
+
+    private val rechner = PunkteRechner()
+    private val tag = LocalDate.of(2026, 3, 2)
+
+    private val tabletten = aktivitaet(
+        basisPunkte = 10,
+        kulanzMinuten = 60,
+        puenktlichkeitsBonus = 5,
+        zeitplan = Zeitplan.FesteZeiten(listOf(LocalTime.of(8, 0)), DayOfWeek.entries.toSet()),
+    )
+
+    private val faelligkeit = Faelligkeit(
+        id = 42,
+        aktivitaetId = tabletten.id,
+        periodeVon = tag,
+        periodeBis = tag,
+        geplantFuer = LocalDateTime.of(2026, 3, 2, 8, 0),
+        sollAnzahl = 1,
+    )
+
+    private fun kontext(
+        zeitpunkt: LocalDateTime,
+        serieNachher: Int = 1,
+        gebuchteSchwellen: Set<Int> = emptySet(),
+        aktivitaet: de.vanhake.dayorganizer.domain.model.Aktivitaet = tabletten,
+        tagesFaelligkeitenNachher: List<Faelligkeit> =
+            listOf(faelligkeit.copy(status = FaelligkeitStatus.ERLEDIGT, istAnzahl = 1)),
+        tagesbonusPunkte: Int = 0,
+        tagesbonusBereitsGebucht: Boolean = false,
+    ) = ErledigungsKontext(
+        aktivitaet = aktivitaet,
+        faelligkeitVorher = faelligkeit,
+        zeitpunkt = zeitpunkt,
+        serieNachher = serieNachher,
+        gebuchteSchwellen = gebuchteSchwellen,
+        tagesFaelligkeitenNachher = tagesFaelligkeitenNachher,
+        tagesbonusPunkte = tagesbonusPunkte,
+        tagesbonusBereitsGebucht = tagesbonusBereitsGebucht,
+    )
+
+    @Test
+    fun `innerhalb des Kulanzfensters gibt es Basis und Puenktlichkeitsbonus`() {
+        val b = rechner.buchungen(kontext(LocalDateTime.of(2026, 3, 2, 8, 30)))
+
+        assertEquals(listOf(BuchungsArt.ERLEDIGUNG, BuchungsArt.PUENKTLICHKEITSBONUS), b.map { it.art })
+        assertEquals(listOf(10, 5), b.map { it.betrag })
+        assertEquals(42, b.first().faelligkeitId)
+    }
+
+    @Test
+    fun `vor dem Sollzeitpunkt zaehlt das Kulanzfenster ebenfalls`() {
+        val b = rechner.buchungen(kontext(LocalDateTime.of(2026, 3, 2, 7, 15)))
+
+        assertEquals(15, b.sumOf { it.betrag })
+    }
+
+    @Test
+    fun `ausserhalb des Kulanzfensters gibt es nur Basispunkte`() {
+        val b = rechner.buchungen(kontext(LocalDateTime.of(2026, 3, 2, 12, 0)))
+
+        assertEquals(listOf(BuchungsArt.ERLEDIGUNG), b.map { it.art })
+        assertEquals(10, b.single().betrag)
+    }
+
+    @Test
+    fun `Zaehlziele ohne Sollzeitpunkt bekommen keinen Puenctlichkeitsbonus`() {
+        val sport = aktivitaet(
+            basisPunkte = 20,
+            puenktlichkeitsBonus = 5,
+            zeitplan = Zeitplan.Wochenziel(anzahl = 3),
+        )
+        val wochenziel = faelligkeit.copy(geplantFuer = null, sollAnzahl = 3)
+        val k = ErledigungsKontext(
+            aktivitaet = sport,
+            faelligkeitVorher = wochenziel,
+            zeitpunkt = LocalDateTime.of(2026, 3, 2, 18, 0),
+            serieNachher = 1,
+            gebuchteSchwellen = emptySet(),
+            tagesFaelligkeitenNachher = listOf(wochenziel.copy(istAnzahl = 1)),
+            tagesbonusPunkte = 0,
+            tagesbonusBereitsGebucht = false,
+        )
+
+        val b = rechner.buchungen(k)
+
+        assertEquals(listOf(BuchungsArt.ERLEDIGUNG), b.map { it.art })
+        assertEquals(20, b.single().betrag)
+    }
+
+    @Test
+    fun `eine erreichte Serienschwelle wird einmal gebucht`() {
+        val mitSchwellen = tabletten.copy(
+            serienSchwellen = listOf(SerienSchwelle(7, 10), SerienSchwelle(30, 50)),
+        )
+
+        val b = rechner.buchungen(
+            kontext(LocalDateTime.of(2026, 3, 2, 8, 5), serieNachher = 7, aktivitaet = mitSchwellen),
+        )
+
+        assertEquals(
+            listOf(BuchungsArt.ERLEDIGUNG, BuchungsArt.PUENKTLICHKEITSBONUS, BuchungsArt.SERIENBONUS),
+            b.map { it.art },
+        )
+        assertEquals(10, b.last().betrag)
+        assertEquals(7, b.last().schwelle)
+    }
+
+    @Test
+    fun `eine bereits gebuchte Schwelle wird nicht erneut gebucht`() {
+        val mitSchwellen = tabletten.copy(serienSchwellen = listOf(SerienSchwelle(7, 10)))
+
+        val b = rechner.buchungen(
+            kontext(
+                LocalDateTime.of(2026, 3, 2, 8, 5),
+                serieNachher = 9,
+                gebuchteSchwellen = setOf(7),
+                aktivitaet = mitSchwellen,
+            ),
+        )
+
+        assertEquals(listOf(BuchungsArt.ERLEDIGUNG, BuchungsArt.PUENKTLICHKEITSBONUS), b.map { it.art })
+    }
+
+    @Test
+    fun `der Tagesbonus kommt wenn alle heutigen Faelligkeiten erledigt sind`() {
+        val zweite = faelligkeit.copy(id = 43, status = FaelligkeitStatus.ERLEDIGT, istAnzahl = 1)
+        val b = rechner.buchungen(
+            kontext(
+                LocalDateTime.of(2026, 3, 2, 8, 5),
+                tagesFaelligkeitenNachher = listOf(
+                    faelligkeit.copy(status = FaelligkeitStatus.ERLEDIGT, istAnzahl = 1),
+                    zweite,
+                ),
+                tagesbonusPunkte = 15,
+            ),
+        )
+
+        assertEquals(BuchungsArt.TAGESBONUS, b.last().art)
+        assertEquals(15, b.last().betrag)
+    }
+
+    @Test
+    fun `eine ausgelassene Faelligkeit verhindert den Tagesbonus`() {
+        val ausgelassen = faelligkeit.copy(id = 43, status = FaelligkeitStatus.AUSGELASSEN)
+        val b = rechner.buchungen(
+            kontext(
+                LocalDateTime.of(2026, 3, 2, 8, 5),
+                tagesFaelligkeitenNachher = listOf(
+                    faelligkeit.copy(status = FaelligkeitStatus.ERLEDIGT, istAnzahl = 1),
+                    ausgelassen,
+                ),
+                tagesbonusPunkte = 15,
+            ),
+        )
+
+        assertEquals(setOf(BuchungsArt.ERLEDIGUNG, BuchungsArt.PUENKTLICHKEITSBONUS), b.map { it.art }.toSet())
+    }
+
+    @Test
+    fun `ein bereits gebuchter Tagesbonus wird nicht verdoppelt`() {
+        val b = rechner.buchungen(
+            kontext(
+                LocalDateTime.of(2026, 3, 2, 8, 5),
+                tagesbonusPunkte = 15,
+                tagesbonusBereitsGebucht = true,
+            ),
+        )
+
+        assertEquals(setOf(BuchungsArt.ERLEDIGUNG, BuchungsArt.PUENKTLICHKEITSBONUS), b.map { it.art }.toSet())
+    }
+}
