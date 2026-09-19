@@ -1885,6 +1885,23 @@ class PunkteRechnerTest {
 Run: `./gradlew :domain:test --tests "*PunkteRechnerTest*"`
 Expected: Kompilierfehler `Unresolved reference: PunkteRechner`.
 
+Vier weitere Tests gehören dazu, weil sie Regeln festnageln, die die neun oben
+nur zufällig richtig treffen:
+
+- `mehrere auf einmal erreichte Schwellen werden aufsteigend gebucht` —
+  `serienSchwellen = listOf(SerienSchwelle(30, 50), SerienSchwelle(7, 10))`,
+  also **absteigend** deklariert, mit `puenktlichkeitsBonus = 0` und
+  `serieNachher = 30`. Erwartet: Arten `[ERLEDIGUNG, SERIENBONUS, SERIENBONUS]`,
+  `schwelle`-Werte `[7, 30]`, Summe 70. Ohne `sortedBy` schlägt der Test fehl.
+- `genau am Rand des Kulanzfensters gibt es den Bonus noch` — Soll 08:00,
+  Kulanz 60, Erledigung 09:00. Erwartet: Summe 15.
+- `eine Minute nach dem Kulanzfenster gibt es ihn nicht mehr` — dasselbe um
+  09:01. Erwartet: Summe 10.
+- `ein Tag ohne Faelligkeiten bekommt keinen Tagesbonus` —
+  `tagesFaelligkeitenNachher = emptyList()` bei `tagesbonusPunkte = 15`.
+  Erwartet: kein `TAGESBONUS`. Ohne die `isNotEmpty()`-Prüfung zahlt Kotlins
+  `all {}` auf der leeren Liste den Bonus aus.
+
 - [ ] **Step 3: Implementieren**
 
 ```kotlin
@@ -1976,8 +1993,9 @@ class PunkteRechner {
 
 - [ ] **Step 4: Test laufen lassen und grünen Lauf bestätigen**
 
-Run: `./gradlew :domain:test`
-Expected: `BUILD SUCCESSFUL`, alle Domänentests bestanden.
+Run: `./gradlew :domain:test --tests "*PunkteRechnerTest*"`
+Expected: `BUILD SUCCESSFUL`, 13 Tests bestanden. Danach `./gradlew :domain:test`
+für das ganze Modul.
 
 - [ ] **Step 5: Commit**
 
