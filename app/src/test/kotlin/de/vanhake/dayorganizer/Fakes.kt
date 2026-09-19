@@ -3,6 +3,7 @@ package de.vanhake.dayorganizer
 import de.vanhake.dayorganizer.data.repository.AktivitaetRepository
 import de.vanhake.dayorganizer.data.repository.BuchungRepository
 import de.vanhake.dayorganizer.data.repository.FaelligkeitRepository
+import de.vanhake.dayorganizer.data.repository.Transaktionen
 import de.vanhake.dayorganizer.domain.model.Aktivitaet
 import de.vanhake.dayorganizer.domain.model.Buchung
 import de.vanhake.dayorganizer.domain.model.BuchungsArt
@@ -135,4 +136,15 @@ class FakeBuchungRepository(start: List<Buchung> = emptyList()) : BuchungReposit
         stand.value.any {
             it.art == BuchungsArt.TAGESBONUS && it.zeitpunkt.toLocalDate() == tag
         }
+}
+
+/** Fuehrt den Block direkt aus. Die Fakes sind ohnehin single-threaded. */
+class FakeTransaktionen : Transaktionen {
+    var aufrufe = 0
+        private set
+
+    override suspend fun <T> inTransaktion(block: suspend () -> T): T {
+        aufrufe++
+        return block()
+    }
 }

@@ -18,6 +18,8 @@ import de.vanhake.dayorganizer.data.repository.FaelligkeitRepository
 import de.vanhake.dayorganizer.data.repository.RaumAktivitaetRepository
 import de.vanhake.dayorganizer.data.repository.RaumBuchungRepository
 import de.vanhake.dayorganizer.data.repository.RaumFaelligkeitRepository
+import de.vanhake.dayorganizer.data.repository.RaumTransaktionen
+import de.vanhake.dayorganizer.data.repository.Transaktionen
 import de.vanhake.dayorganizer.domain.rechner.PunkteRechner
 import de.vanhake.dayorganizer.domain.rechner.SerienRechner
 import de.vanhake.dayorganizer.domain.rechner.ZeitplanRechner
@@ -49,4 +51,5 @@ abstract class RepositoryModul {
     @Binds abstract fun aktivitaeten(impl: RaumAktivitaetRepository): AktivitaetRepository
     @Binds abstract fun faelligkeiten(impl: RaumFaelligkeitRepository): FaelligkeitRepository
     @Binds abstract fun buchungen(impl: RaumBuchungRepository): BuchungRepository
+    @Binds abstract fun transaktionen(impl: RaumTransaktionen): Transaktionen
 }

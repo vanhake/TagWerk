@@ -3,6 +3,7 @@ package de.vanhake.dayorganizer.domainuse
 import de.vanhake.dayorganizer.FakeAktivitaetRepository
 import de.vanhake.dayorganizer.FakeBuchungRepository
 import de.vanhake.dayorganizer.FakeFaelligkeitRepository
+import de.vanhake.dayorganizer.FakeTransaktionen
 import de.vanhake.dayorganizer.data.Einstellungen
 import de.vanhake.dayorganizer.domain.model.Aktivitaet
 import de.vanhake.dayorganizer.domain.model.BuchungsArt
@@ -56,12 +57,14 @@ class FaelligkeitErledigenTest {
         faelligkeiten: FakeFaelligkeitRepository,
         buchungen: FakeBuchungRepository,
         tagesbonus: Int = 0,
+        transaktionen: FakeTransaktionen = FakeTransaktionen(),
     ) = FaelligkeitErledigen(
         aktivitaeten = aktivitaeten,
         faelligkeiten = faelligkeiten,
         buchungen = buchungen,
         punkteRechner = PunkteRechner(),
         serienRechner = SerienRechner(),
+        transaktionen = transaktionen,
         einstellungenLesen = { Einstellungen(tagesbonusPunkte = tagesbonus) },
         uhr = uhr,
     )
@@ -86,7 +89,7 @@ class FaelligkeitErledigenTest {
         val use = useCase(uhrUm(8, 10), FakeAktivitaetRepository(listOf(tabletten)), f, b)
 
         use(10)
-        assertEquals(ErledigungsErgebnis.BEREITS_ERLEDIGT, use(10))
+        assertEquals(ErledigungsErgebnis.NICHT_OFFEN, use(10))
 
         assertEquals(15, b.stand.value.sumOf { it.betrag })
     }
@@ -182,6 +185,47 @@ class FaelligkeitErledigenTest {
 
         assertEquals(FaelligkeitStatus.AUSGELASSEN, f.stand.value.single().status)
         assertEquals(0, b.stand.value.size)
+    }
+
+    @Test
+    fun `eine ausgelassene Faelligkeit wird nicht nachtraeglich bezahlt`() = runTest {
+        val f = FakeFaelligkeitRepository(listOf(morgens))
+        val b = FakeBuchungRepository()
+        val auslassen = FaelligkeitAuslassen(f, uhrUm(9, 0))
+        auslassen(10)
+
+        val use = useCase(uhrUm(9, 30), FakeAktivitaetRepository(listOf(tabletten)), f, b)
+
+        assertEquals(ErledigungsErgebnis.NICHT_OFFEN, use(10))
+        assertEquals(FaelligkeitStatus.AUSGELASSEN, f.stand.value.single().status)
+        assertEquals(0, b.stand.value.size)
+    }
+
+    @Test
+    fun `eine verpasste Faelligkeit wird nicht nachtraeglich bezahlt`() = runTest {
+        val verpasst = morgens.copy(status = FaelligkeitStatus.VERPASST)
+        val f = FakeFaelligkeitRepository(listOf(verpasst))
+        val b = FakeBuchungRepository()
+        val use = useCase(uhrUm(9, 30), FakeAktivitaetRepository(listOf(tabletten)), f, b)
+
+        assertEquals(ErledigungsErgebnis.NICHT_OFFEN, use(10))
+        assertEquals(FaelligkeitStatus.VERPASST, f.stand.value.single().status)
+        assertEquals(0, b.stand.value.size)
+    }
+
+    @Test
+    fun `alles laeuft in einer Transaktion`() = runTest {
+        val f = FakeFaelligkeitRepository(listOf(morgens))
+        val b = FakeBuchungRepository()
+        val transaktionen = FakeTransaktionen()
+        val use = useCase(
+            uhrUm(8, 10), FakeAktivitaetRepository(listOf(tabletten)), f, b,
+            transaktionen = transaktionen,
+        )
+
+        use(10)
+
+        assertEquals(1, transaktionen.aufrufe)
     }
 
     @Test

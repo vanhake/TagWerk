@@ -5,6 +5,7 @@ import de.vanhake.dayorganizer.data.EinstellungenSpeicher
 import de.vanhake.dayorganizer.data.repository.AktivitaetRepository
 import de.vanhake.dayorganizer.data.repository.BuchungRepository
 import de.vanhake.dayorganizer.data.repository.FaelligkeitRepository
+import de.vanhake.dayorganizer.data.repository.Transaktionen
 import de.vanhake.dayorganizer.domain.model.Faelligkeit
 import de.vanhake.dayorganizer.domain.model.FaelligkeitStatus
 import de.vanhake.dayorganizer.domain.rechner.ErledigungsKontext
@@ -15,7 +16,13 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import javax.inject.Inject
 
-enum class ErledigungsErgebnis { GEBUCHT, BEREITS_ERLEDIGT, UNBEKANNT }
+/**
+ * NICHT_OFFEN deckt alle drei geschlossenen Zustaende ab: ERLEDIGT (schon gebucht),
+ * AUSGELASSEN (bewusst uebersprungen -- keine Punkte, aber die Serie ueberlebt) und
+ * VERPASST (vom naechtlichen Watchdog geschlossen -- die Serie bricht). Keiner davon
+ * darf nachtraeglich durch einen zweiten Aufruf gebucht werden.
+ */
+enum class ErledigungsErgebnis { GEBUCHT, NICHT_OFFEN, UNBEKANNT }
 
 /**
  * Der primaere Konstruktor nimmt die Einstellungen als Funktion entgegen, damit
@@ -28,6 +35,7 @@ class FaelligkeitErledigen(
     private val buchungen: BuchungRepository,
     private val punkteRechner: PunkteRechner,
     private val serienRechner: SerienRechner,
+    private val transaktionen: Transaktionen,
     private val einstellungenLesen: suspend () -> Einstellungen,
     private val uhr: Clock,
 ) {
@@ -39,16 +47,22 @@ class FaelligkeitErledigen(
         buchungen: BuchungRepository,
         punkteRechner: PunkteRechner,
         serienRechner: SerienRechner,
+        transaktionen: Transaktionen,
         speicher: EinstellungenSpeicher,
         uhr: Clock,
     ) : this(
         aktivitaeten, faelligkeiten, buchungen, punkteRechner, serienRechner,
-        { speicher.lesen() }, uhr,
+        transaktionen, { speicher.lesen() }, uhr,
     )
 
-    suspend operator fun invoke(faelligkeitId: Long): ErledigungsErgebnis {
+    // Lesen, Pruefen, Schreiben und Buchen liegen zusammen in der Transaktion.
+    // Nur so trennt die Statuspruefung zwei gleichzeitige Aufrufer.
+    suspend operator fun invoke(faelligkeitId: Long): ErledigungsErgebnis =
+        transaktionen.inTransaktion { erledige(faelligkeitId) }
+
+    private suspend fun erledige(faelligkeitId: Long): ErledigungsErgebnis {
         val vorher = faelligkeiten.nachId(faelligkeitId) ?: return ErledigungsErgebnis.UNBEKANNT
-        if (vorher.status == FaelligkeitStatus.ERLEDIGT) return ErledigungsErgebnis.BEREITS_ERLEDIGT
+        if (vorher.status != FaelligkeitStatus.OFFEN) return ErledigungsErgebnis.NICHT_OFFEN
         val aktivitaet = aktivitaeten.nachId(vorher.aktivitaetId)
             ?: return ErledigungsErgebnis.UNBEKANNT
 
