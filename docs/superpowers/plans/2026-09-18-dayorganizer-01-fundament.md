@@ -3883,8 +3883,8 @@ class FaelligkeitErledigen(
     private val buchungen: BuchungRepository,
     private val punkteRechner: PunkteRechner,
     private val serienRechner: SerienRechner,
-    private val einstellungenLesen: suspend () -> Einstellungen,
     private val transaktionen: Transaktionen,
+    private val einstellungenLesen: suspend () -> Einstellungen,
     private val uhr: Clock,
 ) {
 
@@ -3895,12 +3895,12 @@ class FaelligkeitErledigen(
         buchungen: BuchungRepository,
         punkteRechner: PunkteRechner,
         serienRechner: SerienRechner,
-        speicher: EinstellungenSpeicher,
         transaktionen: Transaktionen,
+        speicher: EinstellungenSpeicher,
         uhr: Clock,
     ) : this(
         aktivitaeten, faelligkeiten, buchungen, punkteRechner, serienRechner,
-        { speicher.lesen() }, transaktionen, uhr,
+        transaktionen, { speicher.lesen() }, uhr,
     )
 
     // Lesen, Pruefen, Schreiben und Buchen liegen zusammen in der Transaktion.
