@@ -130,4 +130,31 @@ class ErinnerungenMaterialisierenTest {
 
         assertEquals(3, erinnerungen.stand.value.size)
     }
+
+    @Test
+    fun `ein Wochenziel mit Anstoss erzeugt beim zweiten Lauf keine doppelte Erinnerung`() = runTest {
+        val erinnerungen = FakeErinnerungRepository()
+        val use = FaelligkeitenMaterialisieren(
+            aktivitaeten = FakeAktivitaetRepository(
+                listOf(
+                    aktivitaet(
+                        1,
+                        Zeitplan.Wochenziel(
+                            anzahl = 3,
+                            anstoss = listOf(Anstoss(DayOfWeek.TUESDAY, LocalTime.of(18, 0))),
+                        ),
+                    ),
+                ),
+            ),
+            faelligkeiten = FakeFaelligkeitRepository(),
+            erinnerungen = erinnerungen,
+            zeitplanRechner = ZeitplanRechner(),
+            uhr = uhr,
+        )
+
+        use(vorausTage = 6)
+        use(vorausTage = 6)
+
+        assertEquals(1, erinnerungen.stand.value.size)
+    }
 }
