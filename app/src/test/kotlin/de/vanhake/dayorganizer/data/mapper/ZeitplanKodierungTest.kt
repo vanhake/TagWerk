@@ -168,6 +168,7 @@ class ZeitplanKodierungTest {
             )
         }
         assertTrue(fehler.message.orEmpty().contains("MONTAG"))
+        assertTrue(fehler.message.orEmpty().contains("in \"wochentage\""))
     }
 
     @Test
@@ -182,6 +183,7 @@ class ZeitplanKodierungTest {
             )
         }
         assertTrue(fehler.message.orEmpty().contains("MONTAG"))
+        assertTrue(fehler.message.orEmpty().contains("in \"Anstoss\""))
     }
 
     @Test
