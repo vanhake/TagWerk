@@ -15,4 +15,11 @@
     <string name="warnung_akku_titel">Akkuoptimierung ist aktiv</string>
     <string name="warnung_akku_text">Das System kann Erinnerungen unterdrücken. Nimm DayOrganizer von der Optimierung aus.</string>
     <string name="warnung_beheben">Einstellung öffnen</string>
+    <string name="punktestand">%1$d Punkte</string>
+    <string name="tagesfortschritt">Heute %1$d von %2$d erledigt</string>
+    <string name="ziel_fortschritt">%1$d von %2$d</string>
+    <string name="abschnitt_ueberfaellig">Überfällig</string>
+    <string name="abschnitt_anstehend">Jetzt dran</string>
+    <string name="abschnitt_spaeter">Später heute</string>
+    <string name="abschnitt_abgeschlossen">Erledigt</string>
 </resources>
