@@ -133,4 +133,54 @@ class DaoTest {
         assertEquals(1, offen.size)
         assertEquals(LocalDateTime.of(2026, 3, 2, 8, 0), offen.single().geplantFuer)
     }
+
+    @Test
+    fun Zaehlziele_stehen_hinter_den_terminierten_Eintraegen_des_Tages() = runTest {
+        val id = db.aktivitaetDao().einfuegen(aktivitaet())
+        val tag = LocalDate.of(2026, 3, 2)
+        // Inserted in order: 20:00, null, 08:00
+        db.faelligkeitDao().anlegenFallsNeu(
+            listOf(
+                FaelligkeitEntity(
+                    aktivitaetId = id,
+                    schluessel = "$id|$tag|${tag}T20:00",
+                    periodeVon = tag,
+                    periodeBis = tag,
+                    geplantFuer = LocalDateTime.of(2026, 3, 2, 20, 0),
+                    sollAnzahl = 1, istAnzahl = 0, status = "OFFEN",
+                    erledigtAm = null, warPuenktlich = false,
+                ),
+                FaelligkeitEntity(
+                    aktivitaetId = id,
+                    schluessel = "$id|$tag|count-goal",
+                    periodeVon = tag,
+                    periodeBis = tag,
+                    geplantFuer = null,
+                    sollAnzahl = 3, istAnzahl = 0, status = "OFFEN",
+                    erledigtAm = null, warPuenktlich = false,
+                ),
+                FaelligkeitEntity(
+                    aktivitaetId = id,
+                    schluessel = "$id|$tag|${tag}T08:00",
+                    periodeVon = tag,
+                    periodeBis = tag,
+                    geplantFuer = LocalDateTime.of(2026, 3, 2, 8, 0),
+                    sollAnzahl = 1, istAnzahl = 0, status = "OFFEN",
+                    erledigtAm = null, warPuenktlich = false,
+                ),
+            ),
+        )
+
+        val eintraege = db.faelligkeitDao().fuerZeitraum(tag, tag)
+
+        assertEquals(3, eintraege.size)
+        assertEquals(LocalDateTime.of(2026, 3, 2, 8, 0), eintraege[0].geplantFuer)
+        assertEquals(LocalDateTime.of(2026, 3, 2, 20, 0), eintraege[1].geplantFuer)
+        assertEquals(null, eintraege[2].geplantFuer)
+    }
+
+    @Test
+    fun leeres_Journal_hat_Kontostand_null() = runTest {
+        assertEquals(0, db.buchungDao().kontostandJetzt())
+    }
 }

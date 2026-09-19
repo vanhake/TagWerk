@@ -24,7 +24,7 @@ interface FaelligkeitDao {
 
     @Query(
         "SELECT * FROM faelligkeit WHERE periodeBis >= :von AND periodeVon <= :bis " +
-            "ORDER BY periodeVon, geplantFuer",
+            "ORDER BY periodeVon, geplantFuer IS NULL, geplantFuer",
     )
     suspend fun fuerZeitraum(von: LocalDate, bis: LocalDate): List<FaelligkeitEntity>
 
