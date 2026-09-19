@@ -5,7 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.material3.Surface
 import dagger.hilt.android.AndroidEntryPoint
-import de.vanhake.dayorganizer.ui.heute.HeuteScreen
+import de.vanhake.dayorganizer.ui.DayOrganizerNavigation
 import de.vanhake.dayorganizer.ui.theme.DayOrganizerThema
 
 @AndroidEntryPoint
@@ -14,7 +14,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             DayOrganizerThema {
-                Surface { HeuteScreen() }
+                Surface { DayOrganizerNavigation() }
             }
         }
     }

@@ -22,4 +22,21 @@
     <string name="abschnitt_anstehend">Jetzt dran</string>
     <string name="abschnitt_spaeter">Später heute</string>
     <string name="abschnitt_abgeschlossen">Erledigt</string>
+    <string name="tab_heute">Heute</string>
+    <string name="tab_aktivitaeten">Aktivitäten</string>
+    <string name="neue_aktivitaet">Neue Aktivität</string>
+    <string name="punkte_je_erledigung">%1$d Punkte je Erledigung</string>
+    <string name="archivieren">Archivieren</string>
+    <string name="feld_name">Name</string>
+    <string name="feld_punkte">Punkte je Erledigung</string>
+    <string name="feld_zeitplan">Zeitplan</string>
+    <string name="feld_wochentage">Wochentage</string>
+    <string name="feld_uhrzeiten">Uhrzeiten, kommagetrennt (z. B. 08:00, 20:00)</string>
+    <string name="feld_intervall">Alle wie viele Stunden</string>
+    <string name="feld_zielanzahl">Wie oft</string>
+    <string name="typ_feste_zeiten">Feste Zeiten</string>
+    <string name="typ_intervall">Intervall</string>
+    <string name="typ_tagesziel">Mal pro Tag</string>
+    <string name="typ_wochenziel">Mal pro Woche</string>
+    <string name="speichern">Speichern</string>
 </resources>
