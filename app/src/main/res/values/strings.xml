@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">DayOrganizer</string>
+    <string name="kanal_erinnerungen_name">Erinnerungen</string>
+    <string name="kanal_erinnerungen_beschreibung">Erinnerungen an deine täglichen Aktivitäten</string>
+    <string name="aktion_erledigt">Erledigt</string>
+    <string name="aktion_spaeter">Später</string>
+    <string name="aktion_ausgelassen">Ausgelassen</string>
+    <string name="erinnerung_jetzt_faellig">Jetzt fällig</string>
+    <string name="erinnerung_noch_offen">Noch %1$d von %2$d offen</string>
 </resources>

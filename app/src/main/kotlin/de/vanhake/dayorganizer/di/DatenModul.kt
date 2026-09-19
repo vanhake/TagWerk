@@ -23,6 +23,8 @@ import de.vanhake.dayorganizer.data.repository.Transaktionen
 import de.vanhake.dayorganizer.domain.rechner.PunkteRechner
 import de.vanhake.dayorganizer.domain.rechner.SerienRechner
 import de.vanhake.dayorganizer.domain.rechner.ZeitplanRechner
+import de.vanhake.dayorganizer.platform.notification.Erinnerungsanzeige
+import de.vanhake.dayorganizer.platform.notification.ErinnerungsNotifier
 import java.time.Clock
 import javax.inject.Singleton
 
@@ -52,4 +54,5 @@ abstract class RepositoryModul {
     @Binds abstract fun faelligkeiten(impl: RaumFaelligkeitRepository): FaelligkeitRepository
     @Binds abstract fun buchungen(impl: RaumBuchungRepository): BuchungRepository
     @Binds abstract fun transaktionen(impl: RaumTransaktionen): Transaktionen
+    @Binds abstract fun erinnerungsanzeige(impl: ErinnerungsNotifier): Erinnerungsanzeige
 }
