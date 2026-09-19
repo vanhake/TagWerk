@@ -4283,13 +4283,15 @@ class ErinnerungsNotifier @Inject constructor(
 
 - [ ] **Step 6: Icon, Texte und Kanalanlage ergänzen**
 
-`app/src/main/res/drawable/ic_erinnerung.xml`:
+`app/src/main/res/drawable/ic_erinnerung.xml` — der Tint verweist auf das
+Framework-Attribut, nicht auf `?attr/...`: das Projekt benutzt kein AppCompat,
+und AAPT bricht sonst mit `resource attr/colorControlNormal not found` ab.
 
 ```xml
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp" android:height="24dp"
     android:viewportWidth="24" android:viewportHeight="24"
-    android:tint="?attr/colorControlNormal">
+    android:tint="?android:attr/colorControlNormal">
     <path android:fillColor="@android:color/white"
         android:pathData="M12,22c1.1,0 2,-0.9 2,-2h-4C10,21.1 10.9,22 12,22zM18,16v-5c0,-3.07 -1.64,-5.64 -4.5,-6.32L13.5,4c0,-0.83 -0.67,-1.5 -1.5,-1.5s-1.5,0.67 -1.5,1.5v0.68C7.63,5.36 6,7.92 6,11v5l-2,2v1h16v-1L18,16z" />
 </vector>
