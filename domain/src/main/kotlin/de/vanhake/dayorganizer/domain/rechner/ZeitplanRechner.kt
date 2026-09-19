@@ -3,6 +3,7 @@ package de.vanhake.dayorganizer.domain.rechner
 import de.vanhake.dayorganizer.domain.model.Aktivitaet
 import de.vanhake.dayorganizer.domain.model.Faelligkeit
 import de.vanhake.dayorganizer.domain.model.Zeitplan
+import java.time.Duration
 import java.time.LocalDate
 
 /**
@@ -48,17 +49,22 @@ class ZeitplanRechner {
         bis: LocalDate,
     ): List<Faelligkeit> {
         require(plan.alleNStunden > 0) { "Intervall muss positiv sein" }
+        val fensterMinuten = Duration.between(plan.von, plan.bis).toMinutes()
+        if (fensterMinuten < 0) return emptyList()
+        val schrittMinuten = plan.alleNStunden.toLong() * 60
         return tageIm(von, bis)
             .filter { it.dayOfWeek in plan.wochentage }
             .flatMap { tag ->
-                generateSequence(plan.von) { it.plusHours(plan.alleNStunden.toLong()) }
-                    .takeWhile { !it.isAfter(plan.bis) && !it.isBefore(plan.von) }
-                    .map { zeit ->
+                // Offset-Arithmetik statt LocalTime.plusHours: plusHours rechnet modulo 24
+                // und wuerde bei Teilern von 24 (z.B. 8, 12, 24 Stunden) nie terminieren.
+                generateSequence(0L) { it + schrittMinuten }
+                    .takeWhile { it <= fensterMinuten }
+                    .map { offset ->
                         Faelligkeit(
                             aktivitaetId = aktivitaet.id,
                             periodeVon = tag,
                             periodeBis = tag,
-                            geplantFuer = tag.atTime(zeit),
+                            geplantFuer = tag.atTime(plan.von.plusMinutes(offset)),
                             sollAnzahl = 1,
                         )
                     }

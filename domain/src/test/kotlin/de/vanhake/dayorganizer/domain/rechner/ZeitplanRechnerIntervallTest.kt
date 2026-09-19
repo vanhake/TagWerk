@@ -7,6 +7,8 @@ import java.time.LocalDate
 import java.time.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class ZeitplanRechnerIntervallTest {
 
@@ -85,5 +87,121 @@ class ZeitplanRechnerIntervallTest {
             setOf(LocalDate.of(2026, 3, 7), LocalDate.of(2026, 3, 8)),
             ergebnis.map { it.periodeVon }.toSet(),
         )
+    }
+
+    @Test
+    fun `alle acht Stunden zwischen sechs und zweiundzwanzig Uhr terminiert trotz Teiler von vierundzwanzig`() {
+        val a = aktivitaet(
+            zeitplan = Zeitplan.Intervall(
+                alleNStunden = 8,
+                von = LocalTime.of(6, 0),
+                bis = LocalTime.of(22, 0),
+                wochentage = DayOfWeek.entries.toSet(),
+            ),
+        )
+
+        val ergebnis = rechner.faelligkeitenFuer(
+            aktivitaet = a,
+            von = LocalDate.of(2026, 3, 2),
+            bis = LocalDate.of(2026, 3, 2),
+        )
+
+        assertEquals(
+            listOf(
+                LocalTime.of(6, 0),
+                LocalTime.of(14, 0),
+                LocalTime.of(22, 0),
+            ),
+            ergebnis.map { it.geplantFuer!!.toLocalTime() },
+        )
+    }
+
+    @Test
+    fun `alle zwoelf Stunden zwischen acht und zwanzig Uhr terminiert trotz Teiler von vierundzwanzig`() {
+        val a = aktivitaet(
+            zeitplan = Zeitplan.Intervall(
+                alleNStunden = 12,
+                von = LocalTime.of(8, 0),
+                bis = LocalTime.of(20, 0),
+                wochentage = DayOfWeek.entries.toSet(),
+            ),
+        )
+
+        val ergebnis = rechner.faelligkeitenFuer(
+            aktivitaet = a,
+            von = LocalDate.of(2026, 3, 2),
+            bis = LocalDate.of(2026, 3, 2),
+        )
+
+        assertEquals(
+            listOf(
+                LocalTime.of(8, 0),
+                LocalTime.of(20, 0),
+            ),
+            ergebnis.map { it.geplantFuer!!.toLocalTime() },
+        )
+    }
+
+    @Test
+    fun `alle vierundzwanzig Stunden zwischen acht und zwanzig Uhr ergibt genau einen Zeitpunkt`() {
+        val a = aktivitaet(
+            zeitplan = Zeitplan.Intervall(
+                alleNStunden = 24,
+                von = LocalTime.of(8, 0),
+                bis = LocalTime.of(20, 0),
+                wochentage = DayOfWeek.entries.toSet(),
+            ),
+        )
+
+        val ergebnis = rechner.faelligkeitenFuer(
+            aktivitaet = a,
+            von = LocalDate.of(2026, 3, 2),
+            bis = LocalDate.of(2026, 3, 2),
+        )
+
+        assertEquals(
+            listOf(LocalTime.of(8, 0)),
+            ergebnis.map { it.geplantFuer!!.toLocalTime() },
+        )
+    }
+
+    @Test
+    fun `ein invertiertes Fenster ergibt eine leere Liste`() {
+        val a = aktivitaet(
+            zeitplan = Zeitplan.Intervall(
+                alleNStunden = 4,
+                von = LocalTime.of(20, 0),
+                bis = LocalTime.of(8, 0),
+                wochentage = DayOfWeek.entries.toSet(),
+            ),
+        )
+
+        val ergebnis = rechner.faelligkeitenFuer(
+            aktivitaet = a,
+            von = LocalDate.of(2026, 3, 2),
+            bis = LocalDate.of(2026, 3, 2),
+        )
+
+        assertTrue(ergebnis.isEmpty())
+    }
+
+    @Test
+    fun `alleNStunden null wirft IllegalArgumentException`() {
+        val a = aktivitaet(
+            zeitplan = Zeitplan.Intervall(
+                alleNStunden = 0,
+                von = LocalTime.of(8, 0),
+                bis = LocalTime.of(20, 0),
+                wochentage = DayOfWeek.entries.toSet(),
+            ),
+        )
+
+        assertFailsWith<IllegalArgumentException> {
+            rechner.faelligkeitenFuer(
+                aktivitaet = a,
+                von = LocalDate.of(2026, 3, 2),
+                bis = LocalDate.of(2026, 3, 2),
+            )
+        }
     }
 }
