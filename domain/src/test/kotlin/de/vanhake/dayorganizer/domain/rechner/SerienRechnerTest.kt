@@ -112,4 +112,42 @@ class SerienRechnerTest {
 
         assertEquals(SerienStand(0, null), rechner.aktuelleSerieMitStart(f, start))
     }
+
+    @Test
+    fun `Perioden nach dem Stichtag zaehlen nicht mit`() {
+        val f = listOf(
+            tag(0, FaelligkeitStatus.ERLEDIGT),
+            tag(1, FaelligkeitStatus.ERLEDIGT),
+            tag(2, FaelligkeitStatus.ERLEDIGT),
+        )
+
+        assertEquals(2, rechner.aktuelleSerie(f, start.plusDays(1)))
+    }
+
+    @Test
+    fun `eine verpasste Periode nach dem Stichtag bricht die Serie nicht`() {
+        val f = listOf(
+            tag(0, FaelligkeitStatus.ERLEDIGT),
+            tag(1, FaelligkeitStatus.ERLEDIGT),
+            tag(2, FaelligkeitStatus.VERPASST),
+        )
+
+        val stand = rechner.aktuelleSerieMitStart(f, start.plusDays(1))
+
+        assertEquals(2, stand.laenge)
+        assertEquals(start.plusDays(0), stand.startPeriode)
+    }
+
+    @Test
+    fun `eine ausgelassene Periode in der Mitte teilt die laengste Serie nicht`() {
+        val f = listOf(
+            tag(0, FaelligkeitStatus.ERLEDIGT),
+            tag(1, FaelligkeitStatus.ERLEDIGT),
+            tag(2, FaelligkeitStatus.AUSGELASSEN),
+            tag(3, FaelligkeitStatus.ERLEDIGT),
+            tag(4, FaelligkeitStatus.ERLEDIGT),
+        )
+
+        assertEquals(4, rechner.laengsteSerie(f))
+    }
 }
