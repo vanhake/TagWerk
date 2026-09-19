@@ -18,6 +18,7 @@ class ZeitplanRechner {
         bis: LocalDate,
     ): List<Faelligkeit> = when (val plan = aktivitaet.zeitplan) {
         is Zeitplan.FesteZeiten -> festeZeiten(aktivitaet, plan, von, bis)
+        is Zeitplan.Intervall -> intervall(aktivitaet, plan, von, bis)
         else -> emptyList()
     }
 
@@ -39,6 +40,31 @@ class ZeitplanRechner {
                 )
             }
         }
+
+    private fun intervall(
+        aktivitaet: Aktivitaet,
+        plan: Zeitplan.Intervall,
+        von: LocalDate,
+        bis: LocalDate,
+    ): List<Faelligkeit> {
+        require(plan.alleNStunden > 0) { "Intervall muss positiv sein" }
+        return tageIm(von, bis)
+            .filter { it.dayOfWeek in plan.wochentage }
+            .flatMap { tag ->
+                generateSequence(plan.von) { it.plusHours(plan.alleNStunden.toLong()) }
+                    .takeWhile { !it.isAfter(plan.bis) && !it.isBefore(plan.von) }
+                    .map { zeit ->
+                        Faelligkeit(
+                            aktivitaetId = aktivitaet.id,
+                            periodeVon = tag,
+                            periodeBis = tag,
+                            geplantFuer = tag.atTime(zeit),
+                            sollAnzahl = 1,
+                        )
+                    }
+                    .toList()
+            }
+    }
 
     private fun tageIm(von: LocalDate, bis: LocalDate): List<LocalDate> =
         generateSequence(von) { it.plusDays(1) }
