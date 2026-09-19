@@ -30,5 +30,15 @@
                 <action android:name="de.vanhake.dayorganizer.ERINNERUNG_FAELLIG" />
             </intent-filter>
         </receiver>
+
+        <receiver
+            android:name=".platform.notification.AktionsEmpfaenger"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="de.vanhake.dayorganizer.ERLEDIGT" />
+                <action android:name="de.vanhake.dayorganizer.SPAETER" />
+                <action android:name="de.vanhake.dayorganizer.AUSGELASSEN" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>
