@@ -4038,6 +4038,7 @@ git commit -m "feat(domainuse): Erledigen, Auslassen und Verpassen mit Punktebuc
 **Files:**
 - Create: `app/src/main/kotlin/de/vanhake/dayorganizer/platform/notification/Benachrichtigungsaktionen.kt`
 - Create: `app/src/main/kotlin/de/vanhake/dayorganizer/platform/notification/Kanaele.kt`
+- Create: `app/src/main/kotlin/de/vanhake/dayorganizer/platform/notification/Erinnerungsanzeige.kt`
 - Create: `app/src/main/kotlin/de/vanhake/dayorganizer/platform/notification/ErinnerungsNotifier.kt`
 - Modify: `app/src/main/kotlin/de/vanhake/dayorganizer/DayOrganizerApp.kt`
 - Modify: `app/src/main/res/values/strings.xml`
@@ -4050,7 +4051,8 @@ git commit -m "feat(domainuse): Erledigen, Auslassen und Verpassen mit Punktebuc
   - `Benachrichtigungsaktionen.ACTION_ERLEDIGT`, `ACTION_SPAETER`, `ACTION_AUSGELASSEN`, `EXTRA_FAELLIGKEIT_ID`
   - `Benachrichtigungsaktionen.aus(action: String?, faelligkeitId: Long): Benachrichtigungsaktion?` — `null` bei unbekannter Aktion oder `faelligkeitId <= 0`
   - `Kanaele.KANAL_ERINNERUNGEN`, `Kanaele.anlegen(kontext: Context)`
-  - `ErinnerungsNotifier.zeige(faelligkeitId: Long, titel: String, text: String)`, `ErinnerungsNotifier.verstecke(faelligkeitId: Long)`
+  - `interface Erinnerungsanzeige { fun zeige(faelligkeit: Faelligkeit, aktivitaet: Aktivitaet); fun verstecke(faelligkeitId: Long) }` — die Textgestaltung liegt in der Android-Implementierung, damit der Use Case in Task 15 ohne Ressourcen prüfbar bleibt
+  - `ErinnerungsNotifier : Erinnerungsanzeige`, in `RepositoryModul` gebunden
 
 Die Zuordnung von Intent zu Aktion ist als reine Funktion herausgezogen, damit sie ohne Emulator geprüft werden kann. Der BroadcastReceiver aus Task 15 reicht nur `intent.action` und das Extra hinein.
 
@@ -4166,6 +4168,25 @@ object Kanaele {
 }
 ```
 
+`platform/notification/Erinnerungsanzeige.kt`:
+
+```kotlin
+package de.vanhake.dayorganizer.platform.notification
+
+import de.vanhake.dayorganizer.domain.model.Aktivitaet
+import de.vanhake.dayorganizer.domain.model.Faelligkeit
+
+/**
+ * Trennt das Anzeigen einer Erinnerung von der Entscheidung, wann erinnert
+ * wird. Die Textgestaltung gehoert in die Android-Implementierung, damit der
+ * Use Case in Task 15 ohne Ressourcen und ohne Emulator pruefbar bleibt.
+ */
+interface Erinnerungsanzeige {
+    fun zeige(faelligkeit: Faelligkeit, aktivitaet: Aktivitaet)
+    fun verstecke(faelligkeitId: Long)
+}
+```
+
 `platform/notification/ErinnerungsNotifier.kt`:
 
 ```kotlin
@@ -4179,18 +4200,31 @@ import androidx.core.app.NotificationManagerCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import de.vanhake.dayorganizer.MainActivity
 import de.vanhake.dayorganizer.R
+import de.vanhake.dayorganizer.domain.model.Aktivitaet
+import de.vanhake.dayorganizer.domain.model.Faelligkeit
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class ErinnerungsNotifier @Inject constructor(
     @ApplicationContext private val kontext: Context,
-) {
+) : Erinnerungsanzeige {
 
-    fun zeige(faelligkeitId: Long, titel: String, text: String) {
+    override fun zeige(faelligkeit: Faelligkeit, aktivitaet: Aktivitaet) {
+        val faelligkeitId = faelligkeit.id
+        val text = if (faelligkeit.sollAnzahl > 1) {
+            kontext.getString(
+                R.string.erinnerung_noch_offen,
+                faelligkeit.sollAnzahl - faelligkeit.istAnzahl,
+                faelligkeit.sollAnzahl,
+            )
+        } else {
+            kontext.getString(R.string.erinnerung_jetzt_faellig)
+        }
+
         val benachrichtigung = NotificationCompat.Builder(kontext, Kanaele.KANAL_ERINNERUNGEN)
             .setSmallIcon(R.drawable.ic_erinnerung)
-            .setContentTitle(titel)
+            .setContentTitle(aktivitaet.name)
             .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
@@ -4221,7 +4255,7 @@ class ErinnerungsNotifier @Inject constructor(
         // die Erinnerungskette deswegen nicht abbrechen.
     }
 
-    fun verstecke(faelligkeitId: Long) {
+    override fun verstecke(faelligkeitId: Long) {
         NotificationManagerCompat.from(kontext).cancel(faelligkeitId.toInt())
     }
 
@@ -4269,6 +4303,14 @@ In `strings.xml` ergänzen:
     <string name="aktion_erledigt">Erledigt</string>
     <string name="aktion_spaeter">Später</string>
     <string name="aktion_ausgelassen">Ausgelassen</string>
+    <string name="erinnerung_jetzt_faellig">Jetzt fällig</string>
+    <string name="erinnerung_noch_offen">Noch %1$d von %2$d offen</string>
+```
+
+In `RepositoryModul` in `di/DatenModul.kt` binden:
+
+```kotlin
+    @Binds abstract fun erinnerungsanzeige(impl: ErinnerungsNotifier): Erinnerungsanzeige
 ```
 
 `DayOrganizerApp.kt` erweitern:
@@ -5032,19 +5074,15 @@ git commit -m "feat(platform): Erinnerungstermine als Tabelle und rollierender E
 
 **Files:**
 - Create: `app/src/main/kotlin/de/vanhake/dayorganizer/domainuse/ErinnerungAusloesen.kt`
-- Create: `app/src/main/kotlin/de/vanhake/dayorganizer/platform/notification/Erinnerungsanzeige.kt`
-- Modify: `app/src/main/kotlin/de/vanhake/dayorganizer/platform/notification/ErinnerungsNotifier.kt` — implementiert `Erinnerungsanzeige`
 - Modify: `app/src/main/kotlin/de/vanhake/dayorganizer/platform/alarm/ErinnerungsEmpfaenger.kt`
 - Create: `app/src/main/kotlin/de/vanhake/dayorganizer/platform/notification/AktionsEmpfaenger.kt`
-- Modify: `app/src/main/kotlin/de/vanhake/dayorganizer/di/DatenModul.kt` — `Erinnerungsanzeige` binden
 - Modify: `app/src/main/AndroidManifest.xml`
 - Modify: `app/src/main/res/values/strings.xml`
 - Test: `app/src/test/kotlin/de/vanhake/dayorganizer/domainuse/ErinnerungAusloesenTest.kt`
 
 **Interfaces:**
-- Consumes: `ErinnerungRepository` und `AlarmPlaner` aus Task 14, `FaelligkeitErledigen`, `FaelligkeitAuslassen` aus Task 12
+- Consumes: `Erinnerungsanzeige` aus Task 13, `ErinnerungRepository` und `AlarmPlaner` aus Task 14, `FaelligkeitErledigen`, `FaelligkeitAuslassen` aus Task 12
 - Produces:
-  - `interface Erinnerungsanzeige { fun zeige(faelligkeit: Faelligkeit, aktivitaet: Aktivitaet); fun verstecke(faelligkeitId: Long) }` — die Textgestaltung liegt in der Android-Implementierung, damit der Use Case ohne Ressourcen testbar bleibt
   - `ErinnerungAusloesen.invoke()` — verarbeitet alle bis jetzt fälligen Erinnerungen, zeigt Benachrichtigungen, plant Nachfassen und setzt den nächsten Alarm
   - `ErinnerungSpaeter.invoke(faelligkeitId: Long)` — verschiebt um `nachfassAbstandMinuten`
 
@@ -5220,26 +5258,7 @@ class ErinnerungAusloesenTest {
 Run: `./gradlew :app:testDebugUnitTest --tests "*ErinnerungAusloesenTest*"`
 Expected: Kompilierfehler `Unresolved reference: ErinnerungAusloesen`.
 
-- [ ] **Step 3: Anzeige-Schnittstelle und Use Cases implementieren**
-
-`platform/notification/Erinnerungsanzeige.kt`:
-
-```kotlin
-package de.vanhake.dayorganizer.platform.notification
-
-import de.vanhake.dayorganizer.domain.model.Aktivitaet
-import de.vanhake.dayorganizer.domain.model.Faelligkeit
-
-/**
- * Trennt das Anzeigen einer Erinnerung von der Entscheidung, wann erinnert wird.
- * Die Textgestaltung gehoert in die Android-Implementierung, damit der Use Case
- * ohne Ressourcen und ohne Emulator pruefbar bleibt.
- */
-interface Erinnerungsanzeige {
-    fun zeige(faelligkeit: Faelligkeit, aktivitaet: Aktivitaet)
-    fun verstecke(faelligkeitId: Long)
-}
-```
+- [ ] **Step 3: Use Cases implementieren**
 
 `domainuse/ErinnerungAusloesen.kt`:
 
@@ -5323,78 +5342,7 @@ class ErinnerungSpaeter @Inject constructor(
 Run: `./gradlew :app:testDebugUnitTest --tests "*ErinnerungAusloesenTest*"`
 Expected: `BUILD SUCCESSFUL`, 5 Tests bestanden.
 
-- [ ] **Step 5: Notifier auf die Schnittstelle umstellen**
-
-In `ErinnerungsNotifier.kt` die Klassensignatur und die Methode `zeige` ersetzen:
-
-```kotlin
-@Singleton
-class ErinnerungsNotifier @Inject constructor(
-    @ApplicationContext private val kontext: Context,
-) : Erinnerungsanzeige {
-
-    override fun zeige(faelligkeit: Faelligkeit, aktivitaet: Aktivitaet) {
-        val text = if (faelligkeit.sollAnzahl > 1) {
-            kontext.getString(
-                R.string.erinnerung_noch_offen,
-                faelligkeit.sollAnzahl - faelligkeit.istAnzahl,
-                faelligkeit.sollAnzahl,
-            )
-        } else {
-            kontext.getString(R.string.erinnerung_jetzt_faellig)
-        }
-
-        val benachrichtigung = NotificationCompat.Builder(kontext, Kanaele.KANAL_ERINNERUNGEN)
-            .setSmallIcon(R.drawable.ic_erinnerung)
-            .setContentTitle(aktivitaet.name)
-            .setContentText(text)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_REMINDER)
-            .setAutoCancel(true)
-            .setContentIntent(appOeffnen())
-            .addAction(
-                0,
-                kontext.getString(R.string.aktion_erledigt),
-                aktion(Benachrichtigungsaktionen.ACTION_ERLEDIGT, faelligkeit.id),
-            )
-            .addAction(
-                0,
-                kontext.getString(R.string.aktion_spaeter),
-                aktion(Benachrichtigungsaktionen.ACTION_SPAETER, faelligkeit.id),
-            )
-            .addAction(
-                0,
-                kontext.getString(R.string.aktion_ausgelassen),
-                aktion(Benachrichtigungsaktionen.ACTION_AUSGELASSEN, faelligkeit.id),
-            )
-            .build()
-
-        runCatching {
-            NotificationManagerCompat.from(kontext).notify(faelligkeit.id.toInt(), benachrichtigung)
-        }
-    }
-
-    override fun verstecke(faelligkeitId: Long) {
-        NotificationManagerCompat.from(kontext).cancel(faelligkeitId.toInt())
-    }
-```
-
-Neue Importe: `de.vanhake.dayorganizer.domain.model.Aktivitaet`, `de.vanhake.dayorganizer.domain.model.Faelligkeit`.
-
-In `strings.xml` ergänzen:
-
-```xml
-    <string name="erinnerung_jetzt_faellig">Jetzt fällig</string>
-    <string name="erinnerung_noch_offen">Noch %1$d von %2$d offen</string>
-```
-
-In `RepositoryModul` ergänzen:
-
-```kotlin
-    @Binds abstract fun erinnerungsanzeige(impl: ErinnerungsNotifier): Erinnerungsanzeige
-```
-
-- [ ] **Step 6: Empfänger verdrahten**
+- [ ] **Step 5: Empfänger verdrahten**
 
 `platform/alarm/ErinnerungsEmpfaenger.kt` vollständig ersetzen:
 
@@ -5501,12 +5449,12 @@ Im Manifest innerhalb von `<application>` ergänzen:
         </receiver>
 ```
 
-- [ ] **Step 7: Build und alle Tests laufen lassen**
+- [ ] **Step 6: Build und alle Tests laufen lassen**
 
 Run: `./gradlew :app:assembleDebug :app:testDebugUnitTest :domain:test`
 Expected: `BUILD SUCCESSFUL`.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add app/
