@@ -15,19 +15,22 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 
 class FakeAktivitaetRepository(start: List<Aktivitaet> = emptyList()) : AktivitaetRepository {
-    private val stand = MutableStateFlow(start)
-    private var naechsteId = (start.maxOfOrNull { it.id } ?: 0L) + 1
+    val stand = MutableStateFlow(start)
+
+    private fun naechsteId(): Long = (stand.value.maxOfOrNull { it.id } ?: 0L) + 1
 
     override fun beobachteAktive(): Flow<List<Aktivitaet>> =
-        stand.map { liste -> liste.filter { it.aktiv && it.archiviertAm == null } }
+        stand.map { liste ->
+            liste.filter { it.aktiv && it.archiviertAm == null }.sortedBy { it.name }
+        }
 
     override suspend fun alleAktiven(): List<Aktivitaet> =
-        stand.value.filter { it.aktiv && it.archiviertAm == null }
+        stand.value.filter { it.aktiv && it.archiviertAm == null }.sortedBy { it.name }
 
     override suspend fun nachId(id: Long): Aktivitaet? = stand.value.find { it.id == id }
 
     override suspend fun speichern(aktivitaet: Aktivitaet): Long {
-        val id = if (aktivitaet.id == 0L) naechsteId++ else aktivitaet.id
+        val id = if (aktivitaet.id == 0L) naechsteId() else aktivitaet.id
         stand.value = stand.value.filterNot { it.id == id } + aktivitaet.copy(id = id)
         return id
     }
@@ -41,13 +44,27 @@ class FakeAktivitaetRepository(start: List<Aktivitaet> = emptyList()) : Aktivita
 
 class FakeFaelligkeitRepository(start: List<Faelligkeit> = emptyList()) : FaelligkeitRepository {
     val stand = MutableStateFlow(start)
-    private var naechsteId = (start.maxOfOrNull { it.id } ?: 0L) + 1
+
+    private fun naechsteId(): Long = (stand.value.maxOfOrNull { it.id } ?: 0L) + 1
 
     private fun schluessel(f: Faelligkeit) = "${f.aktivitaetId}|${f.periodeVon}|${f.geplantFuer ?: "ZIEL"}"
+
+    /** Spiegelt "ORDER BY periodeVon, geplantFuer IS NULL, geplantFuer": Ziele (geplantFuer
+     * == null) sortieren innerhalb derselben Periode nach den terminierten Eintraegen ein. */
+    private val zeitraumOrdnung: Comparator<Faelligkeit> =
+        compareBy<Faelligkeit> { it.periodeVon }
+            .thenBy { it.geplantFuer == null }
+            .thenBy { it.geplantFuer }
+
+    /** Spiegelt "ORDER BY geplantFuer IS NULL, geplantFuer". */
+    private val tagOrdnung: Comparator<Faelligkeit> =
+        compareBy<Faelligkeit> { it.geplantFuer == null }
+            .thenBy { it.geplantFuer }
 
     override suspend fun anlegenFallsNeu(neue: List<Faelligkeit>) {
         val vorhanden = stand.value.map(::schluessel).toMutableSet()
         val ergaenzt = stand.value.toMutableList()
+        var naechsteId = naechsteId()
         neue.forEach { f ->
             if (vorhanden.add(schluessel(f))) ergaenzt += f.copy(id = naechsteId++)
         }
@@ -60,16 +77,20 @@ class FakeFaelligkeitRepository(start: List<Faelligkeit> = emptyList()) : Faelli
         stand.value.filter { it.aktivitaetId == aktivitaetId && it.periodeVon == periodeVon }
 
     override suspend fun fuerZeitraum(von: LocalDate, bis: LocalDate): List<Faelligkeit> =
-        stand.value.filter { !it.periodeBis.isBefore(von) && !it.periodeVon.isAfter(bis) }
+        stand.value
+            .filter { !it.periodeBis.isBefore(von) && !it.periodeVon.isAfter(bis) }
+            .sortedWith(zeitraumOrdnung)
 
     override suspend fun historie(aktivitaetId: Long): List<Faelligkeit> =
         stand.value.filter { it.aktivitaetId == aktivitaetId }.sortedBy { it.periodeVon }
 
     override suspend fun offeneBis(zeitpunkt: LocalDateTime): List<Faelligkeit> =
-        stand.value.filter {
-            it.status == FaelligkeitStatus.OFFEN &&
-                it.geplantFuer != null && it.geplantFuer!!.isBefore(zeitpunkt)
-        }
+        stand.value
+            .filter {
+                it.status == FaelligkeitStatus.OFFEN &&
+                    it.geplantFuer != null && it.geplantFuer!!.isBefore(zeitpunkt)
+            }
+            .sortedBy { it.geplantFuer }
 
     override suspend fun offeneVorTag(tag: LocalDate): List<Faelligkeit> =
         stand.value.filter { it.status == FaelligkeitStatus.OFFEN && it.periodeBis.isBefore(tag) }
@@ -83,7 +104,9 @@ class FakeFaelligkeitRepository(start: List<Faelligkeit> = emptyList()) : Faelli
 
     override fun beobachteTag(tag: LocalDate): Flow<List<Faelligkeit>> =
         stand.map { liste ->
-            liste.filter { !it.periodeBis.isBefore(tag) && !it.periodeVon.isAfter(tag) }
+            liste
+                .filter { !it.periodeBis.isBefore(tag) && !it.periodeVon.isAfter(tag) }
+                .sortedWith(tagOrdnung)
         }
 }
 

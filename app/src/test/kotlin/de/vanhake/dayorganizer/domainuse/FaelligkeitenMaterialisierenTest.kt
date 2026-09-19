@@ -3,8 +3,10 @@ package de.vanhake.dayorganizer.domainuse
 import de.vanhake.dayorganizer.FakeAktivitaetRepository
 import de.vanhake.dayorganizer.FakeFaelligkeitRepository
 import de.vanhake.dayorganizer.domain.model.Aktivitaet
+import de.vanhake.dayorganizer.domain.model.Faelligkeit
 import de.vanhake.dayorganizer.domain.model.Zeitplan
 import de.vanhake.dayorganizer.domain.rechner.ZeitplanRechner
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import java.time.Clock
 import java.time.DayOfWeek
@@ -13,6 +15,7 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class FaelligkeitenMaterialisierenTest {
 
@@ -78,5 +81,68 @@ class FaelligkeitenMaterialisierenTest {
         use(vorausTage = 6)
 
         assertEquals(0, faelligkeiten.stand.value.size)
+    }
+
+    @Test
+    fun `ein Wochenziel wird bei wiederholtem Lauf nicht doppelt angelegt`() = runTest {
+        val sport = tabletten.copy(
+            id = 2,
+            name = "Sport",
+            zeitplan = Zeitplan.Wochenziel(anzahl = 3),
+        )
+        val faelligkeiten = FakeFaelligkeitRepository()
+        val use = FaelligkeitenMaterialisieren(
+            aktivitaeten = FakeAktivitaetRepository(listOf(sport)),
+            faelligkeiten = faelligkeiten,
+            zeitplanRechner = ZeitplanRechner(),
+            uhr = uhr,
+        )
+
+        use(vorausTage = 6)
+        use(vorausTage = 6)
+
+        assertEquals(1, faelligkeiten.stand.value.size)
+        assertNull(faelligkeiten.stand.value.single().geplantFuer)
+    }
+
+    @Test
+    fun `fuerZeitraum liefert terminierte Faelligkeiten vor Zielen der gleichen Periode`() = runTest {
+        val periodeVon = LocalDate.of(2026, 3, 2)
+        val periodeBis = LocalDate.of(2026, 3, 8)
+        val ziel = Faelligkeit(
+            id = 1,
+            aktivitaetId = 1,
+            periodeVon = periodeVon,
+            periodeBis = periodeBis,
+            geplantFuer = null,
+            sollAnzahl = 3,
+        )
+        val termin = Faelligkeit(
+            id = 2,
+            aktivitaetId = 1,
+            periodeVon = periodeVon,
+            periodeBis = periodeVon,
+            geplantFuer = periodeVon.atTime(8, 0),
+            sollAnzahl = 1,
+        )
+        // Absichtlich in "falscher" Reihenfolge geseedet, damit der Test die Sortierung
+        // der Fake-Implementierung prueft und nicht nur die Einfuegereihenfolge.
+        val faelligkeiten = FakeFaelligkeitRepository(listOf(ziel, termin))
+
+        val ergebnis = faelligkeiten.fuerZeitraum(periodeVon, periodeBis)
+
+        assertEquals(listOf(termin.id, ziel.id), ergebnis.map { it.id })
+    }
+
+    @Test
+    fun `beobachteAktive liefert Aktivitaeten alphabetisch sortiert nach Namen`() = runTest {
+        val zeta = tabletten.copy(id = 1, name = "Zeta")
+        val alpha = tabletten.copy(id = 2, name = "Alpha")
+        // Absichtlich in "falscher" Reihenfolge geseedet.
+        val aktivitaeten = FakeAktivitaetRepository(listOf(zeta, alpha))
+
+        val ergebnis = aktivitaeten.beobachteAktive().first()
+
+        assertEquals(listOf("Alpha", "Zeta"), ergebnis.map { it.name })
     }
 }
