@@ -4538,8 +4538,10 @@ class FakeErinnerungRepository(start: List<Erinnerung> = emptyList()) : Erinneru
         stand.value = stand.value.map { if (it.id == id) it.copy(ausgeloest = true) else it }
     }
 
+    // Wie die DAO-Abfrage: bereits ausgeloeste Erinnerungen bleiben stehen,
+    // damit die Historie erhalten bleibt.
     override suspend fun entfernenFuerFaelligkeit(faelligkeitId: Long) {
-        stand.value = stand.value.filterNot { it.faelligkeitId == faelligkeitId }
+        stand.value = stand.value.filterNot { it.faelligkeitId == faelligkeitId && !it.ausgeloest }
     }
 }
 ```
