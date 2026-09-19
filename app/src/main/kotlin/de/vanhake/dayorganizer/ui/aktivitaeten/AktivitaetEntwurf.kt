@@ -42,6 +42,8 @@ data class AktivitaetEntwurf(
     val serienSchwellen: List<SerienSchwelle> = listOf(SerienSchwelle(7, 10)),
     val nachfassAnzahlText: String = "2",
     val nachfassAbstandText: String = "15",
+    val aktiv: Boolean = true,
+    val archiviertAm: LocalDate? = null,
 ) {
 
     private val basisPunkte: Int get() = basisPunkteText.toIntOrNull() ?: 0
@@ -97,6 +99,8 @@ data class AktivitaetEntwurf(
         nachfassAnzahl = nachfassAnzahlText.toIntOrNull() ?: 0,
         nachfassAbstandMinuten = nachfassAbstandText.toIntOrNull() ?: 15,
         erstelltAm = erstelltAm,
+        aktiv = aktiv,
+        archiviertAm = archiviertAm,
     )
 
     companion object {
@@ -112,6 +116,8 @@ data class AktivitaetEntwurf(
                 serienSchwellen = aktivitaet.serienSchwellen,
                 nachfassAnzahlText = aktivitaet.nachfassAnzahl.toString(),
                 nachfassAbstandText = aktivitaet.nachfassAbstandMinuten.toString(),
+                aktiv = aktivitaet.aktiv,
+                archiviertAm = aktivitaet.archiviertAm,
             )
             return when (val plan = aktivitaet.zeitplan) {
                 is Zeitplan.FesteZeiten -> basis.copy(

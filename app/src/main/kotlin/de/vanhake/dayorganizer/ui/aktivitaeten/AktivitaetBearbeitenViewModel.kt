@@ -1,5 +1,6 @@
 package de.vanhake.dayorganizer.ui.aktivitaeten
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -45,9 +46,19 @@ class AktivitaetBearbeitenViewModel @Inject constructor(
 
         aktivitaeten.speichern(_entwurf.value.zuAktivitaet(LocalDate.now(uhr)))
         // Ohne diese beiden Zeilen wirkt eine neue Aktivitaet erst nach dem
-        // naechtlichen Waechterlauf.
-        materialisieren()
-        alarmPlaner.neuPlanen()
+        // naechtlichen Waechterlauf. Sie sind reine Optimierung: Wenn sie
+        // fehlschlagen, holt der naechtliche Waechterlauf das nach, darum
+        // duerfen sie das Ergebnis nicht mit runterreissen.
+        runCatching {
+            materialisieren()
+            alarmPlaner.neuPlanen()
+        }.onFailure { ausnahme ->
+            Log.w(TAG, "Nachbereitung nach dem Speichern fehlgeschlagen", ausnahme)
+        }
         return true
+    }
+
+    private companion object {
+        const val TAG = "AktivitaetBearbeiten"
     }
 }
