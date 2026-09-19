@@ -5515,7 +5515,13 @@ git commit -m "feat(platform): Erinnerungen ausloesen, nachfassen und aus der Le
   - `WaechterPlanung.taeglichPlanen()` — meldet den periodischen Job an; `WaechterPlanung.sofortAusfuehren()` für Boot und App-Update
   - `BootEmpfaenger` reagiert auf `BOOT_COMPLETED` und `MY_PACKAGE_REPLACED`
 
-Die Reihenfolge ist wichtig: erst schließen, dann materialisieren. Andernfalls würde eine soeben angelegte Fälligkeit für heute mit einem Sollzeitpunkt in der Vergangenheit sofort wieder als verpasst markiert.
+Die Reihenfolge — erst schließen, dann materialisieren, dann neu planen — ist
+absichtlich so gewählt, trägt aber heute nichts: `VerpassteAbschliessen`
+vergleicht ganze Tage (`periodeBis < heute`), und materialisiert werden nur
+Fälligkeiten ab heute. Die beiden Mengen überschneiden sich nie. Schließen
+zuerst bleibt trotzdem die sichere Reihenfolge, falls die Verpasst-Prüfung
+jemals auf Uhrzeiten umgestellt wird. Schreibe keinen Test, der behauptet, die
+Reihenfolge zu beweisen — er kann nicht fehlschlagen.
 
 - [ ] **Step 1: Fehlschlagenden Test schreiben**
 
@@ -5588,12 +5594,12 @@ class WaechterAblaufTest {
             FaelligkeitStatus.VERPASST,
             faelligkeiten.stand.value.first { it.id == 9L }.status,
         )
-        assertEquals(8, faelligkeiten.stand.value.size)
+        assertEquals(9, faelligkeiten.stand.value.size)
         assertTrue(alarmNeuGeplant)
     }
 
     @Test
-    fun `eine heute frueh angelegte Faelligkeit wird nicht sofort verpasst`() = runTest {
+    fun `eine heute faellige Aufgabe bleibt bis Mitternacht offen`() = runTest {
         val faelligkeiten = FakeFaelligkeitRepository()
         val aktivitaeten = FakeAktivitaetRepository(listOf(tabletten))
         val ablauf = WaechterAblauf(
@@ -5652,6 +5658,16 @@ class WaechterAblauf(
 
 - [ ] **Step 4: Test laufen lassen und grünen Lauf bestätigen**
 
+Zwei Dinge zu den Erwartungswerten. Der erste Test erwartet **9** Fälligkeiten,
+nicht 8: ein Vorausblick von sieben Tagen deckt acht Tage einschließlich heute
+ab, dazu kommt die vorbestehende von gestern.
+
+Der zweite Test nagelt die Kulanzregel fest statt der Reihenfolge: eine Aufgabe,
+deren Sollzeitpunkt heute schon vorbei ist, bleibt bis Mitternacht offen. Setze
+die Uhr dafür auf 12:00 und die Aktivität auf 08:00 und lege die Fälligkeit
+vorher an — gegen eine auf Uhrzeiten umgestellte Verpasst-Prüfung schlägt er
+dann fehl.
+
 Run: `./gradlew :app:testDebugUnitTest --tests "*WaechterAblaufTest*"`
 Expected: `BUILD SUCCESSFUL`, 2 Tests bestanden.
 
@@ -5678,7 +5694,25 @@ class WaechterWorker @AssistedInject constructor(
 ) : CoroutineWorker(kontext, parameter) {
 
     override suspend fun doWork(): Result = runCatching { ablauf() }
-        .fold(onSuccess = { Result.success() }, onFailure = { Result.retry() })
+        .fold(
+            onSuccess = { Result.success() },
+            onFailure = { fehler ->
+                // Nach drei Versuchen aufgeben statt endlos zu wiederholen:
+                // der naechtliche Lauf holt es ohnehin nach, und ein dauerhaft
+                // scheiterndes Retry kostet nur Akku.
+                if (runAttemptCount < MAX_VERSUCHE - 1) {
+                    Result.retry()
+                } else {
+                    Log.w(TAG, "Waechter gibt nach $MAX_VERSUCHE Versuchen auf", fehler)
+                    Result.success()
+                }
+            },
+        )
+
+    private companion object {
+        const val MAX_VERSUCHE = 3
+        const val TAG = "WaechterWorker"
+    }
 }
 ```
 
