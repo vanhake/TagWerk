@@ -924,31 +924,52 @@ In `ZeitplanRechner.kt` den `when`-Zweig ergänzen und die Methode hinzufügen:
         bis: LocalDate,
     ): List<Faelligkeit> {
         require(plan.alleNStunden > 0) { "Intervall muss positiv sein" }
+        val fensterMinuten = Duration.between(plan.von, plan.bis).toMinutes()
+        if (fensterMinuten < 0) return emptyList()
+
+        // Gerechnet wird ueber einen wachsenden Minutenversatz, nicht ueber
+        // LocalTime.plusHours: das rechnet modulo 24, und bei Teilern von 24
+        // (8 Stunden von 06:00 bis 22:00, 12 Stunden von 08:00 bis 20:00)
+        // landet der Umlauf exakt wieder auf `von` -- die Folge endet nie.
+        val schrittMinuten = plan.alleNStunden * 60L
+        val zeiten = generateSequence(0L) { it + schrittMinuten }
+            .takeWhile { it <= fensterMinuten }
+            .map { plan.von.plusMinutes(it) }
+            .toList()
+
         return tageIm(von, bis)
             .filter { it.dayOfWeek in plan.wochentage }
             .flatMap { tag ->
-                generateSequence(plan.von) { it.plusHours(plan.alleNStunden.toLong()) }
-                    .takeWhile { !it.isAfter(plan.bis) && !it.isBefore(plan.von) }
-                    .map { zeit ->
-                        Faelligkeit(
-                            aktivitaetId = aktivitaet.id,
-                            periodeVon = tag,
-                            periodeBis = tag,
-                            geplantFuer = tag.atTime(zeit),
-                            sollAnzahl = 1,
-                        )
-                    }
-                    .toList()
+                zeiten.map { zeit ->
+                    Faelligkeit(
+                        aktivitaetId = aktivitaet.id,
+                        periodeVon = tag,
+                        periodeBis = tag,
+                        geplantFuer = tag.atTime(zeit),
+                        sollAnzahl = 1,
+                    )
+                }
             }
     }
 ```
 
-Die zweite Bedingung `!it.isBefore(plan.von)` bricht die Folge ab, sobald `plusHours` über Mitternacht rollt; sonst liefe die Sequenz endlos.
+Der zusätzliche Import ist `java.time.Duration`.
+
+Der Versatz ist ein streng wachsender `Long` gegen eine feste Schranke — damit
+ist die Terminierung strukturell und hängt nicht daran, einen Umlauf zu
+erkennen. Ergänze zu den drei Tests aus Step 1 noch fünf weitere, die genau
+diese Grenzfälle festnageln: 8 Stunden von 06:00 bis 22:00 (erwartet 06:00,
+14:00, 22:00), 12 Stunden von 08:00 bis 20:00 (erwartet 08:00, 20:00), 24
+Stunden von 08:00 bis 20:00 (erwartet nur 08:00), ein umgekehrtes Fenster
+(erwartet leere Liste) und `alleNStunden = 0` (erwartet
+`IllegalArgumentException`). Die ersten drei laufen gegen eine Umlauf-basierte
+Implementierung nicht in einen Fehler, sondern in einen `OutOfMemoryError` —
+begrenze den RED-Lauf entsprechend.
 
 - [ ] **Step 4: Test laufen lassen und grünen Lauf bestätigen**
 
 Run: `./gradlew :domain:test --tests "*ZeitplanRechnerIntervallTest*"`
-Expected: `BUILD SUCCESSFUL`, 3 Tests bestanden.
+Expected: `BUILD SUCCESSFUL`, 8 Tests bestanden.
 
 - [ ] **Step 5: Commit**
 
