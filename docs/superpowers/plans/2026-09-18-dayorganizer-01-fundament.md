@@ -6153,7 +6153,14 @@ git commit -m "feat(ui): Berechtigungspruefung und Warnbanner"
   - `HeuteEintrag(faelligkeitId: Long, aktivitaetName: String, farbe: Int, zeitText: String?, sollAnzahl: Int, istAnzahl: Int, status: FaelligkeitStatus, ueberfaellig: Boolean)`
   - `HeuteZustand(kontostand: Int, erledigtHeute: Int, gesamtHeute: Int, ueberfaellig: List<HeuteEintrag>, anstehend: List<HeuteEintrag>, spaeter: List<HeuteEintrag>, abgeschlossen: List<HeuteEintrag>)`
   - `HeuteZusammenstellung.aus(faelligkeiten, aktivitaeten, kontostand, jetzt): HeuteZustand` — reine Funktion
-  - `HeuteViewModel.zustand: StateFlow<HeuteZustand>`, `.erledigen(id)`, `.auslassen(id)`, `.berechtigungenPruefen()`
+  - `HeuteViewModel.zustand: StateFlow<HeuteZustand>`, `.erledigen(id)`, `.auslassen(id)`, `.beimSichtbarwerden()`
+
+Der beobachtete Tag ist ein `MutableStateFlow<LocalDate>`, aus dem per
+`flatMapLatest` die Fälligkeiten kommen — nicht ein einmal gelesenes Datum.
+Ein Prozess, der über Mitternacht überlebt, zeigte sonst weiter den gestrigen
+Tag, und ein Screen namens *Heute* darf das nicht. `beimSichtbarwerden()` liest
+Tag **und** Berechtigungen neu; zwei getrennte Methoden würden dazu einladen,
+nur eine davon aufzurufen.
 
 Die Einteilung: *überfällig* sind offene Fälligkeiten mit Sollzeitpunkt in der Vergangenheit. *Anstehend* sind offene mit Sollzeitpunkt innerhalb der nächsten zwei Stunden sowie alle Zählziele ohne Sollzeitpunkt. *Später* ist der Rest der offenen. *Abgeschlossen* sind erledigte, ausgelassene und verpasste.
 
@@ -6539,9 +6546,11 @@ class HeuteViewModel(
     )
 
     private val hinweise = MutableStateFlow<List<Hinweis>>(emptyList())
+    private val tag = MutableStateFlow(LocalDate.now(uhr))
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     val zustand: StateFlow<HeuteZustand> = combine(
-        faelligkeiten.beobachteTag(LocalDate.now(uhr)),
+        tag.flatMapLatest { faelligkeiten.beobachteTag(it) },
         aktivitaeten.beobachteAktive(),
         buchungen.beobachteKontostand(),
         hinweise,
@@ -6551,11 +6560,13 @@ class HeuteViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HeuteZustand())
 
     /**
-     * Wird bei jedem Sichtbarwerden des Screens aufgerufen, nicht nur einmal:
-     * der Nutzer kommt aus den Systemeinstellungen zurueck, und dann muss der
-     * Banner verschwinden.
+     * Bei jedem Sichtbarwerden des Screens, nicht nur einmal. Zwei Gruende:
+     * der Nutzer kommt aus den Systemeinstellungen zurueck und der Banner muss
+     * verschwinden, und ein Prozess kann ueber Mitternacht ueberleben, dann
+     * zeigt "Heute" sonst weiter gestern.
      */
-    fun berechtigungenPruefen() {
+    fun beimSichtbarwerden() {
+        tag.value = LocalDate.now(uhr)
         hinweise.value = hinweiseLesen()
     }
 
@@ -6575,8 +6586,16 @@ class HeuteViewModel(
 
 - [ ] **Step 7: Test laufen lassen und grünen Lauf bestätigen**
 
+Ein dritter Test gehört dazu: `nach Mitternacht zeigt der Screen den neuen Tag`.
+Er braucht eine bewegliche Uhr — eine kleine `Clock`-Ableitung im Testfile mit
+einem veränderlichen `instant` genügt. Zwei Fälligkeiten anlegen, eine für den
+2026-03-02 und eine für den 2026-03-03, die Uhr auf den 02. um 23:59 stellen,
+den Zustand einsammeln, dann die Uhr auf den 03. um 00:01 stellen,
+`beimSichtbarwerden()` aufrufen und prüfen, dass jetzt die andere Fälligkeit
+erscheint.
+
 Run: `./gradlew :app:testDebugUnitTest --tests "*HeuteViewModelTest*"`
-Expected: `BUILD SUCCESSFUL`, 2 Tests bestanden.
+Expected: `BUILD SUCCESSFUL`, 3 Tests bestanden.
 
 - [ ] **Step 8: Oberfläche anlegen**
 
@@ -6650,7 +6669,7 @@ fun HeuteScreen(viewModel: HeuteViewModel = hiltViewModel()) {
     // Bei jedem Sichtbarwerden neu pruefen: der Nutzer kommt aus den
     // Systemeinstellungen zurueck, und dann muss der Banner verschwinden.
     LifecycleResumeEffect(Unit) {
-        viewModel.berechtigungenPruefen()
+        viewModel.beimSichtbarwerden()
         onPauseOrDispose { }
     }
 
@@ -6703,17 +6722,26 @@ private fun Kopf(zustand: HeuteZustand) {
                 stringResource(R.string.punktestand, zustand.kontostand),
                 style = MaterialTheme.typography.headlineSmall,
             )
-            Text(
-                stringResource(R.string.tagesfortschritt, zustand.erledigtHeute, zustand.gesamtHeute),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            LinearProgressIndicator(
-                progress = {
-                    if (zustand.gesamtHeute == 0) 0f
-                    else zustand.erledigtHeute.toFloat() / zustand.gesamtHeute
-                },
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            )
+            // Ring statt Balken: das Design sagt einen Fortschrittsring zu,
+            // und der Anteil wird geklemmt, weil Material3 0..1 erwartet.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(
+                    progress = {
+                        val anteil = if (zustand.gesamtHeute == 0) 0f
+                        else zustand.erledigtHeute.toFloat() / zustand.gesamtHeute
+                        anteil.coerceIn(0f, 1f)
+                    },
+                    modifier = Modifier.padding(end = 16.dp),
+                )
+                Text(
+                    stringResource(
+                        R.string.tagesfortschritt,
+                        zustand.erledigtHeute,
+                        zustand.gesamtHeute,
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
         }
     }
 }
