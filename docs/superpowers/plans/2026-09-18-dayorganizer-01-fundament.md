@@ -6039,8 +6039,11 @@ class BerechtigungsPruefer @Inject constructor(
         ) == PackageManager.PERMISSION_GRANTED,
         exakteAlarmeErlaubt = kontext.getSystemService<AlarmManager>()
             ?.canScheduleExactAlarms() ?: false,
+        // Regel fuer alle drei: laesst sich eine Pruefung nicht durchfuehren,
+        // wird gewarnt statt geschwiegen. Eine ausbleibende Erinnerung wiegt
+        // schwerer als ein Banner, das der Nutzer wegtippt.
         akkuOptimierungAktiv = kontext.getSystemService<PowerManager>()
-            ?.isIgnoringBatteryOptimizations(kontext.packageName)?.not() ?: false,
+            ?.isIgnoringBatteryOptimizations(kontext.packageName)?.not() ?: true,
     )
 }
 
