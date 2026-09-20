@@ -650,10 +650,10 @@ git commit -m "feat(data): Persistenz fuer Belohnungen und Einloesungen"
 - Test: `app/src/test/kotlin/de/vanhake/dayorganizer/domainuse/BelohnungEinloesenTest.kt`
 
 **Interfaces:**
-- Consumes: `BelohnungsPruefer` aus Task 1, `BelohnungRepository` aus Task 2, `BuchungRepository`, `FaelligkeitRepository`, `SerienRechner` aus Plan 1
+- Consumes: `BelohnungsPruefer` aus Task 1, `BelohnungRepository` aus Task 2, `BuchungRepository`, `FaelligkeitRepository`, `SerienRechner`, `Transaktionen` aus Plan 1
 - Produces:
   - `sealed interface EinloeseErgebnis` mit `Erfolg(einloesung: Einloesung)` und `Abgelehnt(einloesbarkeit: Einloesbarkeit)` sowie `Unbekannt`
-  - `BelohnungEinloesen.invoke(belohnungId: Long): EinloeseErgebnis` — prüft, bucht negativ und legt die Einlösung an; niemals in umgekehrter Reihenfolge, damit ein Abbruch nicht eine Einlösung ohne Buchung hinterlässt
+  - `BelohnungEinloesen.invoke(belohnungId: Long): EinloeseErgebnis` — prüft, bucht negativ und legt die Einlösung an, **alles in einer Transaktion**. Die Prüfung muss mit drin liegen, nicht davor: sonst lesen zwei gleichzeitige Aufrufer denselben Kontostand, bestehen beide und überziehen das Konto. Ein Doppeltipp auf *Einlösen* genügt dafür. `FaelligkeitErledigen` aus Plan 1 löst dieselbe Stelle genauso.
   - `BelohnungEinloesen.einloesbarkeit(belohnung: Belohnung): Einloesbarkeit` für die Anzeige
 
 - [ ] **Step 1: Fake ergänzen und fehlschlagenden Test schreiben**
@@ -705,6 +705,7 @@ package de.vanhake.dayorganizer.domainuse
 import de.vanhake.dayorganizer.FakeBelohnungRepository
 import de.vanhake.dayorganizer.FakeBuchungRepository
 import de.vanhake.dayorganizer.FakeFaelligkeitRepository
+import de.vanhake.dayorganizer.FakeTransaktionen
 import de.vanhake.dayorganizer.domain.model.Belohnung
 import de.vanhake.dayorganizer.domain.model.Belohnungsbedingung
 import de.vanhake.dayorganizer.domain.model.Buchung
@@ -745,12 +746,14 @@ class BelohnungEinloesenTest {
         belohnungen: FakeBelohnungRepository,
         buchungen: FakeBuchungRepository,
         faelligkeiten: FakeFaelligkeitRepository = FakeFaelligkeitRepository(),
+        transaktionen: FakeTransaktionen = FakeTransaktionen(),
     ) = BelohnungEinloesen(
         belohnungen = belohnungen,
         buchungen = buchungen,
         faelligkeiten = faelligkeiten,
         pruefer = BelohnungsPruefer(),
         serienRechner = SerienRechner(),
+        transaktionen = transaktionen,
         uhr = uhr,
     )
 
@@ -828,6 +831,16 @@ class BelohnungEinloesenTest {
 
         assertEquals(EinloeseErgebnis.Unbekannt, ergebnis)
     }
+
+    @Test
+    fun `Pruefung, Buchung und Einloesung liegen in einer Transaktion`() = runTest {
+        val transaktionen = FakeTransaktionen()
+        val belohnungen = FakeBelohnungRepository(listOf(kinoabend))
+
+        useCase(belohnungen, guthaben(250), transaktionen = transaktionen)(1)
+
+        assertEquals(1, transaktionen.aufrufe)
+    }
 }
 ```
 
@@ -844,6 +857,7 @@ package de.vanhake.dayorganizer.domainuse
 import de.vanhake.dayorganizer.data.repository.BelohnungRepository
 import de.vanhake.dayorganizer.data.repository.BuchungRepository
 import de.vanhake.dayorganizer.data.repository.FaelligkeitRepository
+import de.vanhake.dayorganizer.data.repository.Transaktionen
 import de.vanhake.dayorganizer.domain.model.Belohnung
 import de.vanhake.dayorganizer.domain.model.Belohnungsbedingung
 import de.vanhake.dayorganizer.domain.model.Buchung
@@ -869,6 +883,7 @@ class BelohnungEinloesen @Inject constructor(
     private val faelligkeiten: FaelligkeitRepository,
     private val pruefer: BelohnungsPruefer,
     private val serienRechner: SerienRechner,
+    private val transaktionen: Transaktionen,
     private val uhr: Clock,
 ) {
 
@@ -879,7 +894,15 @@ class BelohnungEinloesen @Inject constructor(
         heute = LocalDate.now(uhr),
     )
 
-    suspend operator fun invoke(belohnungId: Long): EinloeseErgebnis {
+    // Lesen, Pruefen, Buchen und Anlegen liegen zusammen in der Transaktion. Die
+    // Reihenfolge allein reicht nicht: stuende die Pruefung davor, laesen zwei
+    // gleichzeitige Aufrufer denselben Kontostand, bestuenden beide und ueberzoegen
+    // das Konto -- ein Doppeltipp auf Einloesen genuegt. FaelligkeitErledigen loest
+    // dieselbe Stelle genauso.
+    suspend operator fun invoke(belohnungId: Long): EinloeseErgebnis =
+        transaktionen.inTransaktion { loese(belohnungId) }
+
+    private suspend fun loese(belohnungId: Long): EinloeseErgebnis {
         val belohnung = belohnungen.nachId(belohnungId) ?: return EinloeseErgebnis.Unbekannt
 
         val pruefung = einloesbarkeit(belohnung)
@@ -887,8 +910,6 @@ class BelohnungEinloesen @Inject constructor(
 
         val jetzt = LocalDateTime.now(uhr)
 
-        // Erst buchen, dann die Einloesung anlegen. Bricht etwas ab, fehlt hoechstens
-        // der Historieneintrag — nie umgekehrt ein Eintrag ohne Abbuchung.
         buchungen.buchen(
             listOf(
                 Buchung(
@@ -922,7 +943,7 @@ class BelohnungEinloesen @Inject constructor(
 - [ ] **Step 4: Test laufen lassen und grünen Lauf bestätigen**
 
 Run: `./gradlew :app:testDebugUnitTest --tests "*BelohnungEinloesenTest*"`
-Expected: `BUILD SUCCESSFUL`, 5 Tests bestanden.
+Expected: `BUILD SUCCESSFUL`, 6 Tests bestanden.
 
 - [ ] **Step 5: Commit**
 
@@ -1136,6 +1157,7 @@ import app.cash.turbine.test
 import de.vanhake.dayorganizer.FakeBelohnungRepository
 import de.vanhake.dayorganizer.FakeBuchungRepository
 import de.vanhake.dayorganizer.FakeFaelligkeitRepository
+import de.vanhake.dayorganizer.FakeTransaktionen
 import de.vanhake.dayorganizer.domain.model.Belohnung
 import de.vanhake.dayorganizer.domain.model.Buchung
 import de.vanhake.dayorganizer.domain.model.BuchungsArt
@@ -1178,7 +1200,7 @@ class BelohnungenViewModelTest {
             buchungen = buchungen,
             einloesenUseCase = BelohnungEinloesen(
                 belohnungen, buchungen, faelligkeiten,
-                BelohnungsPruefer(), SerienRechner(), uhr,
+                BelohnungsPruefer(), SerienRechner(), FakeTransaktionen(), uhr,
             ),
             pruefer = BelohnungsPruefer(),
             faelligkeiten = faelligkeiten,
