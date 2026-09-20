@@ -26,6 +26,8 @@ fun Punkteverlaufsdiagramm(verlauf: List<Pair<LocalDate, Int>>, modifier: Modifi
     val spanne = maximum - minimum
 
     Canvas(modifier.fillMaxWidth().height((7 * 14).dp)) {
+        val strichbreite = 3.dp.toPx()
+
         if (werte.size == 1) {
             // Ein einzelner Punkt hat keine Strecke -- als Punkt in der Mitte
             // zeichnen, statt durch (Anzahl - 1) Stuetzstellen zu teilen.
@@ -33,12 +35,19 @@ fun Punkteverlaufsdiagramm(verlauf: List<Pair<LocalDate, Int>>, modifier: Modifi
             return@Canvas
         }
 
+        // Ohne Innenabstand liegt der Hoechstwert exakt auf y = 0 und die halbe
+        // Strichbreite wird vom oberen Rand abgeschnitten -- auf dem Emulator war die
+        // Spitze der Kurve sichtbar gekappt. Der Rand haelt Hoechst- und Tiefstwert
+        // um die halbe Strichbreite plus etwas Luft vom Kartenrand fern.
+        val rand = strichbreite
+        val nutzbar = size.height - 2 * rand
+
         fun hoehe(wert: Int): Float = if (spanne == 0) {
             // Durchgehend derselbe Wert: eine waagrechte Linie in der Mitte statt
             // Division durch die Spanne null.
             size.height / 2f
         } else {
-            size.height - (wert - minimum).toFloat() / spanne * size.height
+            rand + nutzbar - (wert - minimum).toFloat() / spanne * nutzbar
         }
 
         val breite = size.width / (werte.size - 1)
@@ -49,7 +58,7 @@ fun Punkteverlaufsdiagramm(verlauf: List<Pair<LocalDate, Int>>, modifier: Modifi
                 color = linie,
                 start = punkte[i],
                 end = punkte[i + 1],
-                strokeWidth = 3.dp.toPx(),
+                strokeWidth = strichbreite,
             )
         }
     }

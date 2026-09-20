@@ -43,7 +43,7 @@
     <string name="typ_tagesziel">Mal pro Tag</string>
     <string name="typ_wochenziel">Mal pro Woche</string>
     <string name="speichern">Speichern</string>
-    <string name="tab_belohnungen">Belohnungen</string>
+    <string name="tab_belohnungen">Belohnung</string>
     <string name="neue_belohnung">Neue Belohnung</string>
     <string name="einloesen">Einlösen</string>
     <string name="bearbeiten">Bearbeiten</string>
@@ -68,7 +68,7 @@
     <string name="punkteverlauf_titel">Punkteverlauf</string>
     <string name="quote_zeile">%1$d %% erledigt — %2$d geschafft, %3$d verpasst</string>
     <string name="serie_zeile">Serie: %1$d aktuell, %2$d am längsten</string>
-    <string name="tab_einstellungen">Einstellungen</string>
+    <string name="tab_einstellungen">Optionen</string>
     <string name="feld_tagesbonus">Tagesbonus, wenn alles erledigt ist</string>
     <string name="feld_standard_kulanz">Standard-Kulanzfenster in Minuten</string>
 </resources>

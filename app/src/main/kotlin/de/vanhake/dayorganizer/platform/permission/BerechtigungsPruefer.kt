@@ -11,6 +11,9 @@ import android.provider.Settings
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -30,6 +33,18 @@ class BerechtigungsPruefer @Inject constructor(
         akkuOptimierungAktiv = kontext.getSystemService<PowerManager>()
             ?.isIgnoringBatteryOptimizations(kontext.packageName)?.not() ?: true,
     )
+
+    /**
+     * Wann diese Installation entstanden ist. Dient als Messpunkt fuer die
+     * Waechter-Frische, solange der Waechter noch nie erfolgreich gelaufen ist --
+     * sonst haette eine frische Installation sofort einen haengenden Waechter.
+     */
+    fun installiertAm(): LocalDateTime = Instant
+        .ofEpochMilli(
+            kontext.packageManager.getPackageInfo(kontext.packageName, 0).firstInstallTime,
+        )
+        .atZone(ZoneId.systemDefault())
+        .toLocalDateTime()
 }
 
 fun Hinweis.einstellungsIntent(kontext: Context): Intent = when (this) {

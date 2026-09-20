@@ -9,6 +9,7 @@ import de.vanhake.dayorganizer.data.EinstellungenSpeicher
 import de.vanhake.dayorganizer.platform.permission.BerechtigungsHinweise
 import de.vanhake.dayorganizer.platform.permission.BerechtigungsPruefer
 import de.vanhake.dayorganizer.platform.permission.Hinweis
+import de.vanhake.dayorganizer.platform.permission.waechterHaengt
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -40,9 +41,11 @@ class EinstellungenViewModel(
             // BerechtigungsPruefer liest nur aus Context und kann DataStore nicht synchron
             // lesen, deshalb wird die Waechter-Frische hier -- suspend -- dazugemischt.
             // Gleiches Muster wie HeuteViewModel.
-            val letzterErfolg = speicher.letzterWaechterErfolg()
-            val haengt = letzterErfolg == null ||
-                Duration.between(letzterErfolg, LocalDateTime.now(uhr)) > WAECHTER_FRISCHE_GRENZE
+            val haengt = waechterHaengt(
+                letzterErfolg = speicher.letzterWaechterErfolg(),
+                installiertAm = pruefer.installiertAm(),
+                jetzt = LocalDateTime.now(uhr),
+            )
             BerechtigungsHinweise.fuer(pruefer.stand().copy(waechterHaengt = haengt))
         },
     )
@@ -105,6 +108,5 @@ class EinstellungenViewModel(
 
     private companion object {
         const val TAG = "EinstellungenVM"
-        val WAECHTER_FRISCHE_GRENZE: Duration = Duration.ofHours(36)
     }
 }

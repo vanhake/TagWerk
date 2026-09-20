@@ -27,11 +27,26 @@ Was noch fehlt: Widget und JSON-Backup (Plan 3), dazu die unter
 
 ## Umgebung
 
-- Kein Gerät, kein Emulator, kein AVD angelegt. **Alle Tests laufen auf der
-  JVM**; Datenbanktests unter Robolectric im `test`-Quellverzeichnis. Es gibt
-  bewusst kein `androidTest`-Quellverzeichnis. Compose-Oberflächen werden
-  übersetzt, aber **nie ausgeführt** — `assembleDebug` ist der einzige
-  Nachweis, dass ein Screen überhaupt baut.
+- **Alle Tests laufen auf der JVM**; Datenbanktests unter Robolectric im
+  `test`-Quellverzeichnis. Es gibt bewusst kein `androidTest`-Quellverzeichnis,
+  und es gibt keine Compose-UI-Tests: Oberflächen werden übersetzt, aber im Test
+  nie ausgeführt — `assembleDebug` ist der einzige Nachweis, dass ein Screen baut.
+- **Ein Emulator ist vorhanden und einsatzbereit.** Emulator 36.5.10 und das
+  System-Image `android-34/google_apis/x86_64` sind installiert, `/dev/kvm` ist
+  per ACL freigegeben. `ANDROID_AVD_HOME` zeigt nach
+  `~/.var/app/com.visualstudio.code/config/.android/avd`; dort liegt das AVD
+  `LernApp_Pixel` (Pixel 5, Android 14), das auch DayOrganizer trägt:
+
+  ```bash
+  ANDROID_AVD_HOME=~/.var/app/com.visualstudio.code/config/.android/avd \
+    $ANDROID_HOME/emulator/emulator -avd LernApp_Pixel -no-snapshot-save -no-boot-anim &
+  ```
+
+  Zum Steuern taugt `adb exec-out screencap -p` zusammen mit
+  `adb shell uiautomator dump`: Knoten über ihren Text suchen und auf die Mitte
+  ihrer `bounds` tippen. **Blind nach Bildschirmkoordinaten zu tippen geht schief** —
+  die Tab-Leiste fehlt auf den Bearbeiten-Screens, und getippte Stellen landen
+  dann auf der Tastatur.
 - JDK 17 unter `/home/jan-lin/.local/opt/jdk-17.0.13+11`, Android SDK unter
   `/home/jan-lin/.local/opt/android-sdk` (`ANDROID_HOME` ist gesetzt).
 - Gradle-Wrapper 8.9 ist eingecheckt, Gradle muss nicht installiert sein.
@@ -115,7 +130,12 @@ Drei Techniken tragen das und sollten beibehalten werden:
    brach zwei Tests, die Anpassung machte sie wieder grün — und entschärfte
    dabei den Wächter für die Doppeltipp-Sperre. „Test wieder grün" ist kein
    Nachweis, dass er noch bewacht, was er bewacht hat. Erneut mutieren.
-3. **Dem Reviewer sagen, worauf er achten soll.** Generische Reviews finden
+3. **Einmal auf dem Emulator durchspielen, sobald ein Screen fertig ist.** Der
+   erste Lauf hat drei Darstellungsfehler bestätigt, die das Abschlussreview
+   allein durch Lesen vorhergesagt hatte — und einen vierten gefunden, den
+   niemand vorhergesehen hatte. Umgekehrt hat er nichts Falsches gemeldet: was
+   die JVM-Tests zusicherten, hielt auch auf dem Gerät.
+4. **Dem Reviewer sagen, worauf er achten soll.** Generische Reviews finden
    wenig. Die scharfen Funde kamen, wenn der Prompt eine konkrete Sorge nannte
    („bildet der Fake die Sortierung nach?", „zählt ein Wochenziel an allen
    sieben Tagen mit?", „sichert der Transaktionstest wirklich etwas zu?").
@@ -196,11 +216,11 @@ hebt auf Version 4 und wird dem begegnen.
 
 ```
 1. plan-2-belohnungen mergen. Das Abschlussreview ist durch, die Fixes sind drin.
-2. Einmal auf einem echten Gerät durchspielen.  ./gradlew :app:installDebug
-   Alles ist über JVM-Tests abgesichert, aber die gesamte Oberfläche wurde nie
-   ausgeführt — Heatmap, Punkteverlauf und die beiden Formulare hat noch nie
-   jemand gesehen. Und ob die Benachrichtigung auf einem konkreten Handy um 8:00
-   ankommt und der Hersteller sie nicht wegoptimiert, zeigt sich erst dort.
+2. Auf einem echten Handy durchspielen.  ./gradlew :app:installDebug
+   Im Emulator ist die Oberfläche inzwischen einmal komplett durchgespielt und
+   vier Befunde daraus sind behoben. Was der Emulator nicht zeigen kann: ob die
+   Benachrichtigung auf einem konkreten Gerät um 8:00 ankommt und der Hersteller
+   sie nicht wegoptimiert.
 3. Aus „Vor oder mit Plan 3 angehen" entscheiden, was vorgezogen wird.
 4. Plan 3 umsetzen, wieder subagent-getrieben.
 ```
