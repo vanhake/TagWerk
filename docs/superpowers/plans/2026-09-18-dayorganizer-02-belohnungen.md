@@ -2563,7 +2563,7 @@ git commit -m "feat(ui): Statistik mit Heatmap, Quoten und Serien"
 **Interfaces:**
 - Consumes: `EinstellungenSpeicher` aus Plan 1 Task 10, `BerechtigungsPruefer` und `Hinweis` aus Plan 1 Task 17
 - Produces:
-  - `EinstellungenZustand(tagesbonusText: String, standardKulanzText: String, hinweise: List<Hinweis>, gespeichert: Boolean)`
+  - `EinstellungenZustand(tagesbonusText: String, standardKulanzText: String, hinweise: List<Hinweis>)`
   - `EinstellungenViewModel.zustand: StateFlow<EinstellungenZustand>`, `.tagesbonusAendern(text)`, `.kulanzAendern(text)`, `.speichern()`
   - Ungültige Eingaben werden beim Speichern auf die bisherigen Werte zurückgesetzt statt die Einstellung zu zerstören
 

@@ -95,6 +95,15 @@ auf ihren Auslöser.
 Buchungsarten: `ERLEDIGUNG`, `PUENKTLICHKEITSBONUS`, `SERIENBONUS`,
 `TAGESBONUS`, `EINLOESUNG` (negativ), `KORREKTUR`.
 
+Eine `TAGESBONUS`-Buchung trägt bewusst weder `aktivitaetId` noch
+`faelligkeitId`: sie entsteht daraus, dass *alle* Fälligkeiten des Tages
+erledigt sind, und gehört damit dem Tag, nicht einer einzelnen Aktivität. Jede
+Zurechnung wäre willkürlich. Daraus folgt eine Regel für jede Auswertung: Der
+Kontostand ist die Summe aller Buchungen, aber eine Aufteilung der Punkte nach
+Aktivitäten kann den Tagesbonus nicht enthalten und summiert sich deshalb nicht
+zum Kontostand. Wer eine solche Aufteilung zeigt, muss den Tagesbonus getrennt
+ausweisen statt ihn stillschweigend fallen zu lassen.
+
 Das Journal liefert die Statistik nahezu kostenlos, macht jede Zahl erklärbar
 und erlaubt Korrekturen, ohne Historie zu fälschen. Der aktuelle Stand wird als
 laufende Summe gelesen; bei Bedarf lässt sich später ein Zwischenstand je Monat
@@ -188,6 +197,16 @@ Der fachliche Kern liegt in drei reinen Funktionen ohne Android-Bezug.
 Alle drei bekommen eine `java.time.Clock` injiziert statt `now()` zu rufen.
 Damit sind Mitternachtsübergänge, Kulanzfenster und Zeitumstellung in
 Millisekunden testbar statt gar nicht.
+
+Der `SerienRechner` bekommt die **vollständige** Historie einer Aktivität und
+soll sie auch bekommen. Eine begrenzte Abfrage wäre zwar sparsamer, aber
+`laengsteSerie` lässt sich grundsätzlich nicht begrenzen, und ein Fenster für
+`aktuelleSerie` rechnet jede Serie falsch, die länger ist als das Fenster —
+ausgerechnet die längsten, an denen am meisten hängt. Ein paar hundert Zeilen
+je Aktivität und Jahr sind dagegen ein Lesevorgang im Millisekundenbereich, und
+er läuft beim Abhaken und beim Öffnen eines Screens, nicht je Bild. Sollte das
+auf einem echten Gerät je sparbar werden, ist der richtige Hebel ein
+vorberechneter Serienstand je Aktivität — nicht eine gekappte Abfrage.
 
 ### 4.3 Zeit und Zeitzonen
 
