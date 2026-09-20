@@ -39,4 +39,22 @@ class NaechsteBelohnungTest {
 
         assertEquals("Neues Buch", ergebnis?.name)
     }
+
+    // Die Grenze selbst: genau bezahlbar zaehlt als bezahlbar und ist damit kein
+    // Ziel mehr, auf das hingespart wird -- sonst stuende dauerhaft "noch 0 Punkte
+    // bis". Der Test braucht die teurere zweite Belohnung, um ueberhaupt
+    // unterscheiden zu koennen: mit nur einer liefern > und >= dasselbe Ergebnis.
+    @Test
+    fun `eine genau bezahlbare Belohnung ist kein Sparziel mehr`() {
+        val ziel = NaechsteBelohnungWahl.aus(
+            listOf(
+                Belohnung(id = 1, name = "Kinoabend", preisPunkte = 200),
+                Belohnung(id = 2, name = "Wochenendausflug", preisPunkte = 800),
+            ),
+            kontostand = 200,
+        )
+
+        assertEquals("Wochenendausflug", ziel?.name)
+        assertEquals(600, ziel?.fehlendePunkte)
+    }
 }

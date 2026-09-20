@@ -1,6 +1,7 @@
 package de.vanhake.dayorganizer.ui.heute
 
 import de.vanhake.dayorganizer.domain.model.Aktivitaet
+import de.vanhake.dayorganizer.domain.model.Belohnung
 import de.vanhake.dayorganizer.domain.model.Faelligkeit
 import de.vanhake.dayorganizer.domain.model.FaelligkeitStatus
 import de.vanhake.dayorganizer.domain.model.Zeitplan
@@ -10,6 +11,7 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 
 class HeuteZusammenstellungTest {
 
@@ -92,6 +94,27 @@ class HeuteZusammenstellungTest {
         assertEquals(2, eintrag.istAnzahl)
         assertEquals(3, eintrag.sollAnzahl)
         assertEquals("Sport", eintrag.aktivitaetName)
+    }
+
+    // Ohne diesen Test bliebe alles gruen, wenn aus() den Parameter belohnungen
+    // stillschweigend ignorierte: jeder andere Test uebergibt hier emptyList().
+    @Test
+    fun `die naechste Belohnung wird in den Zustand uebernommen`() {
+        val zustand = HeuteZusammenstellung.aus(
+            faelligkeiten = emptyList(),
+            aktivitaeten = emptyList(),
+            belohnungen = listOf(
+                Belohnung(id = 1, name = "Kinoabend", preisPunkte = 200),
+                Belohnung(id = 2, name = "Wochenendausflug", preisPunkte = 800),
+            ),
+            kontostand = 160,
+            jetzt = jetzt,
+        )
+
+        val ziel = assertNotNull(zustand.naechsteBelohnung)
+        assertEquals("Kinoabend", ziel.name)
+        assertEquals(200, ziel.preisPunkte)
+        assertEquals(40, ziel.fehlendePunkte)
     }
 
     @Test
