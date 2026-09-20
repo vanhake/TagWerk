@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import de.vanhake.dayorganizer.data.EinstellungenSpeicher
 import de.vanhake.dayorganizer.data.repository.AktivitaetRepository
 import de.vanhake.dayorganizer.domainuse.AktivitaetNeuPlanen
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,11 +16,25 @@ import java.time.LocalDate
 import javax.inject.Inject
 
 @HiltViewModel
-class AktivitaetBearbeitenViewModel @Inject constructor(
+class AktivitaetBearbeitenViewModel(
     private val aktivitaeten: AktivitaetRepository,
     private val neuPlanen: AktivitaetNeuPlanen,
+    private val standardKulanzLesen: suspend () -> Int,
     private val uhr: Clock,
 ) : ViewModel() {
+
+    @Inject
+    constructor(
+        aktivitaeten: AktivitaetRepository,
+        neuPlanen: AktivitaetNeuPlanen,
+        einstellungen: EinstellungenSpeicher,
+        uhr: Clock,
+    ) : this(
+        aktivitaeten,
+        neuPlanen,
+        { einstellungen.lesen().standardKulanzMinuten },
+        uhr,
+    )
 
     private val _entwurf = MutableStateFlow(AktivitaetEntwurf())
     val entwurf: StateFlow<AktivitaetEntwurf> = _entwurf.asStateFlow()
@@ -27,8 +42,17 @@ class AktivitaetBearbeitenViewModel @Inject constructor(
     private val _fehler = MutableStateFlow<List<EntwurfFehler>>(emptyList())
     val fehler: StateFlow<List<EntwurfFehler>> = _fehler.asStateFlow()
 
+    /**
+     * Bei einer neuen Aktivitaet (id == 0) kommt das Kulanzfenster als Vorgabe aus den
+     * Einstellungen statt aus dem hart codierten Standardwert von AktivitaetEntwurf.
+     * Eine bestehende Aktivitaet wird stattdessen geladen und behaelt ihren eigenen,
+     * bereits gespeicherten Wert unangetastet.
+     */
     fun laden(id: Long) = viewModelScope.launch {
-        if (id == 0L) return@launch
+        if (id == 0L) {
+            _entwurf.value = _entwurf.value.copy(kulanzMinutenText = standardKulanzLesen().toString())
+            return@launch
+        }
         aktivitaeten.nachId(id)?.let { _entwurf.value = AktivitaetEntwurf.aus(it) }
     }
 

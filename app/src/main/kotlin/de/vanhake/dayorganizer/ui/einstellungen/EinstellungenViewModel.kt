@@ -1,5 +1,6 @@
 package de.vanhake.dayorganizer.ui.einstellungen
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -13,6 +14,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.time.Clock
+import java.time.Duration
+import java.time.LocalDateTime
 import javax.inject.Inject
 
 data class EinstellungenZustand(
@@ -25,14 +29,22 @@ data class EinstellungenZustand(
 class EinstellungenViewModel(
     private val lesen: suspend () -> Einstellungen,
     private val schreiben: suspend (Einstellungen) -> Unit,
-    private val hinweiseLesen: () -> List<Hinweis>,
+    private val hinweiseLesen: suspend () -> List<Hinweis>,
 ) : ViewModel() {
 
     @Inject
-    constructor(speicher: EinstellungenSpeicher, pruefer: BerechtigungsPruefer) : this(
+    constructor(speicher: EinstellungenSpeicher, pruefer: BerechtigungsPruefer, uhr: Clock) : this(
         lesen = { speicher.lesen() },
         schreiben = { speicher.schreiben(it) },
-        hinweiseLesen = { BerechtigungsHinweise.fuer(pruefer.stand()) },
+        hinweiseLesen = {
+            // BerechtigungsPruefer liest nur aus Context und kann DataStore nicht synchron
+            // lesen, deshalb wird die Waechter-Frische hier -- suspend -- dazugemischt.
+            // Gleiches Muster wie HeuteViewModel.
+            val letzterErfolg = speicher.letzterWaechterErfolg()
+            val haengt = letzterErfolg == null ||
+                Duration.between(letzterErfolg, LocalDateTime.now(uhr)) > WAECHTER_FRISCHE_GRENZE
+            BerechtigungsHinweise.fuer(pruefer.stand().copy(waechterHaengt = haengt))
+        },
     )
 
     private val _zustand = MutableStateFlow(EinstellungenZustand())
@@ -51,19 +63,34 @@ class EinstellungenViewModel(
     }
 
     /**
+     * Wird bei jedem Sichtbarwerden des Screens aufgerufen, nicht nur einmal:
+     * der Nutzer kommt aus den Systemeinstellungen zurueck, und dann muss der
+     * Banner verschwinden. Gleiches Muster wie HeuteViewModel.beimSichtbarwerden.
+     */
+    fun beimSichtbarwerden() {
+        viewModelScope.launch { _zustand.value = _zustand.value.copy(hinweise = hinweiseLesen()) }
+    }
+
+    /**
      * Ungueltige Eingaben werden verworfen, nicht gespeichert. Ein leeres Feld
      * darf den Tagesbonus nicht auf null setzen.
      */
     fun speichern(): Job = viewModelScope.launch {
         val bisher = lesen()
-        schreiben(
-            Einstellungen(
-                tagesbonusPunkte = _zustand.value.tagesbonusText.toIntOrNull()
-                    ?.takeIf { it >= 0 } ?: bisher.tagesbonusPunkte,
-                standardKulanzMinuten = _zustand.value.standardKulanzText.toIntOrNull()
-                    ?.takeIf { it >= 0 } ?: bisher.standardKulanzMinuten,
-            ),
+        val neu = Einstellungen(
+            tagesbonusPunkte = _zustand.value.tagesbonusText.toIntOrNull()
+                ?.takeIf { it >= 0 } ?: bisher.tagesbonusPunkte,
+            standardKulanzMinuten = _zustand.value.standardKulanzText.toIntOrNull()
+                ?.takeIf { it >= 0 } ?: bisher.standardKulanzMinuten,
         )
+        // DataStore.edit wirft bei Platten- oder Korruptionsfehlern eine IOException --
+        // unbehandelt reisst sie die App mit. Gleiches Muster wie
+        // AktivitaetBearbeitenViewModel.speichern(): protokollieren statt abstuerzen.
+        runCatching {
+            schreiben(neu)
+        }.onFailure { ausnahme ->
+            Log.w(TAG, "Speichern der Einstellungen fehlgeschlagen", ausnahme)
+        }
         neuLaden()
     }
 
@@ -74,5 +101,10 @@ class EinstellungenViewModel(
             standardKulanzText = aktuell.standardKulanzMinuten.toString(),
             hinweise = hinweiseLesen(),
         )
+    }
+
+    private companion object {
+        const val TAG = "EinstellungenVM"
+        val WAECHTER_FRISCHE_GRENZE: Duration = Duration.ofHours(36)
     }
 }

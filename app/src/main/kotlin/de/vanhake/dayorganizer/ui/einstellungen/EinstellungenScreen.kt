@@ -15,6 +15,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.vanhake.dayorganizer.R
 import de.vanhake.dayorganizer.platform.permission.einstellungsIntent
@@ -24,6 +25,13 @@ import de.vanhake.dayorganizer.ui.gemeinsam.WarnBanner
 fun EinstellungenScreen(viewModel: EinstellungenViewModel = hiltViewModel()) {
     val zustand by viewModel.zustand.collectAsStateWithLifecycle()
     val kontext = LocalContext.current
+
+    // Bei jedem Sichtbarwerden neu pruefen: der Nutzer kommt aus den
+    // Systemeinstellungen zurueck, und dann muss der Banner verschwinden.
+    LifecycleResumeEffect(Unit) {
+        viewModel.beimSichtbarwerden()
+        onPauseOrDispose { }
+    }
 
     Column(
         modifier = Modifier.fillMaxWidth().padding(16.dp),
