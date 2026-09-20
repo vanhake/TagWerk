@@ -4,6 +4,7 @@ import de.vanhake.dayorganizer.FakeBelohnungRepository
 import de.vanhake.dayorganizer.FakeBuchungRepository
 import de.vanhake.dayorganizer.FakeFaelligkeitRepository
 import de.vanhake.dayorganizer.FakeTransaktionen
+import de.vanhake.dayorganizer.data.repository.BuchungRepository
 import de.vanhake.dayorganizer.domain.model.Belohnung
 import de.vanhake.dayorganizer.domain.model.Belohnungsbedingung
 import de.vanhake.dayorganizer.domain.model.Buchung
@@ -22,6 +23,19 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
+/** Spion um den entscheidenden Lesezugriff: schlaegt sofort fehl, wenn der Kontostand
+ * ausserhalb der Transaktion gelesen wird. Ohne diese Absicherung lesen zwei gleichzeitige
+ * Aufrufer denselben Kontostand, bestehen beide die Pruefung und ueberziehen das Konto. */
+private class KontostandSpion(
+    private val delegate: BuchungRepository,
+    private val transaktionen: FakeTransaktionen,
+) : BuchungRepository by delegate {
+    override suspend fun kontostand(): Int {
+        assertTrue(transaktionen.aktiv, "kontostand() wurde ausserhalb der Transaktion gelesen")
+        return delegate.kontostand()
+    }
+}
+
 class BelohnungEinloesenTest {
 
     private val zone = ZoneId.of("Europe/Berlin")
@@ -29,6 +43,7 @@ class BelohnungEinloesenTest {
         LocalDateTime.of(2026, 3, 2, 19, 0).atZone(zone).toInstant(),
         zone,
     )
+    private val erwarteterZeitpunkt = LocalDateTime.of(2026, 3, 2, 19, 0)
     private val kinoabend = Belohnung(id = 1, name = "Kinoabend", preisPunkte = 200)
 
     private fun guthaben(punkte: Int) = FakeBuchungRepository(
@@ -42,7 +57,7 @@ class BelohnungEinloesenTest {
 
     private fun useCase(
         belohnungen: FakeBelohnungRepository,
-        buchungen: FakeBuchungRepository,
+        buchungen: BuchungRepository,
         faelligkeiten: FakeFaelligkeitRepository = FakeFaelligkeitRepository(),
         transaktionen: FakeTransaktionen = FakeTransaktionen(),
     ) = BelohnungEinloesen(
@@ -66,10 +81,10 @@ class BelohnungEinloesenTest {
         assertEquals(50, buchungen.kontostand())
         assertEquals(1, belohnungen.einloesungen.value.size)
         assertEquals("Kinoabend", belohnungen.einloesungen.value.single().name)
-        assertEquals(
-            -200,
-            buchungen.stand.value.single { it.art == BuchungsArt.EINLOESUNG }.betrag,
-        )
+        val buchung = buchungen.stand.value.single { it.art == BuchungsArt.EINLOESUNG }
+        assertEquals(-200, buchung.betrag)
+        assertEquals(erwarteterZeitpunkt, buchung.zeitpunkt)
+        assertEquals(erwarteterZeitpunkt, belohnungen.einloesungen.value.single().zeitpunkt)
     }
 
     @Test
@@ -134,9 +149,13 @@ class BelohnungEinloesenTest {
     fun `Pruefung, Buchung und Einloesung liegen in einer Transaktion`() = runTest {
         val transaktionen = FakeTransaktionen()
         val belohnungen = FakeBelohnungRepository(listOf(kinoabend))
+        val buchungen = KontostandSpion(guthaben(250), transaktionen)
 
-        useCase(belohnungen, guthaben(250), transaktionen = transaktionen)(1)
+        val ergebnis = useCase(belohnungen, buchungen, transaktionen = transaktionen)(1)
 
+        // Der Spion wirft bereits waehrend des Aufrufs, falls kontostand() ausserhalb der
+        // Transaktion gelesen wurde -- diese Zusicherungen bestaetigen nur den Rahmen.
+        assertTrue(ergebnis is EinloeseErgebnis.Erfolg)
         assertEquals(1, transaktionen.aufrufe)
     }
 }

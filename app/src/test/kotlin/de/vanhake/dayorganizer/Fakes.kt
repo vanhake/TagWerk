@@ -229,7 +229,12 @@ class FakeBelohnungRepository(
     }
 
     override suspend fun einloesungAnlegen(einloesung: Einloesung) {
-        einloesungen.value = einloesungen.value + einloesung.copy(id = einloesungen.value.size + 1L)
+        // Nicht die Listengroesse als id nehmen: setzt ein Test Einloesungen direkt vor,
+        // fuehrt das zu Kollisionen oder ruecklaeufigen ids -- und verfaelscht ausgerechnet
+        // den id-DESC-Tiebreak der Sortierung. Wie naechsteId() in den anderen Fakes: groesser
+        // als jede vorhandene id.
+        val id = (einloesungen.value.maxOfOrNull { it.id } ?: 0L) + 1
+        einloesungen.value = einloesungen.value + einloesung.copy(id = id)
     }
 
     /** Spiegelt "ORDER BY zeitpunkt DESC, id DESC". */
@@ -248,8 +253,19 @@ class FakeTransaktionen : Transaktionen {
     var aufrufe = 0
         private set
 
+    /** Waehrend [inTransaktion] den Block ausfuehrt gesetzt, danach -- auch bei einer
+     * Ausnahme im Block -- wieder false. Damit lassen sich Spione bauen, die beim
+     * Lesen zusichern, dass eine Transaktion gerade aktiv ist. */
+    var aktiv = false
+        private set
+
     override suspend fun <T> inTransaktion(block: suspend () -> T): T {
         aufrufe++
-        return block()
+        aktiv = true
+        try {
+            return block()
+        } finally {
+            aktiv = false
+        }
     }
 }
