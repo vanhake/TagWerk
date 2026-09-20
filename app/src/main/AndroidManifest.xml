@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- USE_EXACT_ALARM statt SCHEDULE_EXACT_ALARM: wird bei Installation sofort gewaehrt
+         (kein manueller Schritt in den Systemeinstellungen) und ist laut Play-Store-Richtlinie
+         ausdruecklich fuer Alarm- und Medikamentenerinnerungs-Apps vorgesehen. Die Einschraenkung
+         auf den Play Store gilt hier nicht, da die App nur als APK verteilt wird. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <application
+        android:name=".DayOrganizerApp"
+        android:allowBackup="false"
+        android:label="@string/app_name"
+        android:supportsRtl="false"
+        android:theme="@style/Theme.DayOrganizer">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.DayOrganizer">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <receiver
+            android:name=".platform.alarm.ErinnerungsEmpfaenger"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="de.vanhake.dayorganizer.ERINNERUNG_FAELLIG" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".platform.notification.AktionsEmpfaenger"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="de.vanhake.dayorganizer.ERLEDIGT" />
+                <action android:name="de.vanhake.dayorganizer.SPAETER" />
+                <action android:name="de.vanhake.dayorganizer.AUSGELASSEN" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".platform.alarm.BootEmpfaenger"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+    </application>
+</manifest>

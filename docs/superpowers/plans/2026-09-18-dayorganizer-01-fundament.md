@@ -19,6 +19,9 @@
 - Zeitpläne werden als `LocalTime`/`DayOfWeek`/`LocalDate` gespeichert, niemals als absoluter Zeitstempel. Auflösung zu einem Instant passiert ausschließlich im `AlarmPlaner`.
 - Commit-Nachrichten im Conventional-Commits-Stil (`feat:`, `test:`, `chore:`, `fix:`).
 - Die Versionen in `gradle/libs.versions.toml` sind der Startpunkt. Schlägt die Auflösung fehl, nimm die neueste kompatible Version und halte Kotlin- und KSP-Version paarweise passend.
+- Es gibt **kein Gerät und keinen Emulator**. Alle Tests laufen auf der JVM. Datenbanktests, die einen Android-Kontext brauchen, laufen unter Robolectric im `test`-Quellverzeichnis; ein `androidTest`-Quellverzeichnis wird nicht angelegt.
+- Der Gradle-Wrapper wird auf **8.9** festgelegt (liegt im lokalen Cache und erfüllt die Mindestanforderung von AGP 8.7.3).
+- `local.properties` mit `sdk.dir=/home/jan-lin/.local/opt/android-sdk` wird angelegt und ist über `.gitignore` ausgeschlossen.
 
 ## File Structure
 
@@ -53,8 +56,8 @@ app/src/main/kotlin/de/vanhake/dayorganizer/
     ui/heute/                    HeuteViewModel, HeuteScreen
     ui/aktivitaeten/             AktivitaetenViewModel, AktivitaetenScreen, AktivitaetBearbeitenScreen
     ui/theme/                    Farben, Typografie
-app/src/androidTest/kotlin/...   Room-DAO- und Migrationstests
-app/src/test/kotlin/...          ViewModel- und Use-Case-Tests
+app/src/test/kotlin/...          ViewModel-, Use-Case- und (unter
+                                 Robolectric) Room-DAO- und Migrationstests
 ```
 
 ---
@@ -146,6 +149,8 @@ turbine = "1.2.0"
 junit = "4.13.2"
 androidxTestRunner = "1.6.2"
 androidxTestExt = "1.2.1"
+androidxTestCore = "1.6.1"
+robolectric = "4.14.1"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -177,6 +182,8 @@ turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
 junit = { module = "junit:junit", version.ref = "junit" }
 androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidxTestRunner" }
 androidx-test-ext-junit = { module = "androidx.test.ext:junit", version.ref = "androidxTestExt" }
+androidx-test-core = { module = "androidx.test:core", version.ref = "androidxTestCore" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -278,7 +285,17 @@ android {
     sourceSets {
         getByName("main").java.srcDirs("src/main/kotlin")
         getByName("test").java.srcDirs("src/test/kotlin")
-        getByName("androidTest").java.srcDirs("src/androidTest/kotlin")
+        // Die exportierten Room-Schemas liegen als Assets nur im Debug-Build.
+        // MigrationTestHelper liest sie ueber den Asset-Manager; das Release-APK
+        // bleibt davon frei.
+        getByName("debug").assets.srcDirs("$projectDir/schemas")
+    }
+
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
     }
 
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
@@ -319,11 +336,13 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
 
-    androidTestImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.test.runner)
-    androidTestImplementation(libs.androidx.test.ext.junit)
-    androidTestImplementation(libs.room.testing)
-    androidTestImplementation(libs.kotlinx.coroutines.test)
+    // Datenbanktests laufen als JVM-Tests unter Robolectric statt auf einem
+    // Geraet. Ohne das waeren Migrationen nur dann geprueft, wenn gerade ein
+    // Emulator laeuft -- also fast nie.
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.test.ext.junit)
+    testImplementation(libs.room.testing)
 }
 ```
 
@@ -905,31 +924,52 @@ In `ZeitplanRechner.kt` den `when`-Zweig ergänzen und die Methode hinzufügen:
         bis: LocalDate,
     ): List<Faelligkeit> {
         require(plan.alleNStunden > 0) { "Intervall muss positiv sein" }
+        val fensterMinuten = Duration.between(plan.von, plan.bis).toMinutes()
+        if (fensterMinuten < 0) return emptyList()
+
+        // Gerechnet wird ueber einen wachsenden Minutenversatz, nicht ueber
+        // LocalTime.plusHours: das rechnet modulo 24, und bei Teilern von 24
+        // (8 Stunden von 06:00 bis 22:00, 12 Stunden von 08:00 bis 20:00)
+        // landet der Umlauf exakt wieder auf `von` -- die Folge endet nie.
+        val schrittMinuten = plan.alleNStunden * 60L
+        val zeiten = generateSequence(0L) { it + schrittMinuten }
+            .takeWhile { it <= fensterMinuten }
+            .map { plan.von.plusMinutes(it) }
+            .toList()
+
         return tageIm(von, bis)
             .filter { it.dayOfWeek in plan.wochentage }
             .flatMap { tag ->
-                generateSequence(plan.von) { it.plusHours(plan.alleNStunden.toLong()) }
-                    .takeWhile { !it.isAfter(plan.bis) && !it.isBefore(plan.von) }
-                    .map { zeit ->
-                        Faelligkeit(
-                            aktivitaetId = aktivitaet.id,
-                            periodeVon = tag,
-                            periodeBis = tag,
-                            geplantFuer = tag.atTime(zeit),
-                            sollAnzahl = 1,
-                        )
-                    }
-                    .toList()
+                zeiten.map { zeit ->
+                    Faelligkeit(
+                        aktivitaetId = aktivitaet.id,
+                        periodeVon = tag,
+                        periodeBis = tag,
+                        geplantFuer = tag.atTime(zeit),
+                        sollAnzahl = 1,
+                    )
+                }
             }
     }
 ```
 
-Die zweite Bedingung `!it.isBefore(plan.von)` bricht die Folge ab, sobald `plusHours` über Mitternacht rollt; sonst liefe die Sequenz endlos.
+Der zusätzliche Import ist `java.time.Duration`.
+
+Der Versatz ist ein streng wachsender `Long` gegen eine feste Schranke — damit
+ist die Terminierung strukturell und hängt nicht daran, einen Umlauf zu
+erkennen. Ergänze zu den drei Tests aus Step 1 noch fünf weitere, die genau
+diese Grenzfälle festnageln: 8 Stunden von 06:00 bis 22:00 (erwartet 06:00,
+14:00, 22:00), 12 Stunden von 08:00 bis 20:00 (erwartet 08:00, 20:00), 24
+Stunden von 08:00 bis 20:00 (erwartet nur 08:00), ein umgekehrtes Fenster
+(erwartet leere Liste) und `alleNStunden = 0` (erwartet
+`IllegalArgumentException`). Die ersten drei laufen gegen eine Umlauf-basierte
+Implementierung nicht in einen Fehler, sondern in einen `OutOfMemoryError` —
+begrenze den RED-Lauf entsprechend.
 
 - [ ] **Step 4: Test laufen lassen und grünen Lauf bestätigen**
 
 Run: `./gradlew :domain:test --tests "*ZeitplanRechnerIntervallTest*"`
-Expected: `BUILD SUCCESSFUL`, 3 Tests bestanden.
+Expected: `BUILD SUCCESSFUL`, 8 Tests bestanden.
 
 - [ ] **Step 5: Commit**
 
@@ -1265,6 +1305,14 @@ Diese Fälle sind der Grund, warum Zeitpläne als `LocalTime` gespeichert werden
 Ohne diese Tests fällt ein Fehler erst im März oder Oktober auf — und dann bei
 einer Medikamentenerinnerung.
 
+Was diese Tests leisten und was nicht, ehrlich benannt: `faelligkeitenFuer`
+rechnet ausschließlich mit `LocalDate` und `LocalTime` und berührt keine
+Zeitzone. Die beiden Umstellungstage liefern deshalb dasselbe Ergebnis wie
+jeder andere Tag — und genau das ist die Zusage, die sie bewachen. Fügt jemand
+später eine `ZoneId`-Auflösung in `festeZeiten` ein, schlagen sie fehl. Die
+eigentliche Auflösung von Ortszeit zu Instant passiert im `AlarmPlaner` in
+Task 14 und wird dort geprüft, nicht hier.
+
 `domain/src/test/kotlin/de/vanhake/dayorganizer/domain/rechner/ZeitplanRechnerKalenderTest.kt`:
 
 ```kotlin
@@ -1293,7 +1341,7 @@ class ZeitplanRechnerKalenderTest {
     )
 
     @Test
-    fun `an der Sommerzeitumstellung entsteht genau eine Faelligkeit je Uhrzeit`() {
+    fun `die Berechnung bleibt am Sommerzeitwechsel zeitzonenfrei`() {
         // In Europa wird am letzten Sonntag im Maerz 2026 (29.03.) umgestellt;
         // 02:30 gibt es an diesem Tag nicht.
         val ergebnis = rechner.faelligkeitenFuer(
@@ -1310,7 +1358,7 @@ class ZeitplanRechnerKalenderTest {
     }
 
     @Test
-    fun `an der Winterzeitumstellung entsteht keine doppelte Faelligkeit`() {
+    fun `die Berechnung bleibt am Winterzeitwechsel zeitzonenfrei`() {
         // Am 25.10.2026 gibt es 02:30 zweimal.
         val ergebnis = rechner.faelligkeitenFuer(
             aktivitaet = taeglichUm(2),
@@ -1319,17 +1367,6 @@ class ZeitplanRechnerKalenderTest {
         )
 
         assertEquals(1, ergebnis.size)
-    }
-
-    @Test
-    fun `eine ausgefallene Uhrzeit wird beim Aufloesen auf einen gueltigen Zeitpunkt gelegt`() {
-        // So loest der AlarmPlaner spaeter auf. ZoneId.getRules verschiebt eine
-        // nicht existierende Ortszeit nach vorn statt zu scheitern.
-        val ausgefallen = LocalDateTime.of(2026, 3, 29, 2, 30)
-
-        val instant = ausgefallen.atZone(berlin).toInstant()
-
-        assertEquals(LocalDateTime.of(2026, 3, 29, 3, 30), LocalDateTime.ofInstant(instant, berlin))
     }
 
     @Test
@@ -1360,7 +1397,7 @@ class ZeitplanRechnerKalenderTest {
 ```
 
 Run: `./gradlew :domain:test --tests "*ZeitplanRechnerKalenderTest*"`
-Expected: `BUILD SUCCESSFUL`, 5 Tests bestanden. Schlägt einer fehl, liegt der
+Expected: `BUILD SUCCESSFUL`, 4 Tests bestanden. Schlägt einer fehl, liegt der
 Fehler im `ZeitplanRechner` und nicht im Test — die erwarteten Werte sind die
 fachlich richtigen.
 
@@ -1508,6 +1545,44 @@ class SerienRechnerTest {
 
         assertEquals(SerienStand(0, null), rechner.aktuelleSerieMitStart(f, start))
     }
+
+    // Die folgenden drei nageln fest, was die Serienlogik sonst nur zufaellig
+    // richtig macht: die Stichtagsgrenze und die Brueckenwirkung neutraler
+    // Perioden. Task 12 rechnet auf beidem Bonuszahlungen aus.
+
+    @Test
+    fun `Perioden nach dem Stichtag zaehlen nicht mit`() {
+        val f = (0L..2L).map { tag(it, FaelligkeitStatus.ERLEDIGT) }
+
+        assertEquals(2, rechner.aktuelleSerie(f, start.plusDays(1)))
+    }
+
+    @Test
+    fun `eine verpasste Periode nach dem Stichtag bricht die Serie nicht`() {
+        val f = listOf(
+            tag(0, FaelligkeitStatus.ERLEDIGT),
+            tag(1, FaelligkeitStatus.ERLEDIGT),
+            tag(2, FaelligkeitStatus.VERPASST),
+        )
+
+        val stand = rechner.aktuelleSerieMitStart(f, start.plusDays(1))
+
+        assertEquals(2, stand.laenge)
+        assertEquals(start, stand.startPeriode)
+    }
+
+    @Test
+    fun `eine ausgelassene Periode in der Mitte teilt die laengste Serie nicht`() {
+        val f = listOf(
+            tag(0, FaelligkeitStatus.ERLEDIGT),
+            tag(1, FaelligkeitStatus.ERLEDIGT),
+            tag(2, FaelligkeitStatus.AUSGELASSEN),
+            tag(3, FaelligkeitStatus.ERLEDIGT),
+            tag(4, FaelligkeitStatus.ERLEDIGT),
+        )
+
+        assertEquals(4, rechner.laengsteSerie(f))
+    }
 }
 ```
 
@@ -1590,7 +1665,7 @@ class SerienRechner {
 - [ ] **Step 4: Test laufen lassen und grünen Lauf bestätigen**
 
 Run: `./gradlew :domain:test --tests "*SerienRechnerTest*"`
-Expected: `BUILD SUCCESSFUL`, 9 Tests bestanden.
+Expected: `BUILD SUCCESSFUL`, 12 Tests bestanden.
 
 - [ ] **Step 5: Commit**
 
@@ -1810,6 +1885,23 @@ class PunkteRechnerTest {
 Run: `./gradlew :domain:test --tests "*PunkteRechnerTest*"`
 Expected: Kompilierfehler `Unresolved reference: PunkteRechner`.
 
+Vier weitere Tests gehören dazu, weil sie Regeln festnageln, die die neun oben
+nur zufällig richtig treffen:
+
+- `mehrere auf einmal erreichte Schwellen werden aufsteigend gebucht` —
+  `serienSchwellen = listOf(SerienSchwelle(30, 50), SerienSchwelle(7, 10))`,
+  also **absteigend** deklariert, mit `puenktlichkeitsBonus = 0` und
+  `serieNachher = 30`. Erwartet: Arten `[ERLEDIGUNG, SERIENBONUS, SERIENBONUS]`,
+  `schwelle`-Werte `[7, 30]`, Summe 70. Ohne `sortedBy` schlägt der Test fehl.
+- `genau am Rand des Kulanzfensters gibt es den Bonus noch` — Soll 08:00,
+  Kulanz 60, Erledigung 09:00. Erwartet: Summe 15.
+- `eine Minute nach dem Kulanzfenster gibt es ihn nicht mehr` — dasselbe um
+  09:01. Erwartet: Summe 10.
+- `ein Tag ohne Faelligkeiten bekommt keinen Tagesbonus` —
+  `tagesFaelligkeitenNachher = emptyList()` bei `tagesbonusPunkte = 15`.
+  Erwartet: kein `TAGESBONUS`. Ohne die `isNotEmpty()`-Prüfung zahlt Kotlins
+  `all {}` auf der leeren Liste den Bonus aus.
+
 - [ ] **Step 3: Implementieren**
 
 ```kotlin
@@ -1901,8 +1993,9 @@ class PunkteRechner {
 
 - [ ] **Step 4: Test laufen lassen und grünen Lauf bestätigen**
 
-Run: `./gradlew :domain:test`
-Expected: `BUILD SUCCESSFUL`, alle Domänentests bestanden.
+Run: `./gradlew :domain:test --tests "*PunkteRechnerTest*"`
+Expected: `BUILD SUCCESSFUL`, 13 Tests bestanden. Danach `./gradlew :domain:test`
+für das ganze Modul.
 
 - [ ] **Step 5: Commit**
 
@@ -2135,12 +2228,38 @@ object ZeitplanKodierung {
 }
 ```
 
-- [ ] **Step 4: Test laufen lassen und grünen Lauf bestätigen**
+- [ ] **Step 4: Fehlerfälle diagnostizierbar machen und festnageln**
+
+Die sechs Rundlauftests oben decken nur den guten Fall ab. Der Grund für die
+lesbare Kodierung ist aber der schlechte Fall — und der muss sagen, was kaputt
+ist. Rohes `val (tag, zeit) = it.split("@")` wirft eine
+`IndexOutOfBoundsException` ohne Feldnamen und ohne den Wert; damit ist man
+genau da, wo man ohne lesbare Kodierung auch wäre.
+
+Ergänze deshalb kleine Parse-Hilfen, die Wert **und** Feldnamen in die Meldung
+schreiben, etwa `Ungueltiger Wochentag "MONTAG" in "wochentage"`, und zwar für
+den Wochentag (`DayOfWeek.valueOf`), die Uhrzeit (`LocalTime.parse`), die Zahl
+(`toInt`) sowie für beide Trennzeichen-Splits (`@` und `:`). Nichts davon darf
+einen Fehler schlucken und einen Vorgabewert zurückgeben.
+
+Dazu zwölf weitere Tests: unbekannter `typ`; `INTERVALL` ohne
+`intervallStunden`; `TAGESZIEL` ohne `zielAnzahl`; Anstoss ohne `@`;
+Serienschwelle ohne `:`; Serienschwelle mit unlesbarer Zahl; ungültiger
+Wochentag in `wochentage`; ungültiger Wochentag im Anstoss; ungültige Uhrzeit
+in `zeiten`; ungültige Uhrzeit in `fensterVon`; dazu zwei positive Fälle,
+`FesteZeiten` mit leerer Wochentagsmenge und eine `LocalTime` mit Sekunden.
+
+Bei den Wochentagstests reicht es **nicht**, auf den Wert zu prüfen: die
+JDK-Meldung `No enum constant java.time.DayOfWeek.MONTAG` enthält ihn schon und
+ist derselbe Ausnahmetyp. Prüfe auf den Feldnamen — sonst besteht der Test auch
+ohne den Wrapper, den er bewachen soll.
+
+- [ ] **Step 5: Test laufen lassen und grünen Lauf bestätigen**
 
 Run: `./gradlew :app:testDebugUnitTest --tests "*ZeitplanKodierungTest*"`
-Expected: `BUILD SUCCESSFUL`, 6 Tests bestanden.
+Expected: `BUILD SUCCESSFUL`, 18 Tests bestanden.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add app/
@@ -2160,7 +2279,7 @@ git commit -m "feat(data): lesbare Textkodierung der Zeitplaene"
 - Create: `app/src/main/kotlin/de/vanhake/dayorganizer/data/db/FaelligkeitDao.kt`
 - Create: `app/src/main/kotlin/de/vanhake/dayorganizer/data/db/BuchungDao.kt`
 - Create: `app/src/main/kotlin/de/vanhake/dayorganizer/data/db/DayOrganizerDatenbank.kt`
-- Test: `app/src/androidTest/kotlin/de/vanhake/dayorganizer/data/db/DaoTest.kt`
+- Test: `app/src/test/kotlin/de/vanhake/dayorganizer/data/db/DaoTest.kt`
 
 **Interfaces:**
 - Consumes: `ZeitplanFelder` aus Task 8
@@ -2171,28 +2290,34 @@ git commit -m "feat(data): lesbare Textkodierung der Zeitplaene"
 
 - [ ] **Step 1: Fehlschlagenden Test schreiben**
 
-`app/src/androidTest/kotlin/de/vanhake/dayorganizer/data/db/DaoTest.kt`:
+`app/src/test/kotlin/de/vanhake/dayorganizer/data/db/DaoTest.kt`:
 
 ```kotlin
 package de.vanhake.dayorganizer.data.db
 
+import android.content.Context
 import androidx.room.Room
-import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import java.time.LocalDate
 import java.time.LocalDateTime
 import kotlin.test.assertEquals
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [33])
 class DaoTest {
 
     private lateinit var db: DayOrganizerDatenbank
 
     @Before
     fun aufbauen() {
-        val kontext = InstrumentationRegistry.getInstrumentation().targetContext
+        val kontext = ApplicationProvider.getApplicationContext<Context>()
         db = Room.inMemoryDatabaseBuilder(kontext, DayOrganizerDatenbank::class.java)
             .allowMainThreadQueries()
             .build()
@@ -2308,9 +2433,7 @@ class DaoTest {
 
 - [ ] **Step 2: Test laufen lassen und Fehlschlag bestätigen**
 
-Ein Gerät oder Emulator mit API 33+ muss verbunden sein (`adb devices` zeigt es an).
-
-Run: `./gradlew :app:connectedDebugAndroidTest --tests "*DaoTest*"`
+Run: `./gradlew :app:testDebugUnitTest --tests "*DaoTest*"`
 Expected: Kompilierfehler `Unresolved reference: DayOrganizerDatenbank`.
 
 - [ ] **Step 3: Converters und Entities anlegen**
@@ -2504,9 +2627,12 @@ interface FaelligkeitDao {
     @Query("SELECT * FROM faelligkeit WHERE id = :id")
     suspend fun nachId(id: Long): FaelligkeitEntity?
 
+    // Dieselbe Sortierkonvention wie beobachteTag: terminierte Eintraege nach
+    // Uhrzeit, Zaehlziele ohne Sollzeitpunkt dahinter. Ohne "geplantFuer IS NULL"
+    // sortiert SQLite NULL nach vorn -- also genau andersherum.
     @Query(
         "SELECT * FROM faelligkeit WHERE periodeBis >= :von AND periodeVon <= :bis " +
-            "ORDER BY periodeVon, geplantFuer",
+            "ORDER BY periodeVon, geplantFuer IS NULL, geplantFuer",
     )
     suspend fun fuerZeitraum(von: LocalDate, bis: LocalDate): List<FaelligkeitEntity>
 
@@ -2604,8 +2730,18 @@ abstract class DayOrganizerDatenbank : RoomDatabase() {
 
 - [ ] **Step 5: Test laufen lassen und grünen Lauf bestätigen**
 
-Run: `./gradlew :app:connectedDebugAndroidTest --tests "*DaoTest*"`
-Expected: `BUILD SUCCESSFUL`, 4 Tests bestanden. Die Datei `app/schemas/de.vanhake.dayorganizer.data.db.DayOrganizerDatenbank/1.json` ist entstanden.
+Zwei Tests gehören noch dazu, weil sie Zusagen festnageln, die sonst nur in
+der SQL stehen:
+
+- `Zaehlziele_stehen_hinter_den_terminierten_Eintraegen_des_Tages` — drei
+  Fälligkeiten eines Tages in der Reihenfolge 20:00, Zählziel, 08:00 anlegen
+  und prüfen, dass `fuerZeitraum` sie als 08:00, 20:00, Zählziel liefert. Gegen
+  ein schlichtes `ORDER BY periodeVon, geplantFuer` schlägt der Test fehl.
+- `leeres_Journal_hat_Kontostand_null` — `kontostandJetzt()` auf einer frischen
+  Datenbank ist 0, nicht null.
+
+Run: `./gradlew :app:testDebugUnitTest --tests "*DaoTest*"`
+Expected: `BUILD SUCCESSFUL`, 6 Tests bestanden. Die Datei `app/schemas/de.vanhake.dayorganizer.data.db.DayOrganizerDatenbank/1.json` ist entstanden und wird mit eingecheckt — der Migrationstest in Task 14 liest sie.
 
 - [ ] **Step 6: Commit**
 
@@ -3409,7 +3545,10 @@ git commit -m "feat(domainuse): Faelligkeiten fuer den Vorausblick materialisier
 Der wichtigste Use Case der App. Er ist idempotent, damit Widget, Benachrichtigung und Oberfläche nicht doppelt buchen können.
 
 **Files:**
+- Create: `app/src/main/kotlin/de/vanhake/dayorganizer/data/repository/Transaktionen.kt`
 - Create: `app/src/main/kotlin/de/vanhake/dayorganizer/domainuse/FaelligkeitErledigen.kt`
+- Modify: `app/src/main/kotlin/de/vanhake/dayorganizer/di/DatenModul.kt` — `Transaktionen` binden
+- Modify: `app/src/test/kotlin/de/vanhake/dayorganizer/Fakes.kt` — `FakeTransaktionen`
 - Create: `app/src/main/kotlin/de/vanhake/dayorganizer/domainuse/FaelligkeitAuslassen.kt`
 - Create: `app/src/main/kotlin/de/vanhake/dayorganizer/domainuse/VerpassteAbschliessen.kt`
 - Modify: `domain/src/main/kotlin/de/vanhake/dayorganizer/domain/rechner/PunkteRechner.kt` — `istPuenktlich` von `private` auf öffentlich heben
@@ -3418,12 +3557,67 @@ Der wichtigste Use Case der App. Er ist idempotent, damit Widget, Benachrichtigu
 **Interfaces:**
 - Consumes: alle Repositories aus Task 10, `PunkteRechner`, `SerienRechner`, `ErledigungsKontext` aus Tasks 6 und 7, `EinstellungenSpeicher` aus Task 10
 - Produces:
-  - `enum ErledigungsErgebnis { GEBUCHT, BEREITS_ERLEDIGT, UNBEKANNT }`
+  - `interface Transaktionen { suspend fun <T> inTransaktion(block: suspend () -> T): T }` mit `RaumTransaktionen` dahinter
+  - `enum ErledigungsErgebnis { GEBUCHT, NICHT_OFFEN, UNBEKANNT }`
   - `FaelligkeitErledigen.invoke(faelligkeitId: Long): ErledigungsErgebnis`
   - `FaelligkeitAuslassen.invoke(faelligkeitId: Long)`
   - `VerpassteAbschliessen.invoke()` — setzt alle offenen Fälligkeiten, deren Periode vor heute endet, auf `VERPASST`
 
-- [ ] **Step 1: `istPuenktlich` öffentlich machen**
+- [ ] **Step 1: Transaktionsgrenze anlegen**
+
+Das Design verspricht: *"Das Abhaken läuft in einer Transaktion und ist
+idempotent: eine Fälligkeit kann nur einmal gebucht werden, auch wenn Widget,
+Benachrichtigung und App gleichzeitig zugreifen."* Ohne Transaktion ist die
+Statusprüfung der einzige Schutz — und zwei gleichzeitige Aufrufer lesen beide
+`OFFEN`, bevor einer schreibt. Beide buchen.
+
+Der Use Case arbeitet bewusst gegen schmale Schnittstellen statt gegen Room,
+damit er ohne Emulator testbar bleibt. Die Transaktionsgrenze bekommt deshalb
+ebenfalls eine Schnittstelle.
+
+`data/repository/Transaktionen.kt`:
+
+```kotlin
+package de.vanhake.dayorganizer.data.repository
+
+import androidx.room.withTransaction
+import de.vanhake.dayorganizer.data.db.DayOrganizerDatenbank
+import javax.inject.Inject
+
+/**
+ * Klammert mehrere Schreibvorgaenge zu einer Einheit. Ohne sie waere die
+ * Statuspruefung im Erledigen-Use-Case die einzige Absicherung gegen
+ * Doppelbuchungen -- und die greift nicht, wenn zwei Aufrufer gleichzeitig
+ * lesen, bevor einer schreibt.
+ */
+interface Transaktionen {
+    suspend fun <T> inTransaktion(block: suspend () -> T): T
+}
+
+class RaumTransaktionen @Inject constructor(
+    private val db: DayOrganizerDatenbank,
+) : Transaktionen {
+    override suspend fun <T> inTransaktion(block: suspend () -> T): T =
+        db.withTransaction(block)
+}
+```
+
+In `RepositoryModul` binden:
+
+```kotlin
+    @Binds abstract fun transaktionen(impl: RaumTransaktionen): Transaktionen
+```
+
+In `Fakes.kt` ergänzen:
+
+```kotlin
+/** Fuehrt den Block direkt aus. Die Fakes sind ohnehin single-threaded. */
+class FakeTransaktionen : Transaktionen {
+    override suspend fun <T> inTransaktion(block: suspend () -> T): T = block()
+}
+```
+
+- [ ] **Step 2: `istPuenktlich` öffentlich machen**
 
 In `PunkteRechner.kt` die Signatur ändern, damit der Use Case dieselbe Regel benutzt statt sie zu wiederholen:
 
@@ -3435,7 +3629,7 @@ In `PunkteRechner.kt` die Signatur ändern, damit der Use Case dieselbe Regel be
     }
 ```
 
-- [ ] **Step 2: Fehlschlagenden Test schreiben**
+- [ ] **Step 3: Fehlschlagenden Test schreiben**
 
 ```kotlin
 package de.vanhake.dayorganizer.domainuse
@@ -3526,7 +3720,7 @@ class FaelligkeitErledigenTest {
         val use = useCase(uhrUm(8, 10), FakeAktivitaetRepository(listOf(tabletten)), f, b)
 
         use(10)
-        assertEquals(ErledigungsErgebnis.BEREITS_ERLEDIGT, use(10))
+        assertEquals(ErledigungsErgebnis.NICHT_OFFEN, use(10))
 
         assertEquals(15, b.stand.value.sumOf { it.betrag })
     }
@@ -3643,12 +3837,12 @@ class FaelligkeitErledigenTest {
 }
 ```
 
-- [ ] **Step 3: Test laufen lassen und Fehlschlag bestätigen**
+- [ ] **Step 4: Test laufen lassen und Fehlschlag bestätigen**
 
 Run: `./gradlew :app:testDebugUnitTest --tests "*FaelligkeitErledigenTest*"`
 Expected: Kompilierfehler `Unresolved reference: FaelligkeitErledigen`.
 
-- [ ] **Step 4: Implementieren**
+- [ ] **Step 5: Implementieren**
 
 `domainuse/FaelligkeitErledigen.kt`:
 
@@ -3670,7 +3864,13 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import javax.inject.Inject
 
-enum class ErledigungsErgebnis { GEBUCHT, BEREITS_ERLEDIGT, UNBEKANNT }
+/**
+ * NICHT_OFFEN deckt alles ab, was nicht mehr angefasst werden darf: bereits
+ * erledigt, bewusst ausgelassen, oder vom Waechter als verpasst geschlossen.
+ * Eine Sperre nur auf ERLEDIGT wuerde ein ausgelassenes Mittagessen beim
+ * naechsten Widget-Tipp nachtraeglich bezahlen.
+ */
+enum class ErledigungsErgebnis { GEBUCHT, NICHT_OFFEN, UNBEKANNT }
 
 /**
  * Der primaere Konstruktor nimmt die Einstellungen als Funktion entgegen, damit
@@ -3683,6 +3883,7 @@ class FaelligkeitErledigen(
     private val buchungen: BuchungRepository,
     private val punkteRechner: PunkteRechner,
     private val serienRechner: SerienRechner,
+    private val transaktionen: Transaktionen,
     private val einstellungenLesen: suspend () -> Einstellungen,
     private val uhr: Clock,
 ) {
@@ -3694,16 +3895,22 @@ class FaelligkeitErledigen(
         buchungen: BuchungRepository,
         punkteRechner: PunkteRechner,
         serienRechner: SerienRechner,
+        transaktionen: Transaktionen,
         speicher: EinstellungenSpeicher,
         uhr: Clock,
     ) : this(
         aktivitaeten, faelligkeiten, buchungen, punkteRechner, serienRechner,
-        { speicher.lesen() }, uhr,
+        transaktionen, { speicher.lesen() }, uhr,
     )
 
-    suspend operator fun invoke(faelligkeitId: Long): ErledigungsErgebnis {
+    // Lesen, Pruefen, Schreiben und Buchen liegen zusammen in der Transaktion.
+    // Nur so trennt die Statuspruefung zwei gleichzeitige Aufrufer.
+    suspend operator fun invoke(faelligkeitId: Long): ErledigungsErgebnis =
+        transaktionen.inTransaktion { erledige(faelligkeitId) }
+
+    private suspend fun erledige(faelligkeitId: Long): ErledigungsErgebnis {
         val vorher = faelligkeiten.nachId(faelligkeitId) ?: return ErledigungsErgebnis.UNBEKANNT
-        if (vorher.status == FaelligkeitStatus.ERLEDIGT) return ErledigungsErgebnis.BEREITS_ERLEDIGT
+        if (vorher.status != FaelligkeitStatus.OFFEN) return ErledigungsErgebnis.NICHT_OFFEN
         val aktivitaet = aktivitaeten.nachId(vorher.aktivitaetId)
             ?: return ErledigungsErgebnis.UNBEKANNT
 
@@ -3800,12 +4007,24 @@ class VerpassteAbschliessen @Inject constructor(
 }
 ```
 
-- [ ] **Step 5: Test laufen lassen und grünen Lauf bestätigen**
+- [ ] **Step 6: Test laufen lassen und grünen Lauf bestätigen**
+
+Drei Tests kommen zu den acht oben dazu, weil sie genau die Zusage prüfen, an
+der der Plan zuerst vorbeigeschrieben hat:
+
+- `eine ausgelassene Faelligkeit wird nicht nachtraeglich bezahlt` — auslassen,
+  dann erledigen. Erwartet: `NICHT_OFFEN`, Status bleibt `AUSGELASSEN`, keine
+  Buchung.
+- `eine verpasste Faelligkeit wird nicht nachtraeglich bezahlt` — Status
+  `VERPASST`, dann erledigen. Erwartet: `NICHT_OFFEN`, Status bleibt, keine
+  Buchung.
+- `alles laeuft in einer Transaktion` — ein `FakeTransaktionen`, das mitzählt,
+  belegt, dass `invoke` seinen Rumpf genau einmal in `inTransaktion` ausführt.
 
 Run: `./gradlew :app:testDebugUnitTest --tests "*FaelligkeitErledigenTest*"`
-Expected: `BUILD SUCCESSFUL`, 8 Tests bestanden.
+Expected: `BUILD SUCCESSFUL`, 11 Tests bestanden.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add app/ domain/
@@ -3819,6 +4038,7 @@ git commit -m "feat(domainuse): Erledigen, Auslassen und Verpassen mit Punktebuc
 **Files:**
 - Create: `app/src/main/kotlin/de/vanhake/dayorganizer/platform/notification/Benachrichtigungsaktionen.kt`
 - Create: `app/src/main/kotlin/de/vanhake/dayorganizer/platform/notification/Kanaele.kt`
+- Create: `app/src/main/kotlin/de/vanhake/dayorganizer/platform/notification/Erinnerungsanzeige.kt`
 - Create: `app/src/main/kotlin/de/vanhake/dayorganizer/platform/notification/ErinnerungsNotifier.kt`
 - Modify: `app/src/main/kotlin/de/vanhake/dayorganizer/DayOrganizerApp.kt`
 - Modify: `app/src/main/res/values/strings.xml`
@@ -3831,7 +4051,8 @@ git commit -m "feat(domainuse): Erledigen, Auslassen und Verpassen mit Punktebuc
   - `Benachrichtigungsaktionen.ACTION_ERLEDIGT`, `ACTION_SPAETER`, `ACTION_AUSGELASSEN`, `EXTRA_FAELLIGKEIT_ID`
   - `Benachrichtigungsaktionen.aus(action: String?, faelligkeitId: Long): Benachrichtigungsaktion?` — `null` bei unbekannter Aktion oder `faelligkeitId <= 0`
   - `Kanaele.KANAL_ERINNERUNGEN`, `Kanaele.anlegen(kontext: Context)`
-  - `ErinnerungsNotifier.zeige(faelligkeitId: Long, titel: String, text: String)`, `ErinnerungsNotifier.verstecke(faelligkeitId: Long)`
+  - `interface Erinnerungsanzeige { fun zeige(faelligkeit: Faelligkeit, aktivitaet: Aktivitaet); fun verstecke(faelligkeitId: Long) }` — die Textgestaltung liegt in der Android-Implementierung, damit der Use Case in Task 15 ohne Ressourcen prüfbar bleibt
+  - `ErinnerungsNotifier : Erinnerungsanzeige`, in `RepositoryModul` gebunden
 
 Die Zuordnung von Intent zu Aktion ist als reine Funktion herausgezogen, damit sie ohne Emulator geprüft werden kann. Der BroadcastReceiver aus Task 15 reicht nur `intent.action` und das Extra hinein.
 
@@ -3947,6 +4168,25 @@ object Kanaele {
 }
 ```
 
+`platform/notification/Erinnerungsanzeige.kt`:
+
+```kotlin
+package de.vanhake.dayorganizer.platform.notification
+
+import de.vanhake.dayorganizer.domain.model.Aktivitaet
+import de.vanhake.dayorganizer.domain.model.Faelligkeit
+
+/**
+ * Trennt das Anzeigen einer Erinnerung von der Entscheidung, wann erinnert
+ * wird. Die Textgestaltung gehoert in die Android-Implementierung, damit der
+ * Use Case in Task 15 ohne Ressourcen und ohne Emulator pruefbar bleibt.
+ */
+interface Erinnerungsanzeige {
+    fun zeige(faelligkeit: Faelligkeit, aktivitaet: Aktivitaet)
+    fun verstecke(faelligkeitId: Long)
+}
+```
+
 `platform/notification/ErinnerungsNotifier.kt`:
 
 ```kotlin
@@ -3960,18 +4200,31 @@ import androidx.core.app.NotificationManagerCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import de.vanhake.dayorganizer.MainActivity
 import de.vanhake.dayorganizer.R
+import de.vanhake.dayorganizer.domain.model.Aktivitaet
+import de.vanhake.dayorganizer.domain.model.Faelligkeit
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class ErinnerungsNotifier @Inject constructor(
     @ApplicationContext private val kontext: Context,
-) {
+) : Erinnerungsanzeige {
 
-    fun zeige(faelligkeitId: Long, titel: String, text: String) {
+    override fun zeige(faelligkeit: Faelligkeit, aktivitaet: Aktivitaet) {
+        val faelligkeitId = faelligkeit.id
+        val text = if (faelligkeit.sollAnzahl > 1) {
+            kontext.getString(
+                R.string.erinnerung_noch_offen,
+                faelligkeit.sollAnzahl - faelligkeit.istAnzahl,
+                faelligkeit.sollAnzahl,
+            )
+        } else {
+            kontext.getString(R.string.erinnerung_jetzt_faellig)
+        }
+
         val benachrichtigung = NotificationCompat.Builder(kontext, Kanaele.KANAL_ERINNERUNGEN)
             .setSmallIcon(R.drawable.ic_erinnerung)
-            .setContentTitle(titel)
+            .setContentTitle(aktivitaet.name)
             .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
@@ -4002,7 +4255,7 @@ class ErinnerungsNotifier @Inject constructor(
         // die Erinnerungskette deswegen nicht abbrechen.
     }
 
-    fun verstecke(faelligkeitId: Long) {
+    override fun verstecke(faelligkeitId: Long) {
         NotificationManagerCompat.from(kontext).cancel(faelligkeitId.toInt())
     }
 
@@ -4030,13 +4283,15 @@ class ErinnerungsNotifier @Inject constructor(
 
 - [ ] **Step 6: Icon, Texte und Kanalanlage ergänzen**
 
-`app/src/main/res/drawable/ic_erinnerung.xml`:
+`app/src/main/res/drawable/ic_erinnerung.xml` — der Tint verweist auf das
+Framework-Attribut, nicht auf `?attr/...`: das Projekt benutzt kein AppCompat,
+und AAPT bricht sonst mit `resource attr/colorControlNormal not found` ab.
 
 ```xml
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp" android:height="24dp"
     android:viewportWidth="24" android:viewportHeight="24"
-    android:tint="?attr/colorControlNormal">
+    android:tint="?android:attr/colorControlNormal">
     <path android:fillColor="@android:color/white"
         android:pathData="M12,22c1.1,0 2,-0.9 2,-2h-4C10,21.1 10.9,22 12,22zM18,16v-5c0,-3.07 -1.64,-5.64 -4.5,-6.32L13.5,4c0,-0.83 -0.67,-1.5 -1.5,-1.5s-1.5,0.67 -1.5,1.5v0.68C7.63,5.36 6,7.92 6,11v5l-2,2v1h16v-1L18,16z" />
 </vector>
@@ -4050,6 +4305,14 @@ In `strings.xml` ergänzen:
     <string name="aktion_erledigt">Erledigt</string>
     <string name="aktion_spaeter">Später</string>
     <string name="aktion_ausgelassen">Ausgelassen</string>
+    <string name="erinnerung_jetzt_faellig">Jetzt fällig</string>
+    <string name="erinnerung_noch_offen">Noch %1$d von %2$d offen</string>
+```
+
+In `RepositoryModul` in `di/DatenModul.kt` binden:
+
+```kotlin
+    @Binds abstract fun erinnerungsanzeige(impl: ErinnerungsNotifier): Erinnerungsanzeige
 ```
 
 `DayOrganizerApp.kt` erweitern:
@@ -4098,7 +4361,7 @@ Hier entsteht der Kern des Erinnerungsmotors. Erinnerungstermine werden als eige
 - Modify: `app/src/main/kotlin/de/vanhake/dayorganizer/domainuse/FaelligkeitenMaterialisieren.kt`
 - Create: `app/src/main/kotlin/de/vanhake/dayorganizer/platform/alarm/AlarmPlaner.kt`
 - Test: `app/src/test/kotlin/de/vanhake/dayorganizer/domainuse/ErinnerungenMaterialisierenTest.kt`
-- Test: `app/src/androidTest/kotlin/de/vanhake/dayorganizer/data/db/MigrationTest.kt`
+- Test: `app/src/test/kotlin/de/vanhake/dayorganizer/data/db/MigrationTest.kt`
 
 **Interfaces:**
 - Consumes: `ZeitplanRechner.anstossZeitpunkteFuer` aus Task 5, `FaelligkeitenMaterialisieren` aus Task 11
@@ -4275,8 +4538,10 @@ class FakeErinnerungRepository(start: List<Erinnerung> = emptyList()) : Erinneru
         stand.value = stand.value.map { if (it.id == id) it.copy(ausgeloest = true) else it }
     }
 
+    // Wie die DAO-Abfrage: bereits ausgeloeste Erinnerungen bleiben stehen,
+    // damit die Historie erhalten bleibt.
     override suspend fun entfernenFuerFaelligkeit(faelligkeitId: Long) {
-        stand.value = stand.value.filterNot { it.faelligkeitId == faelligkeitId }
+        stand.value = stand.value.filterNot { it.faelligkeitId == faelligkeitId && !it.ausgeloest }
     }
 }
 ```
@@ -4679,7 +4944,7 @@ Im Manifest innerhalb von `<application>` registrieren:
 
 - [ ] **Step 8: Migrationstest schreiben und laufen lassen**
 
-`app/src/androidTest/kotlin/de/vanhake/dayorganizer/data/db/MigrationTest.kt`:
+`app/src/test/kotlin/de/vanhake/dayorganizer/data/db/MigrationTest.kt`:
 
 ```kotlin
 package de.vanhake.dayorganizer.data.db
@@ -4689,8 +4954,13 @@ import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Rule
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import kotlin.test.assertEquals
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [33])
 class MigrationTest {
 
     @get:Rule
@@ -4720,10 +4990,112 @@ class MigrationTest {
 }
 ```
 
-Run: `./gradlew :app:connectedDebugAndroidTest --tests "*MigrationTest*"`
+Run: `./gradlew :app:testDebugUnitTest --tests "*MigrationTest*"`
 Expected: `BUILD SUCCESSFUL`, 1 Test bestanden.
 
-- [ ] **Step 9: Commit**
+Findet `MigrationTestHelper` die exportierten Schemas unter Robolectric nicht,
+liegt es am Asset-Pfad. Fällt der Versuch aus, ersetze den Helfer durch einen
+direkten Test: eine Version-1-Datenbank mit explizitem `CREATE TABLE` anlegen,
+`MIGRATION_1_2.migrate(db)` aufrufen und das Vorhandensein der Tabelle prüfen.
+Das prüft dieselbe Zusage und hängt an keinem Asset.
+
+- [ ] **Step 9: Auflösung über die Zeitumstellung absichern**
+
+Der `AlarmPlaner` ist die einzige Stelle, an der Ortszeit zu einem Instant
+wird. Genau hier schlägt die Zeitumstellung zu: am 29.03.2026 existiert 02:30
+in Europa/Berlin nicht, am 25.10.2026 gibt es sie zweimal. Diese Zusage gehört
+geprüft, und zwar hier statt im `ZeitplanRechner`, der gar keine Zeitzone kennt.
+
+Ziehe die Umrechnung dafür in eine eigene, testbare Funktion in
+`platform/alarm/AlarmPlaner.kt` auf Dateiebene:
+
+```kotlin
+/**
+ * Ortszeit zu Instant. Faellt die Ortszeit durch die Sommerzeitumstellung aus,
+ * nimmt die Zone den naechsten gueltigen Zeitpunkt; gibt es sie doppelt, den
+ * ersten. Beides ist besser als ein Alarm, der gar nicht feuert.
+ */
+internal fun alsEpochMillis(zeitpunkt: LocalDateTime, zone: ZoneId): Long =
+    zeitpunkt.atZone(zone).toInstant().toEpochMilli()
+```
+
+und rufe sie aus `neuPlanen()` auf, statt dort direkt umzurechnen. Dazu der Test
+`app/src/test/kotlin/de/vanhake/dayorganizer/platform/alarm/AlarmPlanerZeitzoneTest.kt`:
+
+```kotlin
+package de.vanhake.dayorganizer.platform.alarm
+
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
+import kotlin.test.Test
+import kotlin.test.assertEquals
+
+class AlarmPlanerZeitzoneTest {
+
+    private val berlin = ZoneId.of("Europe/Berlin")
+
+    @Test
+    fun `eine ausgefallene Ortszeit wird auf den naechsten gueltigen Zeitpunkt gelegt`() {
+        val millis = alsEpochMillis(LocalDateTime.of(2026, 3, 29, 2, 30), berlin)
+
+        assertEquals(
+            LocalDateTime.of(2026, 3, 29, 3, 30),
+            LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), berlin),
+        )
+    }
+
+    @Test
+    fun `eine doppelte Ortszeit nimmt den ersten Durchgang`() {
+        val millis = alsEpochMillis(LocalDateTime.of(2026, 10, 25, 2, 30), berlin)
+
+        // Der erste Durchgang liegt noch in der Sommerzeit, also UTC+2.
+        assertEquals(Instant.parse("2026-10-25T00:30:00Z"), Instant.ofEpochMilli(millis))
+    }
+
+    @Test
+    fun `eine gewoehnliche Ortszeit bleibt unveraendert`() {
+        val millis = alsEpochMillis(LocalDateTime.of(2026, 3, 2, 8, 0), berlin)
+
+        assertEquals(Instant.parse("2026-03-02T07:00:00Z"), Instant.ofEpochMilli(millis))
+    }
+}
+```
+
+Run: `./gradlew :app:testDebugUnitTest --tests "*AlarmPlanerZeitzoneTest*"`
+Expected: `BUILD SUCCESSFUL`, 3 Tests bestanden.
+
+- [ ] **Step 10: Den rollierenden Alarm selbst festnageln**
+
+`alsEpochMillis` ist geprüft, `neuPlanen` bisher nicht — und genau dort steht
+die zentrale Zusage des Designs. Bricht später jemand die `PendingIntent`-
+Gleichheit zwischen Setz- und Abbruchpfad, feuert ein verwaister Alarm für
+immer weiter, ohne dass ein Test das bemerkt.
+
+Schreibe `app/src/test/kotlin/de/vanhake/dayorganizer/platform/alarm/AlarmPlanerTest.kt`
+als Robolectric-Test (`@Config(sdk = [33])`), mit
+`ApplicationProvider.getApplicationContext<Context>()`, einem
+`FakeErinnerungRepository` und fester Uhr. `org.robolectric.Shadows.shadowOf`
+liefert einen `ShadowAlarmManager`, über den sich die gesetzten Alarme lesen
+lassen. Abgedeckt gehören:
+
+- genau ein Alarm, und zwar auf die **frühere** von zwei Erinnerungen
+- zweimal `neuPlanen()` ergibt weiterhin genau einen Alarm, nicht zwei
+- nach `alsAusgeloestMarkieren` der frühesten zeigt der Alarm auf die nächste
+- ohne fällige Erinnerung wird der Alarm abgebrochen — erst einen setzen, dann
+  leeren und neu planen, damit der Test das Abbrechen belegt und nicht nur die
+  Abwesenheit
+- bereits ausgelöste Erinnerungen werden übersprungen
+
+Dazu in `ErinnerungenMaterialisierenTest` noch
+`ein Wochenziel mit Anstoss erzeugt beim zweiten Lauf keine doppelte Erinnerung` —
+Zählziele laufen über `anstossZeitpunkteFuer` und haben `geplantFuer == null`,
+also genau den Fall, für den es den `ZIEL`-Platzhalter gibt.
+
+Run: `./gradlew :app:testDebugUnitTest --tests "*AlarmPlanerTest*"`
+Expected: `BUILD SUCCESSFUL`, 5 Tests bestanden.
+
+- [ ] **Step 11: Commit**
 
 ```bash
 git add app/ domain/
@@ -4736,19 +5108,15 @@ git commit -m "feat(platform): Erinnerungstermine als Tabelle und rollierender E
 
 **Files:**
 - Create: `app/src/main/kotlin/de/vanhake/dayorganizer/domainuse/ErinnerungAusloesen.kt`
-- Create: `app/src/main/kotlin/de/vanhake/dayorganizer/platform/notification/Erinnerungsanzeige.kt`
-- Modify: `app/src/main/kotlin/de/vanhake/dayorganizer/platform/notification/ErinnerungsNotifier.kt` — implementiert `Erinnerungsanzeige`
 - Modify: `app/src/main/kotlin/de/vanhake/dayorganizer/platform/alarm/ErinnerungsEmpfaenger.kt`
 - Create: `app/src/main/kotlin/de/vanhake/dayorganizer/platform/notification/AktionsEmpfaenger.kt`
-- Modify: `app/src/main/kotlin/de/vanhake/dayorganizer/di/DatenModul.kt` — `Erinnerungsanzeige` binden
 - Modify: `app/src/main/AndroidManifest.xml`
 - Modify: `app/src/main/res/values/strings.xml`
 - Test: `app/src/test/kotlin/de/vanhake/dayorganizer/domainuse/ErinnerungAusloesenTest.kt`
 
 **Interfaces:**
-- Consumes: `ErinnerungRepository` und `AlarmPlaner` aus Task 14, `FaelligkeitErledigen`, `FaelligkeitAuslassen` aus Task 12
+- Consumes: `Erinnerungsanzeige` aus Task 13, `ErinnerungRepository` und `AlarmPlaner` aus Task 14, `FaelligkeitErledigen`, `FaelligkeitAuslassen` aus Task 12
 - Produces:
-  - `interface Erinnerungsanzeige { fun zeige(faelligkeit: Faelligkeit, aktivitaet: Aktivitaet); fun verstecke(faelligkeitId: Long) }` — die Textgestaltung liegt in der Android-Implementierung, damit der Use Case ohne Ressourcen testbar bleibt
   - `ErinnerungAusloesen.invoke()` — verarbeitet alle bis jetzt fälligen Erinnerungen, zeigt Benachrichtigungen, plant Nachfassen und setzt den nächsten Alarm
   - `ErinnerungSpaeter.invoke(faelligkeitId: Long)` — verschiebt um `nachfassAbstandMinuten`
 
@@ -4924,26 +5292,7 @@ class ErinnerungAusloesenTest {
 Run: `./gradlew :app:testDebugUnitTest --tests "*ErinnerungAusloesenTest*"`
 Expected: Kompilierfehler `Unresolved reference: ErinnerungAusloesen`.
 
-- [ ] **Step 3: Anzeige-Schnittstelle und Use Cases implementieren**
-
-`platform/notification/Erinnerungsanzeige.kt`:
-
-```kotlin
-package de.vanhake.dayorganizer.platform.notification
-
-import de.vanhake.dayorganizer.domain.model.Aktivitaet
-import de.vanhake.dayorganizer.domain.model.Faelligkeit
-
-/**
- * Trennt das Anzeigen einer Erinnerung von der Entscheidung, wann erinnert wird.
- * Die Textgestaltung gehoert in die Android-Implementierung, damit der Use Case
- * ohne Ressourcen und ohne Emulator pruefbar bleibt.
- */
-interface Erinnerungsanzeige {
-    fun zeige(faelligkeit: Faelligkeit, aktivitaet: Aktivitaet)
-    fun verstecke(faelligkeitId: Long)
-}
-```
+- [ ] **Step 3: Use Cases implementieren**
 
 `domainuse/ErinnerungAusloesen.kt`:
 
@@ -5027,78 +5376,7 @@ class ErinnerungSpaeter @Inject constructor(
 Run: `./gradlew :app:testDebugUnitTest --tests "*ErinnerungAusloesenTest*"`
 Expected: `BUILD SUCCESSFUL`, 5 Tests bestanden.
 
-- [ ] **Step 5: Notifier auf die Schnittstelle umstellen**
-
-In `ErinnerungsNotifier.kt` die Klassensignatur und die Methode `zeige` ersetzen:
-
-```kotlin
-@Singleton
-class ErinnerungsNotifier @Inject constructor(
-    @ApplicationContext private val kontext: Context,
-) : Erinnerungsanzeige {
-
-    override fun zeige(faelligkeit: Faelligkeit, aktivitaet: Aktivitaet) {
-        val text = if (faelligkeit.sollAnzahl > 1) {
-            kontext.getString(
-                R.string.erinnerung_noch_offen,
-                faelligkeit.sollAnzahl - faelligkeit.istAnzahl,
-                faelligkeit.sollAnzahl,
-            )
-        } else {
-            kontext.getString(R.string.erinnerung_jetzt_faellig)
-        }
-
-        val benachrichtigung = NotificationCompat.Builder(kontext, Kanaele.KANAL_ERINNERUNGEN)
-            .setSmallIcon(R.drawable.ic_erinnerung)
-            .setContentTitle(aktivitaet.name)
-            .setContentText(text)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_REMINDER)
-            .setAutoCancel(true)
-            .setContentIntent(appOeffnen())
-            .addAction(
-                0,
-                kontext.getString(R.string.aktion_erledigt),
-                aktion(Benachrichtigungsaktionen.ACTION_ERLEDIGT, faelligkeit.id),
-            )
-            .addAction(
-                0,
-                kontext.getString(R.string.aktion_spaeter),
-                aktion(Benachrichtigungsaktionen.ACTION_SPAETER, faelligkeit.id),
-            )
-            .addAction(
-                0,
-                kontext.getString(R.string.aktion_ausgelassen),
-                aktion(Benachrichtigungsaktionen.ACTION_AUSGELASSEN, faelligkeit.id),
-            )
-            .build()
-
-        runCatching {
-            NotificationManagerCompat.from(kontext).notify(faelligkeit.id.toInt(), benachrichtigung)
-        }
-    }
-
-    override fun verstecke(faelligkeitId: Long) {
-        NotificationManagerCompat.from(kontext).cancel(faelligkeitId.toInt())
-    }
-```
-
-Neue Importe: `de.vanhake.dayorganizer.domain.model.Aktivitaet`, `de.vanhake.dayorganizer.domain.model.Faelligkeit`.
-
-In `strings.xml` ergänzen:
-
-```xml
-    <string name="erinnerung_jetzt_faellig">Jetzt fällig</string>
-    <string name="erinnerung_noch_offen">Noch %1$d von %2$d offen</string>
-```
-
-In `RepositoryModul` ergänzen:
-
-```kotlin
-    @Binds abstract fun erinnerungsanzeige(impl: ErinnerungsNotifier): Erinnerungsanzeige
-```
-
-- [ ] **Step 6: Empfänger verdrahten**
+- [ ] **Step 5: Empfänger verdrahten**
 
 `platform/alarm/ErinnerungsEmpfaenger.kt` vollständig ersetzen:
 
@@ -5205,12 +5483,12 @@ Im Manifest innerhalb von `<application>` ergänzen:
         </receiver>
 ```
 
-- [ ] **Step 7: Build und alle Tests laufen lassen**
+- [ ] **Step 6: Build und alle Tests laufen lassen**
 
 Run: `./gradlew :app:assembleDebug :app:testDebugUnitTest :domain:test`
 Expected: `BUILD SUCCESSFUL`.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add app/
@@ -5237,7 +5515,13 @@ git commit -m "feat(platform): Erinnerungen ausloesen, nachfassen und aus der Le
   - `WaechterPlanung.taeglichPlanen()` — meldet den periodischen Job an; `WaechterPlanung.sofortAusfuehren()` für Boot und App-Update
   - `BootEmpfaenger` reagiert auf `BOOT_COMPLETED` und `MY_PACKAGE_REPLACED`
 
-Die Reihenfolge ist wichtig: erst schließen, dann materialisieren. Andernfalls würde eine soeben angelegte Fälligkeit für heute mit einem Sollzeitpunkt in der Vergangenheit sofort wieder als verpasst markiert.
+Die Reihenfolge — erst schließen, dann materialisieren, dann neu planen — ist
+absichtlich so gewählt, trägt aber heute nichts: `VerpassteAbschliessen`
+vergleicht ganze Tage (`periodeBis < heute`), und materialisiert werden nur
+Fälligkeiten ab heute. Die beiden Mengen überschneiden sich nie. Schließen
+zuerst bleibt trotzdem die sichere Reihenfolge, falls die Verpasst-Prüfung
+jemals auf Uhrzeiten umgestellt wird. Schreibe keinen Test, der behauptet, die
+Reihenfolge zu beweisen — er kann nicht fehlschlagen.
 
 - [ ] **Step 1: Fehlschlagenden Test schreiben**
 
@@ -5310,12 +5594,12 @@ class WaechterAblaufTest {
             FaelligkeitStatus.VERPASST,
             faelligkeiten.stand.value.first { it.id == 9L }.status,
         )
-        assertEquals(8, faelligkeiten.stand.value.size)
+        assertEquals(9, faelligkeiten.stand.value.size)
         assertTrue(alarmNeuGeplant)
     }
 
     @Test
-    fun `eine heute frueh angelegte Faelligkeit wird nicht sofort verpasst`() = runTest {
+    fun `eine heute faellige Aufgabe bleibt bis Mitternacht offen`() = runTest {
         val faelligkeiten = FakeFaelligkeitRepository()
         val aktivitaeten = FakeAktivitaetRepository(listOf(tabletten))
         val ablauf = WaechterAblauf(
@@ -5374,6 +5658,16 @@ class WaechterAblauf(
 
 - [ ] **Step 4: Test laufen lassen und grünen Lauf bestätigen**
 
+Zwei Dinge zu den Erwartungswerten. Der erste Test erwartet **9** Fälligkeiten,
+nicht 8: ein Vorausblick von sieben Tagen deckt acht Tage einschließlich heute
+ab, dazu kommt die vorbestehende von gestern.
+
+Der zweite Test nagelt die Kulanzregel fest statt der Reihenfolge: eine Aufgabe,
+deren Sollzeitpunkt heute schon vorbei ist, bleibt bis Mitternacht offen. Setze
+die Uhr dafür auf 12:00 und die Aktivität auf 08:00 und lege die Fälligkeit
+vorher an — gegen eine auf Uhrzeiten umgestellte Verpasst-Prüfung schlägt er
+dann fehl.
+
 Run: `./gradlew :app:testDebugUnitTest --tests "*WaechterAblaufTest*"`
 Expected: `BUILD SUCCESSFUL`, 2 Tests bestanden.
 
@@ -5400,7 +5694,25 @@ class WaechterWorker @AssistedInject constructor(
 ) : CoroutineWorker(kontext, parameter) {
 
     override suspend fun doWork(): Result = runCatching { ablauf() }
-        .fold(onSuccess = { Result.success() }, onFailure = { Result.retry() })
+        .fold(
+            onSuccess = { Result.success() },
+            onFailure = { fehler ->
+                // Nach drei Versuchen aufgeben statt endlos zu wiederholen:
+                // der naechtliche Lauf holt es ohnehin nach, und ein dauerhaft
+                // scheiterndes Retry kostet nur Akku.
+                if (runAttemptCount < MAX_VERSUCHE - 1) {
+                    Result.retry()
+                } else {
+                    Log.w(TAG, "Waechter gibt nach $MAX_VERSUCHE Versuchen auf", fehler)
+                    Result.success()
+                }
+            },
+        )
+
+    private companion object {
+        const val MAX_VERSUCHE = 3
+        const val TAG = "WaechterWorker"
+    }
 }
 ```
 
@@ -5727,8 +6039,11 @@ class BerechtigungsPruefer @Inject constructor(
         ) == PackageManager.PERMISSION_GRANTED,
         exakteAlarmeErlaubt = kontext.getSystemService<AlarmManager>()
             ?.canScheduleExactAlarms() ?: false,
+        // Regel fuer alle drei: laesst sich eine Pruefung nicht durchfuehren,
+        // wird gewarnt statt geschwiegen. Eine ausbleibende Erinnerung wiegt
+        // schwerer als ein Banner, das der Nutzer wegtippt.
         akkuOptimierungAktiv = kontext.getSystemService<PowerManager>()
-            ?.isIgnoringBatteryOptimizations(kontext.packageName)?.not() ?: false,
+            ?.isIgnoringBatteryOptimizations(kontext.packageName)?.not() ?: true,
     )
 }
 
@@ -5833,12 +6148,19 @@ git commit -m "feat(ui): Berechtigungspruefung und Warnbanner"
 - Test: `app/src/test/kotlin/de/vanhake/dayorganizer/ui/heute/HeuteViewModelTest.kt`
 
 **Interfaces:**
-- Consumes: `FaelligkeitRepository.beobachteTag`, `AktivitaetRepository.beobachteAktive`, `BuchungRepository.beobachteKontostand` aus Task 10, `FaelligkeitErledigen` und `FaelligkeitAuslassen` aus Task 12
+- Consumes: `FaelligkeitRepository.beobachteTag`, `AktivitaetRepository.beobachteAktive`, `BuchungRepository.beobachteKontostand` aus Task 10, `FaelligkeitErledigen` und `FaelligkeitAuslassen` aus Task 12, `BerechtigungsPruefer`, `BerechtigungsHinweise` und `WarnBanner` aus Task 17
 - Produces:
   - `HeuteEintrag(faelligkeitId: Long, aktivitaetName: String, farbe: Int, zeitText: String?, sollAnzahl: Int, istAnzahl: Int, status: FaelligkeitStatus, ueberfaellig: Boolean)`
   - `HeuteZustand(kontostand: Int, erledigtHeute: Int, gesamtHeute: Int, ueberfaellig: List<HeuteEintrag>, anstehend: List<HeuteEintrag>, spaeter: List<HeuteEintrag>, abgeschlossen: List<HeuteEintrag>)`
   - `HeuteZusammenstellung.aus(faelligkeiten, aktivitaeten, kontostand, jetzt): HeuteZustand` — reine Funktion
-  - `HeuteViewModel.zustand: StateFlow<HeuteZustand>`, `.erledigen(id)`, `.auslassen(id)`
+  - `HeuteViewModel.zustand: StateFlow<HeuteZustand>`, `.erledigen(id)`, `.auslassen(id)`, `.beimSichtbarwerden()`
+
+Der beobachtete Tag ist ein `MutableStateFlow<LocalDate>`, aus dem per
+`flatMapLatest` die Fälligkeiten kommen — nicht ein einmal gelesenes Datum.
+Ein Prozess, der über Mitternacht überlebt, zeigte sonst weiter den gestrigen
+Tag, und ein Screen namens *Heute* darf das nicht. `beimSichtbarwerden()` liest
+Tag **und** Berechtigungen neu; zwei getrennte Methoden würden dazu einladen,
+nur eine davon aufzurufen.
 
 Die Einteilung: *überfällig* sind offene Fälligkeiten mit Sollzeitpunkt in der Vergangenheit. *Anstehend* sind offene mit Sollzeitpunkt innerhalb der nächsten zwei Stunden sowie alle Zählziele ohne Sollzeitpunkt. *Später* ist der Rest der offenen. *Abgeschlossen* sind erledigte, ausgelassene und verpasste.
 
@@ -6134,6 +6456,7 @@ class HeuteViewModelTest {
             ),
             auslassenUseCase = FaelligkeitAuslassen(faelligkeiten, uhr),
             alarmNeuPlanen = {},
+            hinweiseLesen = { emptyList() },
             uhr = uhr,
         )
     }
@@ -6203,6 +6526,7 @@ class HeuteViewModel(
     private val erledigenUseCase: FaelligkeitErledigen,
     private val auslassenUseCase: FaelligkeitAuslassen,
     private val alarmNeuPlanen: suspend () -> Unit,
+    private val hinweiseLesen: () -> List<Hinweis>,
     private val uhr: Clock,
 ) : ViewModel() {
 
@@ -6214,19 +6538,37 @@ class HeuteViewModel(
         erledigenUseCase: FaelligkeitErledigen,
         auslassenUseCase: FaelligkeitAuslassen,
         alarmPlaner: AlarmPlaner,
+        pruefer: BerechtigungsPruefer,
         uhr: Clock,
     ) : this(
         aktivitaeten, faelligkeiten, buchungen, erledigenUseCase, auslassenUseCase,
-        { alarmPlaner.neuPlanen() }, uhr,
+        { alarmPlaner.neuPlanen() }, { BerechtigungsHinweise.fuer(pruefer.stand()) }, uhr,
     )
 
+    private val hinweise = MutableStateFlow<List<Hinweis>>(emptyList())
+    private val tag = MutableStateFlow(LocalDate.now(uhr))
+
+    @OptIn(ExperimentalCoroutinesApi::class)
     val zustand: StateFlow<HeuteZustand> = combine(
-        faelligkeiten.beobachteTag(LocalDate.now(uhr)),
+        tag.flatMapLatest { faelligkeiten.beobachteTag(it) },
         aktivitaeten.beobachteAktive(),
         buchungen.beobachteKontostand(),
-    ) { faelligkeiten, aktivitaeten, kontostand ->
+        hinweise,
+    ) { faelligkeiten, aktivitaeten, kontostand, hinweise ->
         HeuteZusammenstellung.aus(faelligkeiten, aktivitaeten, kontostand, LocalDateTime.now(uhr))
+            .copy(hinweise = hinweise)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HeuteZustand())
+
+    /**
+     * Bei jedem Sichtbarwerden des Screens, nicht nur einmal. Zwei Gruende:
+     * der Nutzer kommt aus den Systemeinstellungen zurueck und der Banner muss
+     * verschwinden, und ein Prozess kann ueber Mitternacht ueberleben, dann
+     * zeigt "Heute" sonst weiter gestern.
+     */
+    fun beimSichtbarwerden() {
+        tag.value = LocalDate.now(uhr)
+        hinweise.value = hinweiseLesen()
+    }
 
     // Property und Methode heissen bewusst unterschiedlich: gleiche Namen
     // kompilieren zwar, lesen sich aber wie ein Selbstaufruf.
@@ -6244,8 +6586,16 @@ class HeuteViewModel(
 
 - [ ] **Step 7: Test laufen lassen und grünen Lauf bestätigen**
 
+Ein dritter Test gehört dazu: `nach Mitternacht zeigt der Screen den neuen Tag`.
+Er braucht eine bewegliche Uhr — eine kleine `Clock`-Ableitung im Testfile mit
+einem veränderlichen `instant` genügt. Zwei Fälligkeiten anlegen, eine für den
+2026-03-02 und eine für den 2026-03-03, die Uhr auf den 02. um 23:59 stellen,
+den Zustand einsammeln, dann die Uhr auf den 03. um 00:01 stellen,
+`beimSichtbarwerden()` aufrufen und prüfen, dass jetzt die andere Fälligkeit
+erscheint.
+
 Run: `./gradlew :app:testDebugUnitTest --tests "*HeuteViewModelTest*"`
-Expected: `BUILD SUCCESSFUL`, 2 Tests bestanden.
+Expected: `BUILD SUCCESSFUL`, 3 Tests bestanden.
 
 - [ ] **Step 8: Oberfläche anlegen**
 
@@ -6301,18 +6651,41 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.vanhake.dayorganizer.R
+import de.vanhake.dayorganizer.platform.permission.Hinweis
+import de.vanhake.dayorganizer.platform.permission.einstellungsIntent
+import de.vanhake.dayorganizer.ui.gemeinsam.WarnBanner
 
 @Composable
 fun HeuteScreen(viewModel: HeuteViewModel = hiltViewModel()) {
     val zustand by viewModel.zustand.collectAsStateWithLifecycle()
+    val kontext = LocalContext.current
+
+    // Bei jedem Sichtbarwerden neu pruefen: der Nutzer kommt aus den
+    // Systemeinstellungen zurueck, und dann muss der Banner verschwinden.
+    LifecycleResumeEffect(Unit) {
+        viewModel.beimSichtbarwerden()
+        onPauseOrDispose { }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxWidth().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        items(zustand.hinweise, key = { it.name }) { hinweis ->
+            WarnBanner(
+                hinweis = hinweis,
+                beheben = {
+                    ContextCompat.startActivity(kontext, hinweis.einstellungsIntent(kontext), null)
+                },
+            )
+        }
+
         item { Kopf(zustand) }
 
         abschnitt(R.string.abschnitt_ueberfaellig, zustand.ueberfaellig, viewModel)
@@ -6349,17 +6722,26 @@ private fun Kopf(zustand: HeuteZustand) {
                 stringResource(R.string.punktestand, zustand.kontostand),
                 style = MaterialTheme.typography.headlineSmall,
             )
-            Text(
-                stringResource(R.string.tagesfortschritt, zustand.erledigtHeute, zustand.gesamtHeute),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            LinearProgressIndicator(
-                progress = {
-                    if (zustand.gesamtHeute == 0) 0f
-                    else zustand.erledigtHeute.toFloat() / zustand.gesamtHeute
-                },
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            )
+            // Ring statt Balken: das Design sagt einen Fortschrittsring zu,
+            // und der Anteil wird geklemmt, weil Material3 0..1 erwartet.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(
+                    progress = {
+                        val anteil = if (zustand.gesamtHeute == 0) 0f
+                        else zustand.erledigtHeute.toFloat() / zustand.gesamtHeute
+                        anteil.coerceIn(0f, 1f)
+                    },
+                    modifier = Modifier.padding(end = 16.dp),
+                )
+                Text(
+                    stringResource(
+                        R.string.tagesfortschritt,
+                        zustand.erledigtHeute,
+                        zustand.gesamtHeute,
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
         }
     }
 }
@@ -6606,6 +6988,11 @@ data class AktivitaetEntwurf(
     val serienSchwellen: List<SerienSchwelle> = listOf(SerienSchwelle(7, 10)),
     val nachfassAnzahlText: String = "2",
     val nachfassAbstandText: String = "15",
+    // Nicht im Formular sichtbar, aber sie muessen den Rundlauf ueberleben:
+    // sonst holt ein Speichern eine archivierte Aktivitaet zurueck und loescht
+    // das Archivdatum -- @Update ersetzt die ganze Zeile.
+    val aktiv: Boolean = true,
+    val archiviertAm: LocalDate? = null,
 ) {
 
     private val basisPunkte: Int get() = basisPunkteText.toIntOrNull() ?: 0
@@ -6660,6 +7047,8 @@ data class AktivitaetEntwurf(
         serienSchwellen = serienSchwellen,
         nachfassAnzahl = nachfassAnzahlText.toIntOrNull() ?: 0,
         nachfassAbstandMinuten = nachfassAbstandText.toIntOrNull() ?: 15,
+        aktiv = aktiv,
+        archiviertAm = archiviertAm,
         erstelltAm = erstelltAm,
     )
 
@@ -6676,6 +7065,8 @@ data class AktivitaetEntwurf(
                 serienSchwellen = aktivitaet.serienSchwellen,
                 nachfassAnzahlText = aktivitaet.nachfassAnzahl.toString(),
                 nachfassAbstandText = aktivitaet.nachfassAbstandMinuten.toString(),
+                aktiv = aktivitaet.aktiv,
+                archiviertAm = aktivitaet.archiviertAm,
             )
             return when (val plan = aktivitaet.zeitplan) {
                 is Zeitplan.FesteZeiten -> basis.copy(
@@ -6709,8 +7100,12 @@ data class AktivitaetEntwurf(
 
 - [ ] **Step 4: Test laufen lassen und grünen Lauf bestätigen**
 
+Zwei Tests kommen dazu, weil der Rundlauf sonst stillschweigend Felder verliert:
+`ein archivierter Entwurf bleibt beim Rundlauf archiviert` und ein Test, der für
+eine aktive Aktivität `aus(x).zuAktivitaet(...) == x` prüft.
+
 Run: `./gradlew :app:testDebugUnitTest --tests "*AktivitaetEntwurfTest*"`
-Expected: `BUILD SUCCESSFUL`, 7 Tests bestanden.
+Expected: `BUILD SUCCESSFUL`, 9 Tests bestanden.
 
 - [ ] **Step 5: ViewModels anlegen**
 
@@ -6797,9 +7192,14 @@ class AktivitaetBearbeitenViewModel @Inject constructor(
 
         aktivitaeten.speichern(_entwurf.value.zuAktivitaet(LocalDate.now(uhr)))
         // Ohne diese beiden Zeilen wirkt eine neue Aktivitaet erst nach dem
-        // naechtlichen Waechterlauf.
-        materialisieren()
-        alarmPlaner.neuPlanen()
+        // naechtlichen Waechterlauf. Sie sind reine Optimierung: schlagen sie
+        // fehl, holt der Waechter es nach -- sie duerfen den Speichervorgang
+        // also nicht mitreissen. Das Schreiben selbst bleibt ungeschuetzt:
+        // scheitert es, darf der Aufrufer kein true sehen.
+        runCatching {
+            materialisieren()
+            alarmPlaner.neuPlanen()
+        }.onFailure { Log.w(TAG, "Nachbereitung nach dem Speichern fehlgeschlagen", it) }
         return true
     }
 }
@@ -7174,5 +7574,5 @@ Nach Task 19 steht eine benutzbare App: Aktivitäten anlegen, zuverlässig erinn
 Vor dem Übergang einmal vollständig prüfen:
 
 ```bash
-./gradlew clean :domain:test :app:testDebugUnitTest :app:connectedDebugAndroidTest :app:assembleDebug
+./gradlew clean :domain:test :app:testDebugUnitTest :app:assembleDebug
 ```

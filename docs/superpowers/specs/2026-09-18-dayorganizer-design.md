@@ -112,17 +112,37 @@ einziehen, ohne dass sich die Semantik ändert.
   Periode hält die Serie, wenn keine ihrer Fälligkeiten `VERPASST` ist. Eine
   ausgelassene Fälligkeit bricht die Serie also nicht, verlängert sie aber auch
   nicht — die Serie wird fortgeschrieben, nicht hochgezählt.
+- Eine Periode zählt erst, wenn sie **abgeschlossen** ist, also keine ihrer
+  Fälligkeiten mehr offen ist. Wer morgens die Tablette nimmt und abends nicht,
+  hat den Tag nicht geschafft und darf morgens auch noch keinen Serienbonus
+  dafür bekommen. Ohne diese Regel ließe sich derselbe Schwellenbonus wiederholt
+  kassieren: morgens einstreichen, abends die Serie brechen lassen, von vorn.
 - Erreicht eine Serie eine konfigurierte Schwelle, wird der Bonus einmalig
   gebucht. Bricht die Serie und wächst erneut über dieselbe Schwelle, wird
   erneut gebucht.
 - Der global konfigurierte Tagesbonus wird gebucht, wenn jede Fälligkeit des
   Tages den Status `ERLEDIGT` hat. Eine ausgelassene Fälligkeit verhindert den
-  Tagesbonus, anders als bei der Serie.
+  Tagesbonus, anders als bei der Serie. Gezählt werden dabei nur Fälligkeiten,
+  deren Periode genau dieser eine Tag ist — ein Wochenziel gehört der Woche,
+  nicht dem Dienstag, und darf den Tagesbonus nicht sechs Tage lang blockieren.
 - Pünktlichkeit gilt nur für Zeitplantypen mit konkretem Zeitpunkt.
   Tages- und Wochenziele kennen keinen Pünktlichkeitsbonus.
 - Bei Tages- und Wochenzielen werden Basispunkte je Teilerledigung gebucht.
 
-### 3.6 Belohnung und Einlösung
+### 3.6 Ändern, Archivieren und Anlegen
+
+Wird eine Aktivität archiviert oder ihr Zeitplan geändert, verschwinden ihre
+noch nicht begonnenen künftigen Fälligkeiten samt deren Erinnerungen, und der
+Alarm wird neu gesetzt. Sonst meldet sich die App tagelang für einen Zeitplan,
+den es nicht mehr gibt, und hinterlässt verpasste Einträge, die niemand
+verschuldet hat. Bereits begonnene Zählziele bleiben stehen — der Fortschritt
+gehört dem Nutzer.
+
+Eine neue Aktivität beginnt zum Anlegezeitpunkt, nicht um Mitternacht. Wer
+mittags eine Tablette für 8:00 und 20:00 einträgt, bekommt nicht sofort einen
+verpassten Morgen und eine gebrochene Serie geschenkt.
+
+### 3.7 Belohnung und Einlösung
 
 Eine Belohnung hat Name, Beschreibung, Icon und einen Preis in Punkten.
 Optional kommt eine Zusatzbedingung hinzu:
@@ -197,11 +217,19 @@ nächste fällige Erinnerung überhaupt.
 Damit entstehen keine verwaisten Alarme, die beim Bearbeiten oder Löschen einer
 Aktivität aufzuräumen wären.
 
+Der Planer schaut dabei ausdrücklich auch **zurück**: eine Erinnerung, deren
+Zeitpunkt vergangen ist und die noch nicht ausgelöst wurde, wird sofort
+eingeplant statt übersprungen. War das Handy um 19:30 aus und um 21:00 wieder
+an, kommt die Erinnerung für 20:00 um 21:00 — verspätet ist bei einer
+Medikamentenerinnerung ungleich besser als gar nicht.
+
 **Wächter.** Ein `WorkManager`-Job läuft täglich nachts sowie nach Neustart und
 App-Update und tut drei Dinge: abgelaufene offene Fälligkeiten auf `VERPASST`
 setzen, Fälligkeiten für die nächsten sieben Tage materialisieren, den nächsten
 Alarm neu setzen. Der Wächter ist die Selbstheilung des Systems für den Fall,
-dass Android einen Alarm verschluckt hat.
+dass Android einen Alarm verschluckt hat. Scheitert er dauerhaft, sagt er das
+über denselben Warnbanner wie eine fehlende Berechtigung — eine still kaputte
+Selbstheilung ist schlimmer als keine.
 
 ### 4.5 Benachrichtigungen
 
@@ -209,8 +237,9 @@ Jede Erinnerung trägt die Aktionen **Erledigt**, **Später** und **Ausgelassen*
 und wird direkt aus der Statusleiste heraus verarbeitet, ohne die App zu öffnen.
 "Später" plant eine Wiedervorlage im konfigurierten Abstand. Bleibt die
 Benachrichtigung unbeantwortet, wird bis zu `nachfassAnzahl`-mal nachgefasst.
-Eigener Notification Channel je Wichtigkeitsstufe, damit der Nutzer im System
-differenzieren kann.
+Ein Notification Channel für Erinnerungen, mit hoher Wichtigkeit. Weitere
+Kanäle erst, wenn es tatsächlich Meldungen anderer Dringlichkeit gibt — ein
+leerer Kanal in den Systemeinstellungen hilft niemandem beim Differenzieren.
 
 ### 4.6 Berechtigungen
 
@@ -218,7 +247,14 @@ Unter API 33+ ist das der fragilste Teil und bekommt einen eigenen
 Onboarding-Ablauf:
 
 - `POST_NOTIFICATIONS` zur Laufzeit anfragen.
-- `SCHEDULE_EXACT_ALARM` erklären und zum Systemdialog führen.
+- Exakte Alarme über `USE_EXACT_ALARM` anfordern statt über
+  `SCHEDULE_EXACT_ALARM`. Die Berechtigung wird bei der Installation erteilt,
+  womit der fragilste Onboarding-Schritt entfällt: sonst startet jede
+  Installation im ungenauen Modus, bis sich der Nutzer durch die
+  Systemeinstellungen geklickt hat. Die Play-Store-Beschränkung auf Wecker- und
+  Kalender-Apps greift bei einer per APK verteilten App nicht, und eine
+  Medikamentenerinnerung ist genau der Fall, für den die Berechtigung gedacht
+  ist. Der Banner bleibt als Rückfallebene, falls sie doch einmal fehlt.
 - Auf herstellerseitige Akkuoptimierung hinweisen. Geräte von Xiaomi, Samsung
   und Huawei beenden Hintergrundprozesse aggressiv; ohne Ausnahme bleiben
   Alarme aus.

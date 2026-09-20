@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">DayOrganizer</string>
+    <string name="kanal_erinnerungen_name">Erinnerungen</string>
+    <string name="kanal_erinnerungen_beschreibung">Erinnerungen an deine täglichen Aktivitäten</string>
+    <string name="aktion_erledigt">Erledigt</string>
+    <string name="aktion_spaeter">Später</string>
+    <string name="aktion_ausgelassen">Ausgelassen</string>
+    <string name="erinnerung_jetzt_faellig">Jetzt fällig</string>
+    <string name="erinnerung_noch_offen">Noch %1$d von %2$d offen</string>
+    <string name="warnung_benachrichtigungen_titel">Benachrichtigungen sind aus</string>
+    <string name="warnung_benachrichtigungen_text">Ohne Benachrichtigungen erinnert dich die App an nichts.</string>
+    <string name="warnung_exakte_alarme_titel">Exakte Alarme sind nicht erlaubt</string>
+    <string name="warnung_exakte_alarme_text">Erinnerungen können dadurch deutlich verspätet kommen.</string>
+    <string name="warnung_akku_titel">Akkuoptimierung ist aktiv</string>
+    <string name="warnung_akku_text">Das System kann Erinnerungen unterdrücken. Nimm DayOrganizer von der Optimierung aus.</string>
+    <string name="warnung_waechter_titel">Selbstheilung reagiert nicht</string>
+    <string name="warnung_waechter_text">Die App konnte sich lange nicht selbst aktualisieren. Erinnerungen könnten bald ausbleiben.</string>
+    <string name="warnung_beheben">Einstellung öffnen</string>
+    <string name="punktestand">%1$d Punkte</string>
+    <string name="tagesfortschritt">Heute %1$d von %2$d erledigt</string>
+    <string name="ziel_fortschritt">%1$d von %2$d</string>
+    <string name="abschnitt_ueberfaellig">Überfällig</string>
+    <string name="abschnitt_anstehend">Jetzt dran</string>
+    <string name="abschnitt_spaeter">Später heute</string>
+    <string name="abschnitt_abgeschlossen">Erledigt</string>
+    <string name="tab_heute">Heute</string>
+    <string name="tab_aktivitaeten">Aktivitäten</string>
+    <string name="neue_aktivitaet">Neue Aktivität</string>
+    <string name="punkte_je_erledigung">%1$d Punkte je Erledigung</string>
+    <string name="archivieren">Archivieren</string>
+    <string name="feld_name">Name</string>
+    <string name="feld_punkte">Punkte je Erledigung</string>
+    <string name="feld_zeitplan">Zeitplan</string>
+    <string name="feld_wochentage">Wochentage</string>
+    <string name="feld_uhrzeiten">Uhrzeiten, kommagetrennt (z. B. 08:00, 20:00)</string>
+    <string name="feld_intervall">Alle wie viele Stunden</string>
+    <string name="feld_zielanzahl">Wie oft</string>
+    <string name="typ_feste_zeiten">Feste Zeiten</string>
+    <string name="typ_intervall">Intervall</string>
+    <string name="typ_tagesziel">Mal pro Tag</string>
+    <string name="typ_wochenziel">Mal pro Woche</string>
+    <string name="speichern">Speichern</string>
+</resources>
