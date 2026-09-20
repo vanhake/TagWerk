@@ -41,6 +41,16 @@ class StatistikRechner(private val serienRechner: SerienRechner = SerienRechner(
         )
     }
 
+    /**
+     * Gezaehlt werden nur Faelligkeiten, deren Periode genau dieser eine Tag ist.
+     * Ein Wochenziel gehoert der Woche, nicht dem Dienstag: seine Periode deckt
+     * alle sieben Tage ab, und ohne diesen Filter meldete ein einziges erledigtes
+     * Wochenziel sieben erledigte Tage -- auch den Sonntag, an dem nichts geschah.
+     * Ein offenes drueckte umgekehrt eine ganze Woche. Dieselbe Regel gilt in
+     * FaelligkeitErledigen fuer den Tagesbonus; "was gehoert diesem Tag" soll
+     * ueberall in der App dasselbe heissen. Wochenziele erscheinen dafuer nicht in
+     * der Heatmap, sondern in der Quote je Aktivitaet.
+     */
     fun tagesBilanzen(
         faelligkeiten: List<Faelligkeit>,
         von: LocalDate,
@@ -49,7 +59,7 @@ class StatistikRechner(private val serienRechner: SerienRechner = SerienRechner(
         .takeWhile { !it.isAfter(bis) }
         .map { tag ->
             val desTages = faelligkeiten.filter {
-                !it.periodeVon.isAfter(tag) && !it.periodeBis.isBefore(tag)
+                it.periodeVon == it.periodeBis && it.periodeVon == tag
             }
             TagesBilanz(
                 tag = tag,

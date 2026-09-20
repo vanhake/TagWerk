@@ -97,4 +97,32 @@ class StatistikRechnerTest {
             verlauf,
         )
     }
+
+    @Test
+    fun `ein Wochenziel taucht in keiner Tagesbilanz auf`() {
+        val wochenziel = Faelligkeit(
+            id = 500,
+            aktivitaetId = 2,
+            periodeVon = start,
+            periodeBis = start.plusDays(6),
+            geplantFuer = null,
+            sollAnzahl = 3,
+            istAnzahl = 3,
+            status = FaelligkeitStatus.ERLEDIGT,
+        )
+
+        val bilanzen = rechner.tagesBilanzen(
+            listOf(wochenziel, tag(0, FaelligkeitStatus.ERLEDIGT)),
+            start,
+            start.plusDays(6),
+        )
+
+        // Nur das Tagesitem am ersten Tag zaehlt; das erledigte Wochenziel darf
+        // nicht sieben erledigte Tage vortaeuschen.
+        assertEquals(TagesBilanz(start, erledigt = 1, gesamt = 1), bilanzen[0])
+        assertEquals(
+            List(6) { 0 to 0 },
+            bilanzen.drop(1).map { it.erledigt to it.gesamt },
+        )
+    }
 }

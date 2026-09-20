@@ -1930,6 +1930,14 @@ git commit -m "feat(ui): naechste Belohnung als Ziel auf dem Heute-Screen"
 
 Ausgelassene Fälligkeiten aus der Quote herauszurechnen ist eine bewusste Entscheidung: wer bewusst verzichtet, soll seine Statistik nicht verderben.
 
+`tagesBilanzen` zählt nur Fälligkeiten, deren Periode genau dieser eine Tag ist.
+Ein Wochenziel gehört der Woche, nicht dem Dienstag: seine Periode deckt alle
+sieben Tage ab, und ohne diesen Filter meldete ein einziges erledigtes
+Wochenziel sieben erledigte Tage — auch den Sonntag, an dem nichts geschah. Ein
+offenes drückte umgekehrt eine ganze Woche. Dieselbe Regel gilt in
+`FaelligkeitErledigen` für den Tagesbonus. Wochenziele erscheinen dafür nicht in
+der Heatmap, sondern in der Quote je Aktivität.
+
 - [ ] **Step 1: Fehlschlagenden Test schreiben**
 
 ```kotlin
@@ -2094,7 +2102,7 @@ class StatistikRechner(private val serienRechner: SerienRechner = SerienRechner(
         .takeWhile { !it.isAfter(bis) }
         .map { tag ->
             val desTages = faelligkeiten.filter {
-                !it.periodeVon.isAfter(tag) && !it.periodeBis.isBefore(tag)
+                it.periodeVon == it.periodeBis && it.periodeVon == tag
             }
             TagesBilanz(
                 tag = tag,
