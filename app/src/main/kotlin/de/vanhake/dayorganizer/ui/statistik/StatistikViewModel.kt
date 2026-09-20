@@ -7,9 +7,11 @@ import de.vanhake.dayorganizer.data.repository.AktivitaetRepository
 import de.vanhake.dayorganizer.data.repository.BuchungRepository
 import de.vanhake.dayorganizer.data.repository.FaelligkeitRepository
 import de.vanhake.dayorganizer.domain.rechner.StatistikRechner
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import java.time.Clock
@@ -29,6 +31,11 @@ class StatistikViewModel @Inject constructor(
 
     val zustand: StateFlow<StatistikZustand> = zeitraum
         .map { tage -> zusammenstellen(tage) }
+        // Die Berechnung skaliert mit einem Jahr mal allen Faelligkeiten (tagesBilanzen
+        // ist O(Tage * Faelligkeiten)) -- ohne Dispatcher-Wechsel liefe das auf dem
+        // Hauptthread, weil Korutinen nach jedem suspend-Aufruf in ihren Ausgangskontext
+        // zurueckkehren (hier viewModelScope == Dispatchers.Main.immediate).
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StatistikZustand())
 
     /** Erlaubt sind 30, 90 und 365 Tage. */
@@ -57,7 +64,12 @@ class StatistikViewModel @Inject constructor(
                     ),
                 )
             },
-            punkteVerlauf = rechner.punkteVerlauf(buchungen.fuerZeitraum(von, heute), von, heute),
+            // punkteVerlauf bildet den Anfangsbestand aus allen Buchungen VOR "von" (siehe
+            // StatistikRechnerTest."der Punkteverlauf beginnt beim Stand vor dem Zeitraum").
+            // fuerZeitraum(von, heute) enthaelt per Konstruktion nichts vor "von" -- damit
+            // waere der Anfangsbestand immer 0 und herauskaeme die Netto-Aenderung seit "von"
+            // statt des tatsaechlichen Kontostands. Deshalb hier bewusst alle().
+            punkteVerlauf = rechner.punkteVerlauf(buchungen.alle(), von, heute),
         )
     }
 }

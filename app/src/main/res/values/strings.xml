@@ -65,6 +65,7 @@
     <string name="tab_statistik">Statistik</string>
     <string name="zeitraum_tage">%1$d Tage</string>
     <string name="heatmap_titel">Erledigt je Tag</string>
+    <string name="punkteverlauf_titel">Punkteverlauf</string>
     <string name="quote_zeile">%1$d %% erledigt — %2$d geschafft, %3$d verpasst</string>
     <string name="serie_zeile">Serie: %1$d aktuell, %2$d am längsten</string>
 </resources>

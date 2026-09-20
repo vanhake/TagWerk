@@ -14,6 +14,15 @@ import de.vanhake.dayorganizer.domain.rechner.TagesBilanz
 import java.time.DayOfWeek
 
 /**
+ * Mindestanteil, mit dem ein belegter Tag eingefaerbt wird, selbst wenn die Quote
+ * genau null ist. Ohne diese Untergrenze ergibt mische(leer, basis, 0f) exakt [leer]
+ * -- ein Tag mit drei verpassten Faelligkeiten saehe dann genauso aus wie ein Tag
+ * ganz ohne Faelligkeit. Auf einem Bildschirm, dessen Zweck Rechenschaft ist, muss
+ * "belegt und nichts geschafft" sichtbar anders aussehen als "nichts geplant".
+ */
+private const val MINDESTANTEIL_BELEGTER_TAG = 0.18f
+
+/**
  * Kalender-Heatmap im Wochenraster: eine Spalte je Woche, sieben Zeilen von
  * Montag bis Sonntag. Die Faerbung ist der Anteil erledigter Faelligkeiten.
  */
@@ -35,7 +44,11 @@ fun Heatmap(bilanzen: List<TagesBilanz>, modifier: Modifier = Modifier) {
             val position = index + versatz
             val spalte = position / 7
             val zeile = position % 7
-            val anteil = if (bilanz.gesamt == 0) 0f else bilanz.erledigt.toFloat() / bilanz.gesamt
+            val anteil = if (bilanz.gesamt == 0) {
+                0f
+            } else {
+                (bilanz.erledigt.toFloat() / bilanz.gesamt).coerceAtLeast(MINDESTANTEIL_BELEGTER_TAG)
+            }
 
             drawRect(
                 color = if (bilanz.gesamt == 0) leer else mische(leer, basis, anteil),

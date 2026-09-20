@@ -366,4 +366,64 @@ class DaoTest {
             db.belohnungDao().alleEinloesungen().map { it.name },
         )
     }
+
+    private fun buchung(zeitpunkt: LocalDateTime, betrag: Int = 1, notiz: String = "") =
+        BuchungEntity(
+            art = "ERLEDIGUNG", betrag = betrag, zeitpunkt = zeitpunkt,
+            aktivitaetId = null, faelligkeitId = null, belohnungId = null,
+            schwelle = null, notiz = notiz,
+        )
+
+    // Der Zeitpunkt liegt als ISO-Text in der Datenbank, der Vergleich ist also
+    // lexikographisch. Diese Tests pruefen, dass die Tagesgrenzen trotzdem dort
+    // liegen, wo sie liegen sollen -- spaet am letzten Tag zaehlt noch dazu,
+    // Mitternacht des Folgetags nicht mehr.
+    @Test
+    fun fuerZeitraum_schliesst_den_ganzen_letzten_Tag_ein() = runTest {
+        db.buchungDao().einfuegen(
+            listOf(
+                buchung(LocalDateTime.of(2026, 3, 1, 23, 59), notiz = "Tag davor"),
+                buchung(LocalDateTime.of(2026, 3, 2, 0, 0), notiz = "Beginn"),
+                buchung(LocalDateTime.of(2026, 3, 4, 23, 59, 59), notiz = "spaet am Ende"),
+                buchung(LocalDateTime.of(2026, 3, 5, 0, 0), notiz = "Tag danach"),
+            ),
+        )
+
+        val treffer = db.buchungDao().fuerZeitraum(
+            LocalDate.of(2026, 3, 2).atStartOfDay(),
+            LocalDate.of(2026, 3, 4).plusDays(1).atStartOfDay(),
+        )
+
+        assertEquals(listOf("Beginn", "spaet am Ende"), treffer.map { it.notiz })
+    }
+
+    @Test
+    fun fuerZeitraum_liefert_aufsteigend_nach_zeitpunkt() = runTest {
+        db.buchungDao().einfuegen(
+            listOf(
+                buchung(LocalDateTime.of(2026, 3, 3, 20, 0), notiz = "Abend"),
+                buchung(LocalDateTime.of(2026, 3, 2, 8, 0), notiz = "Morgen"),
+                buchung(LocalDateTime.of(2026, 3, 2, 12, 30), notiz = "Mittag"),
+            ),
+        )
+
+        val treffer = db.buchungDao().fuerZeitraum(
+            LocalDate.of(2026, 3, 2).atStartOfDay(),
+            LocalDate.of(2026, 3, 4).atStartOfDay(),
+        )
+
+        assertEquals(listOf("Morgen", "Mittag", "Abend"), treffer.map { it.notiz })
+    }
+
+    @Test
+    fun alle_liefert_das_ganze_Journal_aufsteigend() = runTest {
+        db.buchungDao().einfuegen(
+            listOf(
+                buchung(LocalDateTime.of(2026, 3, 10, 8, 0), notiz = "spaet"),
+                buchung(LocalDateTime.of(2025, 12, 24, 18, 0), notiz = "frueh"),
+            ),
+        )
+
+        assertEquals(listOf("frueh", "spaet"), db.buchungDao().alle().map { it.notiz })
+    }
 }

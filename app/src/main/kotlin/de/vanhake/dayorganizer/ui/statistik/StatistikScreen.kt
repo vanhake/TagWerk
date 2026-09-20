@@ -53,6 +53,18 @@ fun StatistikScreen(viewModel: StatistikViewModel = hiltViewModel()) {
             }
         }
 
+        item {
+            Card {
+                Column(Modifier.padding(16.dp)) {
+                    Text(
+                        stringResource(R.string.punkteverlauf_titel),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Punkteverlaufsdiagramm(zustand.punkteVerlauf, Modifier.padding(top = 8.dp))
+                }
+            }
+        }
+
         items(zustand.zeilen, key = { it.aktivitaetId }) { zeile ->
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
