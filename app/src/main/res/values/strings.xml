@@ -68,4 +68,7 @@
     <string name="punkteverlauf_titel">Punkteverlauf</string>
     <string name="quote_zeile">%1$d %% erledigt — %2$d geschafft, %3$d verpasst</string>
     <string name="serie_zeile">Serie: %1$d aktuell, %2$d am längsten</string>
+    <string name="tab_einstellungen">Einstellungen</string>
+    <string name="feld_tagesbonus">Tagesbonus, wenn alles erledigt ist</string>
+    <string name="feld_standard_kulanz">Standard-Kulanzfenster in Minuten</string>
 </resources>

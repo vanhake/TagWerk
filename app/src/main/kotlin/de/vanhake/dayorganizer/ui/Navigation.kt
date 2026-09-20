@@ -5,6 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -14,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -24,6 +26,7 @@ import de.vanhake.dayorganizer.ui.aktivitaeten.AktivitaetBearbeitenScreen
 import de.vanhake.dayorganizer.ui.aktivitaeten.AktivitaetenScreen
 import de.vanhake.dayorganizer.ui.belohnungen.BelohnungBearbeitenScreen
 import de.vanhake.dayorganizer.ui.belohnungen.BelohnungenScreen
+import de.vanhake.dayorganizer.ui.einstellungen.EinstellungenScreen
 import de.vanhake.dayorganizer.ui.heute.HeuteScreen
 import de.vanhake.dayorganizer.ui.statistik.StatistikScreen
 
@@ -32,11 +35,23 @@ object Ziele {
     const val AKTIVITAETEN = "aktivitaeten"
     const val BELOHNUNGEN = "belohnungen"
     const val STATISTIK = "statistik"
+    const val EINSTELLUNGEN = "einstellungen"
     const val AKTIVITAET_BEARBEITEN = "aktivitaet/{id}"
     const val BELOHNUNG_BEARBEITEN = "belohnung/{id}"
-    fun bearbeiten(id: Long) = "aktivitaet/$id"
+
+    fun aktivitaetBearbeiten(id: Long) = "aktivitaet/$id"
     fun belohnungBearbeiten(id: Long) = "belohnung/$id"
 }
+
+private data class Tab(val ziel: String, val icon: ImageVector, val titelId: Int)
+
+private val TABS = listOf(
+    Tab(Ziele.HEUTE, Icons.Default.CheckCircle, R.string.tab_heute),
+    Tab(Ziele.AKTIVITAETEN, Icons.Default.List, R.string.tab_aktivitaeten),
+    Tab(Ziele.BELOHNUNGEN, Icons.Default.Star, R.string.tab_belohnungen),
+    Tab(Ziele.STATISTIK, Icons.Default.Insights, R.string.tab_statistik),
+    Tab(Ziele.EINSTELLUNGEN, Icons.Default.Settings, R.string.tab_einstellungen),
+)
 
 @Composable
 fun DayOrganizerNavigation() {
@@ -47,30 +62,19 @@ fun DayOrganizerNavigation() {
     Scaffold(
         bottomBar = {
             NavigationBar {
-                NavigationBarItem(
-                    selected = aktuell == Ziele.HEUTE,
-                    onClick = { navController.navigate(Ziele.HEUTE) },
-                    icon = { Icon(Icons.Default.CheckCircle, contentDescription = null) },
-                    label = { Text(stringResource(R.string.tab_heute)) },
-                )
-                NavigationBarItem(
-                    selected = aktuell == Ziele.AKTIVITAETEN,
-                    onClick = { navController.navigate(Ziele.AKTIVITAETEN) },
-                    icon = { Icon(Icons.Default.List, contentDescription = null) },
-                    label = { Text(stringResource(R.string.tab_aktivitaeten)) },
-                )
-                NavigationBarItem(
-                    selected = aktuell == Ziele.BELOHNUNGEN,
-                    onClick = { navController.navigate(Ziele.BELOHNUNGEN) },
-                    icon = { Icon(Icons.Default.Star, contentDescription = null) },
-                    label = { Text(stringResource(R.string.tab_belohnungen)) },
-                )
-                NavigationBarItem(
-                    selected = aktuell == Ziele.STATISTIK,
-                    onClick = { navController.navigate(Ziele.STATISTIK) },
-                    icon = { Icon(Icons.Default.Insights, contentDescription = null) },
-                    label = { Text(stringResource(R.string.tab_statistik)) },
-                )
+                TABS.forEach { tab ->
+                    NavigationBarItem(
+                        selected = aktuell == tab.ziel,
+                        onClick = {
+                            navController.navigate(tab.ziel) {
+                                popUpTo(Ziele.HEUTE)
+                                launchSingleTop = true
+                            }
+                        },
+                        icon = { Icon(tab.icon, contentDescription = null) },
+                        label = { Text(stringResource(tab.titelId)) },
+                    )
+                }
             }
         },
     ) { innen ->
@@ -80,29 +84,35 @@ fun DayOrganizerNavigation() {
             modifier = Modifier.padding(innen),
         ) {
             composable(Ziele.HEUTE) { HeuteScreen() }
+
             composable(Ziele.AKTIVITAETEN) {
                 AktivitaetenScreen(
-                    bearbeiten = { id -> navController.navigate(Ziele.bearbeiten(id)) },
+                    bearbeiten = { id -> navController.navigate(Ziele.aktivitaetBearbeiten(id)) },
                 )
             }
+
+            composable(Ziele.BELOHNUNGEN) {
+                BelohnungenScreen(
+                    bearbeiten = { id -> navController.navigate(Ziele.belohnungBearbeiten(id)) },
+                )
+            }
+
+            composable(Ziele.STATISTIK) { StatistikScreen() }
+            composable(Ziele.EINSTELLUNGEN) { EinstellungenScreen() }
+
             composable(Ziele.AKTIVITAET_BEARBEITEN) { eintrag ->
                 AktivitaetBearbeitenScreen(
                     id = eintrag.arguments?.getString("id")?.toLongOrNull() ?: 0L,
                     fertig = { navController.popBackStack() },
                 )
             }
-            composable(Ziele.BELOHNUNGEN) {
-                BelohnungenScreen(
-                    bearbeiten = { id -> navController.navigate(Ziele.belohnungBearbeiten(id)) },
-                )
-            }
+
             composable(Ziele.BELOHNUNG_BEARBEITEN) { eintrag ->
                 BelohnungBearbeitenScreen(
                     id = eintrag.arguments?.getString("id")?.toLongOrNull() ?: 0L,
                     fertig = { navController.popBackStack() },
                 )
             }
-            composable(Ziele.STATISTIK) { StatistikScreen() }
         }
     }
 }
