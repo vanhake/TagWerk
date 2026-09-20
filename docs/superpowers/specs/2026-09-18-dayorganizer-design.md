@@ -237,8 +237,9 @@ Jede Erinnerung trägt die Aktionen **Erledigt**, **Später** und **Ausgelassen*
 und wird direkt aus der Statusleiste heraus verarbeitet, ohne die App zu öffnen.
 "Später" plant eine Wiedervorlage im konfigurierten Abstand. Bleibt die
 Benachrichtigung unbeantwortet, wird bis zu `nachfassAnzahl`-mal nachgefasst.
-Eigener Notification Channel je Wichtigkeitsstufe, damit der Nutzer im System
-differenzieren kann.
+Ein Notification Channel für Erinnerungen, mit hoher Wichtigkeit. Weitere
+Kanäle erst, wenn es tatsächlich Meldungen anderer Dringlichkeit gibt — ein
+leerer Kanal in den Systemeinstellungen hilft niemandem beim Differenzieren.
 
 ### 4.6 Berechtigungen
 
