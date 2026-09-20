@@ -55,4 +55,16 @@ interface FaelligkeitDao {
 
     @Query("SELECT * FROM faelligkeit WHERE status = 'OFFEN' AND periodeBis >= :abTag")
     suspend fun offeneAbTag(abTag: LocalDate): List<FaelligkeitEntity>
+
+    /**
+     * Raeumt kuenftige, noch nicht begonnene Faelligkeiten einer Aktivitaet weg -- fuer
+     * Archivieren und Zeitplanaenderung. istAnzahl = 0 schuetzt ein teilweise erfuelltes
+     * Zaehlziel (z.B. 2 von 5 Trainingseinheiten): der Fortschritt gehoert dem Nutzer.
+     * Die Erinnerungen haengen per ON DELETE CASCADE daran und verschwinden mit.
+     */
+    @Query(
+        "DELETE FROM faelligkeit WHERE aktivitaetId = :aktivitaetId AND status = 'OFFEN' " +
+            "AND istAnzahl = 0 AND periodeVon >= :abTag",
+    )
+    suspend fun entfernenKuenftigeOffene(aktivitaetId: Long, abTag: LocalDate)
 }

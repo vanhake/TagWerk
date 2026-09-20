@@ -188,6 +188,30 @@ class ErinnerungAusloesenTest {
     }
 
     @Test
+    fun `eine archivierte Aktivitaet erzeugt keine Benachrichtigung, die Erinnerung wird trotzdem verbraucht`() = runTest {
+        // Gehoert zum Aufraeumen bei AktivitaetNeuPlanen: sollte das Aufraeumen einmal
+        // durch einen Absturz uebersprungen worden sein, darf die verwaiste Erinnerung
+        // trotzdem nie eine Benachrichtigung fuer eine bereits archivierte Aktivitaet zeigen.
+        val archiviert = tabletten.copy(aktiv = false, archiviertAm = LocalDate.of(2026, 3, 2))
+        val erinnerungen = FakeErinnerungRepository(
+            listOf(Erinnerung(id = 1, faelligkeitId = 10, zeitpunkt = LocalDateTime.of(2026, 3, 2, 8, 0))),
+        )
+        val anzeige = FakeAnzeige()
+        val use = ErinnerungAusloesen(
+            erinnerungen = erinnerungen,
+            faelligkeiten = FakeFaelligkeitRepository(listOf(morgens)),
+            aktivitaeten = FakeAktivitaetRepository(listOf(archiviert)),
+            anzeige = anzeige,
+            uhr = uhrUm(8, 0),
+        )
+
+        use()
+
+        assertEquals(emptyList(), anzeige.gezeigt)
+        assertEquals(true, erinnerungen.stand.value.single().ausgeloest)
+    }
+
+    @Test
     fun `Spaeter verschiebt um den Nachfassabstand`() = runTest {
         val erinnerungen = FakeErinnerungRepository()
         val use = ErinnerungSpaeter(

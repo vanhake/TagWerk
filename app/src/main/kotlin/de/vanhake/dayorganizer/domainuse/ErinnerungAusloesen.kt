@@ -28,6 +28,12 @@ class ErinnerungAusloesen @Inject constructor(
             if (faelligkeit.status != FaelligkeitStatus.OFFEN) return@forEach
             val aktivitaet = aktivitaeten.nachId(faelligkeit.aktivitaetId) ?: return@forEach
 
+            // Gehoert zum Aufraeumen bei Archivieren/Umplanen (siehe AktivitaetNeuPlanen):
+            // das Aufraeumen kann durch einen Absturz uebersprungen worden sein, darum
+            // sichert dieser Check zusaetzlich ab, dass eine verwaiste Erinnerung nie
+            // eine Benachrichtigung fuer eine archivierte oder inaktive Aktivitaet zeigt.
+            if (!aktivitaet.aktiv || aktivitaet.archiviertAm != null) return@forEach
+
             anzeige.zeige(faelligkeit, aktivitaet)
 
             if (erinnerung.versuch < aktivitaet.nachfassAnzahl) {

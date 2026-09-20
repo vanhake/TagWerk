@@ -13,6 +13,7 @@ import de.vanhake.dayorganizer.domain.rechner.PunkteRechner
 import de.vanhake.dayorganizer.domain.rechner.SerienRechner
 import de.vanhake.dayorganizer.domainuse.FaelligkeitAuslassen
 import de.vanhake.dayorganizer.domainuse.FaelligkeitErledigen
+import de.vanhake.dayorganizer.platform.notification.Erinnerungsanzeige
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -35,6 +36,14 @@ private class VerstellbareUhr(var instant: java.time.Instant, private val zone: 
     override fun getZone(): ZoneId = zone
     override fun withZone(zone: ZoneId): Clock = VerstellbareUhr(instant, zone)
     override fun instant(): java.time.Instant = instant
+}
+
+private class FakeAnzeige : Erinnerungsanzeige {
+    val versteckt = mutableListOf<Long>()
+    override fun zeige(faelligkeit: Faelligkeit, aktivitaet: Aktivitaet) {}
+    override fun verstecke(faelligkeitId: Long) {
+        versteckt += faelligkeitId
+    }
 }
 
 class HeuteViewModelTest {
@@ -67,6 +76,7 @@ class HeuteViewModelTest {
         faelligkeiten: FakeFaelligkeitRepository,
         buchungen: FakeBuchungRepository,
         uhr: Clock = this.uhr,
+        anzeige: Erinnerungsanzeige = FakeAnzeige(),
     ): HeuteViewModel {
         val aktivitaeten = FakeAktivitaetRepository(listOf(tabletten))
         return HeuteViewModel(
@@ -78,6 +88,7 @@ class HeuteViewModelTest {
                 FakeTransaktionen(), { Einstellungen(tagesbonusPunkte = 0) }, uhr,
             ),
             auslassenUseCase = FaelligkeitAuslassen(faelligkeiten, uhr),
+            anzeige = anzeige,
             alarmNeuPlanen = {},
             hinweiseLesen = { emptyList() },
             uhr = uhr,
@@ -139,7 +150,8 @@ class HeuteViewModelTest {
     fun `Erledigen aktualisiert Fortschritt und Kontostand`() = runTest(dispatcher) {
         val faelligkeiten = FakeFaelligkeitRepository(listOf(morgens))
         val buchungen = FakeBuchungRepository()
-        val vm = viewModel(faelligkeiten, buchungen)
+        val anzeige = FakeAnzeige()
+        val vm = viewModel(faelligkeiten, buchungen, anzeige = anzeige)
 
         vm.zustand.test {
             skipItems(2)
@@ -149,5 +161,22 @@ class HeuteViewModelTest {
             assertEquals(10, danach.kontostand)
             cancelAndIgnoreRemainingEvents()
         }
+        assertEquals(listOf(10L), anzeige.versteckt)
+    }
+
+    @Test
+    fun `Auslassen versteckt die Benachrichtigung, damit sie nicht stehen bleibt`() = runTest(dispatcher) {
+        val faelligkeiten = FakeFaelligkeitRepository(listOf(morgens))
+        val anzeige = FakeAnzeige()
+        val vm = viewModel(faelligkeiten, FakeBuchungRepository(), anzeige = anzeige)
+
+        vm.zustand.test {
+            skipItems(2)
+            vm.auslassen(10)
+            awaitItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        assertEquals(listOf(10L), anzeige.versteckt)
     }
 }

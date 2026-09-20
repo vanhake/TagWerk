@@ -111,6 +111,16 @@ class FakeFaelligkeitRepository(start: List<Faelligkeit> = emptyList()) : Faelli
                 .filter { !it.periodeBis.isBefore(tag) && !it.periodeVon.isAfter(tag) }
                 .sortedWith(tagOrdnung)
         }
+
+    /** Spiegelt exakt das Praedikat aus FaelligkeitDao.entfernenKuenftigeOffene. */
+    override suspend fun entfernenKuenftigeOffene(aktivitaetId: Long, abTag: LocalDate) {
+        stand.value = stand.value.filterNot {
+            it.aktivitaetId == aktivitaetId &&
+                it.status == FaelligkeitStatus.OFFEN &&
+                it.istAnzahl == 0 &&
+                !it.periodeVon.isBefore(abTag)
+        }
+    }
 }
 
 class FakeBuchungRepository(start: List<Buchung> = emptyList()) : BuchungRepository {

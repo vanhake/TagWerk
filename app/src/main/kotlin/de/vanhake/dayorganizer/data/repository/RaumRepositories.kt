@@ -69,6 +69,9 @@ class RaumFaelligkeitRepository @Inject constructor(
 
     override fun beobachteTag(tag: LocalDate): Flow<List<Faelligkeit>> =
         dao.beobachteTag(tag).map { liste -> liste.map { it.zuDomaene() } }
+
+    override suspend fun entfernenKuenftigeOffene(aktivitaetId: Long, abTag: LocalDate) =
+        dao.entfernenKuenftigeOffene(aktivitaetId, abTag)
 }
 
 class RaumBuchungRepository @Inject constructor(

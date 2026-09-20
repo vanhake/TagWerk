@@ -9,6 +9,7 @@ import de.vanhake.dayorganizer.data.repository.FaelligkeitRepository
 import de.vanhake.dayorganizer.domainuse.FaelligkeitAuslassen
 import de.vanhake.dayorganizer.domainuse.FaelligkeitErledigen
 import de.vanhake.dayorganizer.platform.alarm.AlarmPlaner
+import de.vanhake.dayorganizer.platform.notification.Erinnerungsanzeige
 import de.vanhake.dayorganizer.platform.permission.BerechtigungsHinweise
 import de.vanhake.dayorganizer.platform.permission.BerechtigungsPruefer
 import de.vanhake.dayorganizer.platform.permission.Hinweis
@@ -32,6 +33,7 @@ class HeuteViewModel(
     private val buchungen: BuchungRepository,
     private val erledigenUseCase: FaelligkeitErledigen,
     private val auslassenUseCase: FaelligkeitAuslassen,
+    private val anzeige: Erinnerungsanzeige,
     private val alarmNeuPlanen: suspend () -> Unit,
     private val hinweiseLesen: () -> List<Hinweis>,
     private val uhr: Clock,
@@ -44,11 +46,12 @@ class HeuteViewModel(
         buchungen: BuchungRepository,
         erledigenUseCase: FaelligkeitErledigen,
         auslassenUseCase: FaelligkeitAuslassen,
+        anzeige: Erinnerungsanzeige,
         alarmPlaner: AlarmPlaner,
         pruefer: BerechtigungsPruefer,
         uhr: Clock,
     ) : this(
-        aktivitaeten, faelligkeiten, buchungen, erledigenUseCase, auslassenUseCase,
+        aktivitaeten, faelligkeiten, buchungen, erledigenUseCase, auslassenUseCase, anzeige,
         { alarmPlaner.neuPlanen() }, { BerechtigungsHinweise.fuer(pruefer.stand()) }, uhr,
     )
 
@@ -79,13 +82,19 @@ class HeuteViewModel(
 
     // Property und Methode heissen bewusst unterschiedlich: gleiche Namen
     // kompilieren zwar, lesen sich aber wie ein Selbstaufruf.
+    // Ohne anzeige.verstecke() bliebe die Systembenachrichtigung stehen, obwohl der
+    // Nutzer die Faelligkeit gerade hier im Screen erledigt/ausgelassen hat -- AktionsEmpfaenger
+    // (der Weg ueber die Benachrichtigungsaktionen) versteckt sie schon, dieser Pfad muss
+    // dasselbe tun (Finding 3 der Branch-Review).
     fun erledigen(faelligkeitId: Long) = viewModelScope.launch {
         erledigenUseCase(faelligkeitId)
+        anzeige.verstecke(faelligkeitId)
         alarmNeuPlanen()
     }
 
     fun auslassen(faelligkeitId: Long) = viewModelScope.launch {
         auslassenUseCase(faelligkeitId)
+        anzeige.verstecke(faelligkeitId)
         alarmNeuPlanen()
     }
 }

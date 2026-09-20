@@ -5,8 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import de.vanhake.dayorganizer.data.repository.AktivitaetRepository
-import de.vanhake.dayorganizer.domainuse.FaelligkeitenMaterialisieren
-import de.vanhake.dayorganizer.platform.alarm.AlarmPlaner
+import de.vanhake.dayorganizer.domainuse.AktivitaetNeuPlanen
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,8 +17,7 @@ import javax.inject.Inject
 @HiltViewModel
 class AktivitaetBearbeitenViewModel @Inject constructor(
     private val aktivitaeten: AktivitaetRepository,
-    private val materialisieren: FaelligkeitenMaterialisieren,
-    private val alarmPlaner: AlarmPlaner,
+    private val neuPlanen: AktivitaetNeuPlanen,
     private val uhr: Clock,
 ) : ViewModel() {
 
@@ -44,14 +42,15 @@ class AktivitaetBearbeitenViewModel @Inject constructor(
         _fehler.value = fehler
         if (fehler.isNotEmpty()) return false
 
-        aktivitaeten.speichern(_entwurf.value.zuAktivitaet(LocalDate.now(uhr)))
-        // Ohne diese beiden Zeilen wirkt eine neue Aktivitaet erst nach dem
-        // naechtlichen Waechterlauf. Sie sind reine Optimierung: Wenn sie
-        // fehlschlagen, holt der naechtliche Waechterlauf das nach, darum
-        // duerfen sie das Ergebnis nicht mit runterreissen.
+        val id = aktivitaeten.speichern(_entwurf.value.zuAktivitaet(LocalDate.now(uhr)))
+        // Ohne diese Nachbereitung wirkt eine neue oder geaenderte Aktivitaet erst nach
+        // dem naechtlichen Waechterlauf. Sie ist reine Optimierung: Wenn sie fehlschlaegt,
+        // holt der naechtliche Waechterlauf das nach, darum darf sie das Ergebnis nicht
+        // mit runterreissen. AktivitaetNeuPlanen raeumt dabei auch noch nicht begonnene
+        // kuenftige Faelligkeiten samt Erinnerungen der alten Planung weg, bevor es neu
+        // materialisiert -- sonst laeuft der alte Zeitplan neben dem neuen weiter.
         runCatching {
-            materialisieren()
-            alarmPlaner.neuPlanen()
+            neuPlanen(id)
         }.onFailure { ausnahme ->
             Log.w(TAG, "Nachbereitung nach dem Speichern fehlgeschlagen", ausnahme)
         }
