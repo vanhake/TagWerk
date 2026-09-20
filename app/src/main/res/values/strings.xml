@@ -14,6 +14,8 @@
     <string name="warnung_exakte_alarme_text">Erinnerungen können dadurch deutlich verspätet kommen.</string>
     <string name="warnung_akku_titel">Akkuoptimierung ist aktiv</string>
     <string name="warnung_akku_text">Das System kann Erinnerungen unterdrücken. Nimm DayOrganizer von der Optimierung aus.</string>
+    <string name="warnung_waechter_titel">Selbstheilung reagiert nicht</string>
+    <string name="warnung_waechter_text">Die App konnte sich lange nicht selbst aktualisieren. Erinnerungen könnten bald ausbleiben.</string>
     <string name="warnung_beheben">Einstellung öffnen</string>
     <string name="punktestand">%1$d Punkte</string>
     <string name="tagesfortschritt">Heute %1$d von %2$d erledigt</string>

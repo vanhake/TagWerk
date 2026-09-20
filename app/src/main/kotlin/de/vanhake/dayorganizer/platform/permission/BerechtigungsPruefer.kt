@@ -20,7 +20,7 @@ class BerechtigungsPruefer @Inject constructor(
 ) {
     fun stand(): BerechtigungsStand = BerechtigungsStand(
         // Wenn ein Service nicht verfuegbar ist: lieber warnen als schweigen.
-        // Eine fehlende Erinnerung ist schlimmer als ein abgelentes Banner.
+        // Eine fehlende Erinnerung ist schlimmer als ein weggetipptes Banner.
         benachrichtigungenErlaubt = ContextCompat.checkSelfPermission(
             kontext,
             Manifest.permission.POST_NOTIFICATIONS,
@@ -40,4 +40,9 @@ fun Hinweis.einstellungsIntent(kontext: Context): Intent = when (this) {
         .setData(Uri.fromParts("package", kontext.packageName, null))
 
     Hinweis.AKKUOPTIMIERUNG_AKTIV -> Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+
+    // Ein haengender Waechter ist meistens Hersteller-Akkuoptimierung, die den
+    // Hintergrundjob abwuergt -- dieselbe Einstellung ehrlich anzubieten ist die
+    // naheliegendste Massnahme, auch wenn WAECHTER_HAENGT selbst vager ist.
+    Hinweis.WAECHTER_HAENGT -> Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
 }

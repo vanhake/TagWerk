@@ -33,9 +33,18 @@ class FakeAktivitaetRepository(start: List<Aktivitaet> = emptyList()) : Aktivita
     override suspend fun nachId(id: Long): Aktivitaet? = stand.value.find { it.id == id }
 
     override suspend fun speichern(aktivitaet: Aktivitaet): Long {
-        val id = if (aktivitaet.id == 0L) naechsteId() else aktivitaet.id
-        stand.value = stand.value.filterNot { it.id == id } + aktivitaet.copy(id = id)
-        return id
+        if (aktivitaet.id == 0L) {
+            val id = naechsteId()
+            stand.value = stand.value + aktivitaet.copy(id = id)
+            return id
+        }
+        // Spiegelt Room's @Update: ohne passenden Datensatz gibt es keinen stillen Insert.
+        check(stand.value.any { it.id == aktivitaet.id }) {
+            "Aktivitaet mit id=${aktivitaet.id} konnte nicht aktualisiert werden -- " +
+                "kein passender Datensatz vorhanden"
+        }
+        stand.value = stand.value.map { if (it.id == aktivitaet.id) aktivitaet else it }
+        return aktivitaet.id
     }
 
     override suspend fun archivieren(id: Long, am: LocalDate) {

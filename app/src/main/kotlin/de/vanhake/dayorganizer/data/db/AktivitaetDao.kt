@@ -12,8 +12,11 @@ interface AktivitaetDao {
     @Insert
     suspend fun einfuegen(eintrag: AktivitaetEntity): Long
 
+    /** Rueckgabe ist die Anzahl betroffener Zeilen -- 0, wenn keine Aktivitaet mit dieser id
+     * existiert. RaumAktivitaetRepository.speichern wertet das aus, statt einen fehlgeschlagenen
+     * Update-Aufruf stillschweigend als Erfolg zu melden. */
     @Update
-    suspend fun aktualisieren(eintrag: AktivitaetEntity)
+    suspend fun aktualisieren(eintrag: AktivitaetEntity): Int
 
     @Query("SELECT * FROM aktivitaet WHERE id = :id")
     suspend fun nachId(id: Long): AktivitaetEntity?

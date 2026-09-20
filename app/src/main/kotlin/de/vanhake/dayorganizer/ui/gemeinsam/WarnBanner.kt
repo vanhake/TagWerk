@@ -25,6 +25,8 @@ fun WarnBanner(hinweis: Hinweis, beheben: () -> Unit, modifier: Modifier = Modif
             R.string.warnung_exakte_alarme_titel to R.string.warnung_exakte_alarme_text
         Hinweis.AKKUOPTIMIERUNG_AKTIV ->
             R.string.warnung_akku_titel to R.string.warnung_akku_text
+        Hinweis.WAECHTER_HAENGT ->
+            R.string.warnung_waechter_titel to R.string.warnung_waechter_text
     }
 
     Card(

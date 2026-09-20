@@ -25,7 +25,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.vanhake.dayorganizer.R
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
-import java.time.LocalTime
 import java.time.format.TextStyle
 import java.util.Locale
 
@@ -97,7 +96,7 @@ fun AktivitaetBearbeitenScreen(
         }
 
         when (entwurf.typ) {
-            ZeitplanTyp.FESTE_ZEITEN, ZeitplanTyp.TAGESZIEL -> UhrzeitenFeld(entwurf, viewModel)
+            ZeitplanTyp.FESTE_ZEITEN, ZeitplanTyp.TAGESZIEL -> UhrzeitenFeld(entwurf, fehler, viewModel)
             ZeitplanTyp.INTERVALL -> OutlinedTextField(
                 value = entwurf.intervallStundenText,
                 onValueChange = { neu -> viewModel.aendern { it.copy(intervallStundenText = neu) } },
@@ -128,16 +127,21 @@ fun AktivitaetBearbeitenScreen(
 }
 
 @Composable
-private fun UhrzeitenFeld(entwurf: AktivitaetEntwurf, viewModel: AktivitaetBearbeitenViewModel) {
+private fun UhrzeitenFeld(
+    entwurf: AktivitaetEntwurf,
+    fehler: List<EntwurfFehler>,
+    viewModel: AktivitaetBearbeitenViewModel,
+) {
     // Eingabe als kommagetrennte Liste im Format HH:mm. Ein Zeitwaehler-Dialog
     // waere schoener, kostet aber Aufwand, den Version 1 nicht braucht.
+    // Der Text bleibt roh im Entwurf (siehe AktivitaetEntwurf) und wird erst in
+    // pruefen()/zuAktivitaet() geparst -- sonst macht ein halb geloeschter Eintrag
+    // den ganzen restlichen Text und die Cursorposition kaputt.
     OutlinedTextField(
-        value = entwurf.zeiten.joinToString(", ") { it.toString() },
-        onValueChange = { neu ->
-            val zeiten = neu.split(",").mapNotNull { runCatching { LocalTime.parse(it.trim()) }.getOrNull() }
-            viewModel.aendern { it.copy(zeiten = zeiten) }
-        },
+        value = entwurf.zeitenText,
+        onValueChange = { neu -> viewModel.aendern { it.copy(zeitenText = neu) } },
         label = { Text(stringResource(R.string.feld_uhrzeiten)) },
+        isError = EntwurfFehler.KEINE_ZEIT in fehler || EntwurfFehler.ZEIT_UNLESBAR in fehler,
         modifier = Modifier.fillMaxWidth(),
     )
 }

@@ -9,6 +9,7 @@ class BerechtigungsHinweiseTest {
         benachrichtigungenErlaubt = true,
         exakteAlarmeErlaubt = true,
         akkuOptimierungAktiv = false,
+        waechterHaengt = false,
     )
 
     @Test
@@ -35,14 +36,28 @@ class BerechtigungsHinweiseTest {
     }
 
     @Test
-    fun `alle drei Probleme werden nach Dringlichkeit sortiert gemeldet`() {
-        val stand = BerechtigungsStand(false, false, true)
+    fun `ein haengender Waechter wird gemeldet`() {
+        assertEquals(
+            listOf(Hinweis.WAECHTER_HAENGT),
+            BerechtigungsHinweise.fuer(allesGut.copy(waechterHaengt = true)),
+        )
+    }
+
+    @Test
+    fun `alle vier Probleme werden nach Dringlichkeit sortiert gemeldet, der haengende Waechter zuletzt`() {
+        val stand = BerechtigungsStand(
+            benachrichtigungenErlaubt = false,
+            exakteAlarmeErlaubt = false,
+            akkuOptimierungAktiv = true,
+            waechterHaengt = true,
+        )
 
         assertEquals(
             listOf(
                 Hinweis.BENACHRICHTIGUNGEN_FEHLEN,
                 Hinweis.EXAKTE_ALARME_FEHLEN,
                 Hinweis.AKKUOPTIMIERUNG_AKTIV,
+                Hinweis.WAECHTER_HAENGT,
             ),
             BerechtigungsHinweise.fuer(stand),
         )

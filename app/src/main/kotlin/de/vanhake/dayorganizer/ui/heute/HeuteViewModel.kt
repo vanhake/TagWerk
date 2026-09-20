@@ -3,6 +3,7 @@ package de.vanhake.dayorganizer.ui.heute
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import de.vanhake.dayorganizer.data.EinstellungenSpeicher
 import de.vanhake.dayorganizer.data.repository.AktivitaetRepository
 import de.vanhake.dayorganizer.data.repository.BuchungRepository
 import de.vanhake.dayorganizer.data.repository.FaelligkeitRepository
@@ -22,6 +23,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Clock
+import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
 import javax.inject.Inject
@@ -35,7 +37,7 @@ class HeuteViewModel(
     private val auslassenUseCase: FaelligkeitAuslassen,
     private val anzeige: Erinnerungsanzeige,
     private val alarmNeuPlanen: suspend () -> Unit,
-    private val hinweiseLesen: () -> List<Hinweis>,
+    private val hinweiseLesen: suspend () -> List<Hinweis>,
     private val uhr: Clock,
 ) : ViewModel() {
 
@@ -49,10 +51,20 @@ class HeuteViewModel(
         anzeige: Erinnerungsanzeige,
         alarmPlaner: AlarmPlaner,
         pruefer: BerechtigungsPruefer,
+        einstellungen: EinstellungenSpeicher,
         uhr: Clock,
     ) : this(
         aktivitaeten, faelligkeiten, buchungen, erledigenUseCase, auslassenUseCase, anzeige,
-        { alarmPlaner.neuPlanen() }, { BerechtigungsHinweise.fuer(pruefer.stand()) }, uhr,
+        { alarmPlaner.neuPlanen() },
+        {
+            // BerechtigungsPruefer liest nur aus Context und kann DataStore nicht synchron
+            // lesen, deshalb wird die Waechter-Frische hier -- suspend -- dazugemischt.
+            val letzterErfolg = einstellungen.letzterWaechterErfolg()
+            val haengt = letzterErfolg == null ||
+                Duration.between(letzterErfolg, LocalDateTime.now(uhr)) > WAECHTER_FRISCHE_GRENZE
+            BerechtigungsHinweise.fuer(pruefer.stand().copy(waechterHaengt = haengt))
+        },
+        uhr,
     )
 
     private val hinweise = MutableStateFlow<List<Hinweis>>(emptyList())
@@ -77,7 +89,7 @@ class HeuteViewModel(
      */
     fun beimSichtbarwerden() {
         tag.value = LocalDate.now(uhr)
-        hinweise.value = hinweiseLesen()
+        viewModelScope.launch { hinweise.value = hinweiseLesen() }
     }
 
     // Property und Methode heissen bewusst unterschiedlich: gleiche Namen
@@ -96,5 +108,9 @@ class HeuteViewModel(
         auslassenUseCase(faelligkeitId)
         anzeige.verstecke(faelligkeitId)
         alarmNeuPlanen()
+    }
+
+    private companion object {
+        val WAECHTER_FRISCHE_GRENZE: Duration = Duration.ofHours(36)
     }
 }

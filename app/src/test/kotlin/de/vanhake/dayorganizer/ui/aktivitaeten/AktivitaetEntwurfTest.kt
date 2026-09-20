@@ -15,7 +15,7 @@ class AktivitaetEntwurfTest {
         name = "Tabletten",
         basisPunkteText = "10",
         typ = ZeitplanTyp.FESTE_ZEITEN,
-        zeiten = listOf(LocalTime.of(8, 0)),
+        zeitenText = "08:00",
         wochentage = DayOfWeek.entries.toSet(),
     )
 
@@ -34,7 +34,7 @@ class AktivitaetEntwurfTest {
 
     @Test
     fun `feste Zeiten brauchen mindestens eine Uhrzeit und einen Wochentag`() {
-        val fehler = gueltig.copy(zeiten = emptyList(), wochentage = emptySet()).pruefen()
+        val fehler = gueltig.copy(zeitenText = "", wochentage = emptySet()).pruefen()
 
         assertTrue(EntwurfFehler.KEINE_ZEIT in fehler)
         assertTrue(EntwurfFehler.KEIN_WOCHENTAG in fehler)
@@ -44,7 +44,7 @@ class AktivitaetEntwurfTest {
     fun `ein Wochenziel braucht keine Wochentage aber eine positive Anzahl`() {
         val entwurf = gueltig.copy(
             typ = ZeitplanTyp.WOCHENZIEL,
-            zeiten = emptyList(),
+            zeitenText = "",
             wochentage = emptySet(),
             zielAnzahlText = "0",
         )
@@ -56,13 +56,76 @@ class AktivitaetEntwurfTest {
     fun `ein Intervall braucht ein positives Fenster`() {
         val entwurf = gueltig.copy(
             typ = ZeitplanTyp.INTERVALL,
-            zeiten = emptyList(),
+            zeitenText = "",
             intervallStundenText = "0",
             fensterVon = LocalTime.of(20, 0),
             fensterBis = LocalTime.of(8, 0),
         )
 
         assertTrue(EntwurfFehler.INTERVALL_UNGUELTIG in entwurf.pruefen())
+    }
+
+    @Test
+    fun `ein Tagesziel braucht eine positive Anzahl und einen Wochentag`() {
+        val entwurf = gueltig.copy(
+            typ = ZeitplanTyp.TAGESZIEL,
+            zeitenText = "",
+            wochentage = emptySet(),
+            zielAnzahlText = "0",
+        )
+
+        val fehler = entwurf.pruefen()
+
+        assertTrue(EntwurfFehler.ZIEL_NICHT_POSITIV in fehler)
+        assertTrue(EntwurfFehler.KEIN_WOCHENTAG in fehler)
+    }
+
+    @Test
+    fun `ein unlesbarer Zeiteintrag wird bei festen Zeiten gemeldet`() {
+        val entwurf = gueltig.copy(zeitenText = "08:00, nicht-lesbar")
+
+        assertEquals(listOf(EntwurfFehler.ZEIT_UNLESBAR), entwurf.pruefen())
+    }
+
+    @Test
+    fun `ein unlesbarer Zeiteintrag wird auch beim Tagesziel gemeldet`() {
+        val entwurf = gueltig.copy(typ = ZeitplanTyp.TAGESZIEL, zeitenText = "nicht-lesbar")
+
+        assertTrue(EntwurfFehler.ZEIT_UNLESBAR in entwurf.pruefen())
+    }
+
+    @Test
+    fun `eine gueltige kommagetrennte Liste wird sortiert geparst`() {
+        val entwurf = gueltig.copy(zeitenText = "12:00, 08:00")
+
+        assertEquals(
+            Zeitplan.FesteZeiten(
+                listOf(LocalTime.of(8, 0), LocalTime.of(12, 0)),
+                DayOfWeek.entries.toSet(),
+            ),
+            entwurf.zuAktivitaet(LocalDate.of(2026, 3, 2)).zeitplan,
+        )
+    }
+
+    @Test
+    fun `der Rundlauf durch aus() erhaelt die Uhrzeiten`() {
+        val aktivitaet = Aktivitaet(
+            id = 7,
+            name = "Tabletten",
+            farbe = 0xFF4CAF50.toInt(),
+            basisPunkte = 10,
+            zeitplan = Zeitplan.FesteZeiten(
+                listOf(LocalTime.of(8, 0), LocalTime.of(20, 30)),
+                DayOfWeek.entries.toSet(),
+            ),
+            erstelltAm = LocalDate.of(2025, 12, 1),
+        )
+
+        val entwurf = AktivitaetEntwurf.aus(aktivitaet)
+        assertEquals("08:00, 20:30", entwurf.zeitenText)
+
+        val rundlauf = entwurf.zuAktivitaet(LocalDate.of(2026, 3, 2))
+        assertEquals(aktivitaet.zeitplan, rundlauf.zeitplan)
     }
 
     @Test
@@ -154,5 +217,16 @@ class AktivitaetEntwurfTest {
         val rundlauf = AktivitaetEntwurf.aus(aktivitaet).zuAktivitaet(aktivitaet.erstelltAm)
 
         assertEquals(aktivitaet, rundlauf)
+    }
+
+    @Test
+    fun `ein geleertes Nachfass-Feld faellt auf den Modell-Standard zurueck statt Nachfassen abzuschalten`() {
+        val entwurf = gueltig.copy(nachfassAnzahlText = "")
+
+        val aktivitaet = entwurf.zuAktivitaet(LocalDate.of(2026, 3, 2))
+
+        // 2 ist Aktivitaet.nachfassAnzahl's eigener Standard -- ein geleertes Feld darf
+        // Nachfassen nicht implizit auf 0 (aus) setzen.
+        assertEquals(2, aktivitaet.nachfassAnzahl)
     }
 }

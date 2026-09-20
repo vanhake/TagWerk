@@ -14,6 +14,7 @@ enum class EntwurfFehler {
     NAME_LEER,
     PUNKTE_NICHT_POSITIV,
     KEINE_ZEIT,
+    ZEIT_UNLESBAR,
     KEIN_WOCHENTAG,
     ZIEL_NICHT_POSITIV,
     INTERVALL_UNGUELTIG,
@@ -30,7 +31,7 @@ data class AktivitaetEntwurf(
     val farbe: Int = 0xFF4CAF50.toInt(),
     val basisPunkteText: String = "10",
     val typ: ZeitplanTyp = ZeitplanTyp.FESTE_ZEITEN,
-    val zeiten: List<LocalTime> = emptyList(),
+    val zeitenText: String = "",
     val wochentage: Set<DayOfWeek> = DayOfWeek.entries.toSet(),
     val intervallStundenText: String = "3",
     val fensterVon: LocalTime = LocalTime.of(8, 0),
@@ -51,13 +52,30 @@ data class AktivitaetEntwurf(
     private val intervallStunden: Int get() = intervallStundenText.toIntOrNull() ?: 0
     private val zielAnzahl: Int get() = zielAnzahlText.toIntOrNull() ?: 0
 
+    /** Kommagetrennte HH:mm-Liste. Leere/blanke Eintraege werden uebersprungen (so bleibt ein
+     * abschliessendes Komma harmlos); ein unlesbarer Eintrag laesst das Ganze scheitern, statt
+     * ihn wie zeiten.mapNotNull{} still zu verschlucken -- genau das war der Fehler, den
+     * ZEIT_UNLESBAR beheben soll. */
+    private fun zeitenGeparst(): Result<List<LocalTime>> = runCatching {
+        zeitenText.split(",")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .map { LocalTime.parse(it) }
+    }
+
     fun pruefen(): List<EntwurfFehler> = buildList {
         if (name.isBlank()) add(EntwurfFehler.NAME_LEER)
         if (basisPunkte <= 0) add(EntwurfFehler.PUNKTE_NICHT_POSITIV)
 
+        val zeitenErgebnis = zeitenGeparst()
+
         when (typ) {
             ZeitplanTyp.FESTE_ZEITEN -> {
-                if (zeiten.isEmpty()) add(EntwurfFehler.KEINE_ZEIT)
+                if (zeitenErgebnis.isFailure) {
+                    add(EntwurfFehler.ZEIT_UNLESBAR)
+                } else if (zeitenErgebnis.getOrThrow().isEmpty()) {
+                    add(EntwurfFehler.KEINE_ZEIT)
+                }
                 if (wochentage.isEmpty()) add(EntwurfFehler.KEIN_WOCHENTAG)
             }
 
@@ -69,6 +87,7 @@ data class AktivitaetEntwurf(
             }
 
             ZeitplanTyp.TAGESZIEL -> {
+                if (zeitenErgebnis.isFailure) add(EntwurfFehler.ZEIT_UNLESBAR)
                 if (zielAnzahl <= 0) add(EntwurfFehler.ZIEL_NICHT_POSITIV)
                 if (wochentage.isEmpty()) add(EntwurfFehler.KEIN_WOCHENTAG)
             }
@@ -82,29 +101,35 @@ data class AktivitaetEntwurf(
     /** Nur aufrufen, wenn [pruefen] leer ist. [heute] gilt nur, wenn der Entwurf noch kein
      * eigenes [erstelltAm] traegt -- ein neu angelegter Entwurf bekommt so das heutige Datum,
      * eine bestehende Aktivitaet behaelt ihr echtes Anlegedatum ueber jedes Speichern hinweg. */
-    fun zuAktivitaet(heute: LocalDate): Aktivitaet = Aktivitaet(
-        id = id,
-        name = name.trim(),
-        notiz = notiz.trim(),
-        farbe = farbe,
-        basisPunkte = basisPunkte,
-        zeitplan = when (typ) {
-            ZeitplanTyp.FESTE_ZEITEN -> Zeitplan.FesteZeiten(zeiten.sorted(), wochentage)
-            ZeitplanTyp.INTERVALL -> Zeitplan.Intervall(
-                intervallStunden, fensterVon, fensterBis, wochentage,
-            )
-            ZeitplanTyp.TAGESZIEL -> Zeitplan.Tagesziel(zielAnzahl, wochentage, zeiten.sorted())
-            ZeitplanTyp.WOCHENZIEL -> Zeitplan.Wochenziel(zielAnzahl, anstoss)
-        },
-        kulanzMinuten = kulanzMinutenText.toIntOrNull() ?: 60,
-        puenktlichkeitsBonus = puenktlichkeitsBonusText.toIntOrNull() ?: 0,
-        serienSchwellen = serienSchwellen,
-        nachfassAnzahl = nachfassAnzahlText.toIntOrNull() ?: 0,
-        nachfassAbstandMinuten = nachfassAbstandText.toIntOrNull() ?: 15,
-        erstelltAm = erstelltAm ?: heute,
-        aktiv = aktiv,
-        archiviertAm = archiviertAm,
-    )
+    fun zuAktivitaet(heute: LocalDate): Aktivitaet {
+        // Nur aufrufen, wenn pruefen() leer ist -- dann ist zeitenGeparst() bereits
+        // erfolgreich. Der Fallback ist trotzdem da, gemaess demselben Muster wie die
+        // anderen *Text-Felder unten, die auch nicht auf gepruefte Eingaben vertrauen.
+        val zeiten = zeitenGeparst().getOrDefault(emptyList()).sorted()
+        return Aktivitaet(
+            id = id,
+            name = name.trim(),
+            notiz = notiz.trim(),
+            farbe = farbe,
+            basisPunkte = basisPunkte,
+            zeitplan = when (typ) {
+                ZeitplanTyp.FESTE_ZEITEN -> Zeitplan.FesteZeiten(zeiten, wochentage)
+                ZeitplanTyp.INTERVALL -> Zeitplan.Intervall(
+                    intervallStunden, fensterVon, fensterBis, wochentage,
+                )
+                ZeitplanTyp.TAGESZIEL -> Zeitplan.Tagesziel(zielAnzahl, wochentage, zeiten)
+                ZeitplanTyp.WOCHENZIEL -> Zeitplan.Wochenziel(zielAnzahl, anstoss)
+            },
+            kulanzMinuten = kulanzMinutenText.toIntOrNull() ?: 60,
+            puenktlichkeitsBonus = puenktlichkeitsBonusText.toIntOrNull() ?: 0,
+            serienSchwellen = serienSchwellen,
+            nachfassAnzahl = nachfassAnzahlText.toIntOrNull() ?: 2,
+            nachfassAbstandMinuten = nachfassAbstandText.toIntOrNull() ?: 15,
+            erstelltAm = erstelltAm ?: heute,
+            aktiv = aktiv,
+            archiviertAm = archiviertAm,
+        )
+    }
 
     companion object {
         fun aus(aktivitaet: Aktivitaet): AktivitaetEntwurf {
@@ -126,7 +151,7 @@ data class AktivitaetEntwurf(
             return when (val plan = aktivitaet.zeitplan) {
                 is Zeitplan.FesteZeiten -> basis.copy(
                     typ = ZeitplanTyp.FESTE_ZEITEN,
-                    zeiten = plan.zeiten,
+                    zeitenText = plan.zeiten.zuText(),
                     wochentage = plan.wochentage,
                 )
                 is Zeitplan.Intervall -> basis.copy(
@@ -140,7 +165,7 @@ data class AktivitaetEntwurf(
                     typ = ZeitplanTyp.TAGESZIEL,
                     zielAnzahlText = plan.anzahl.toString(),
                     wochentage = plan.wochentage,
-                    zeiten = plan.anstossZeiten,
+                    zeitenText = plan.anstossZeiten.zuText(),
                 )
                 is Zeitplan.Wochenziel -> basis.copy(
                     typ = ZeitplanTyp.WOCHENZIEL,
@@ -149,5 +174,7 @@ data class AktivitaetEntwurf(
                 )
             }
         }
+
+        private fun List<LocalTime>.zuText(): String = joinToString(", ") { it.toString() }
     }
 }

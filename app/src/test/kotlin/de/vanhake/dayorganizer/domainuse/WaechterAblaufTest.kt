@@ -75,6 +75,27 @@ class WaechterAblaufTest {
     }
 
     @Test
+    fun `der Waechter merkt sich den Erfolg erst nach dem Neuplanen`() = runTest {
+        val faelligkeiten = FakeFaelligkeitRepository(listOf(gestern))
+        val aktivitaeten = FakeAktivitaetRepository(listOf(tabletten))
+        val erinnerungen = FakeErinnerungRepository()
+        val reihenfolge = mutableListOf<String>()
+
+        val ablauf = WaechterAblauf(
+            verpassteAbschliessen = VerpassteAbschliessen(faelligkeiten, uhr),
+            materialisieren = FaelligkeitenMaterialisieren(
+                aktivitaeten, faelligkeiten, erinnerungen, ZeitplanRechner(), uhr,
+            ),
+            alarmNeuPlanen = { reihenfolge += "alarm" },
+            erfolgMerken = { reihenfolge += "erfolg" },
+        )
+
+        ablauf()
+
+        assertEquals(listOf("alarm", "erfolg"), reihenfolge)
+    }
+
+    @Test
     fun `eine heute faellige Aufgabe bleibt bis Mitternacht offen`() = runTest {
         // Uhr steht auf 12:00, drei Stunden nach der geplanten Zeit (08:00) der Aktivitaet.
         // Die heutige Faelligkeit existiert schon vor diesem Lauf - so, wie sie eine
