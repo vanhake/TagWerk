@@ -87,52 +87,35 @@ class BelohnungenViewModelTest {
         val buchungen = guthaben(250)
         val vm = viewModel(belohnungen, buchungen)
 
-        vm.zustand.test {
-            skipItems(2)
-            vm.einloesen(1)
-            // Die Sperre aus Fund 3 erzeugt vor dem eigentlichen Buchen eine eigene
-            // Zwischenausgabe (wirdEingeloest = true, Kontostand noch unveraendert). Seit
-            // Fund 4 laeuft die Zusammenfuehrung ueber flowOn(Dispatchers.Default) auf
-            // einem echten Thread, also ausserhalb der virtuellen Zeit von [dispatcher] --
-            // expectMostRecentItem() darf sich deshalb nicht mehr auf bereits gepufferte
-            // Ausgaben verlassen. Stattdessen wird wirklich auf die endgueltige Ausgabe
-            // gewartet, an der die Sperre wieder faellt.
-            dispatcher.scheduler.advanceUntilIdle()
-            var danach = awaitItem()
-            while (danach.kacheln.any { it.wirdEingeloest }) {
-                danach = awaitItem()
-            }
-            assertEquals(50, danach.kontostand)
-            assertEquals(listOf("Kinoabend"), danach.einloesungen.map { it.name })
-            cancelAndIgnoreRemainingEvents()
-        }
+        vm.einloesen(1)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(50, buchungen.kontostand())
+        assertEquals(listOf("Kinoabend"), belohnungen.einloesungen.value.map { it.name })
     }
 
     // Guthaben reicht fuer zwei Einloesungen (450 bei Preis 200) -- ein Test mit knappem
     // Guthaben bliebe gruen, auch wenn einloesen() den Use Case zweimal aufriefe, weil der
     // zweite Aufruf dann ohnehin am Kontostand scheitern wuerde. Erst mit ausreichend
     // Guthaben wird dieser Test zum Waechter fuer die Doppeltipp-Sperre.
+    //
+    // Geprueft wird das Ergebnis am Repository, nicht an einer Ausgabe des Zustandsflusses:
+    // einloesen() laeuft im viewModelScope auf [dispatcher] und steht nach
+    // advanceUntilIdle() fest, waehrend der Zustandsfluss seit flowOn(Dispatchers.Default)
+    // von einem echten Thread kommt. Eine Zusicherung auf die Ausgaben bestuende dort
+    // zeitabhaengig -- per Mutationstest belegt: sie fing die entfernte Sperre nicht mehr.
     @Test
     fun `ein Doppeltipp loest nur einmal ein`() = runTest(dispatcher) {
         val belohnungen = FakeBelohnungRepository(listOf(Belohnung(1, "Kinoabend", preisPunkte = 200)))
         val buchungen = guthaben(450)
         val vm = viewModel(belohnungen, buchungen)
 
-        vm.zustand.test {
-            skipItems(2)
-            vm.einloesen(1)
-            vm.einloesen(1)
-            // Wie im Test oben: flowOn(Dispatchers.Default) laesst expectMostRecentItem()
-            // nicht mehr zuverlaessig zu, also wird auf die endgueltige, entsperrte
-            // Ausgabe gewartet.
-            dispatcher.scheduler.advanceUntilIdle()
-            var danach = awaitItem()
-            while (danach.kacheln.any { it.wirdEingeloest }) {
-                danach = awaitItem()
-            }
-            assertEquals(250, danach.kontostand)
-            assertEquals(listOf("Kinoabend"), danach.einloesungen.map { it.name })
-            cancelAndIgnoreRemainingEvents()
-        }
+        vm.einloesen(1)
+        vm.einloesen(1)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        // 450 minus einmal 200. Ohne die Sperre waeren es zwei Abbuchungen und 50.
+        assertEquals(250, buchungen.kontostand())
+        assertEquals(listOf("Kinoabend"), belohnungen.einloesungen.value.map { it.name })
     }
 }
