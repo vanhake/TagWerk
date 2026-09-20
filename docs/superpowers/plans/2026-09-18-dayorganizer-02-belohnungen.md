@@ -654,7 +654,7 @@ git commit -m "feat(data): Persistenz fuer Belohnungen und Einloesungen"
 - Produces:
   - `sealed interface EinloeseErgebnis` mit `Erfolg(einloesung: Einloesung)` und `Abgelehnt(einloesbarkeit: Einloesbarkeit)` sowie `Unbekannt`
   - `BelohnungEinloesen.invoke(belohnungId: Long): EinloeseErgebnis` — prüft, bucht negativ und legt die Einlösung an, **alles in einer Transaktion**. Die Prüfung muss mit drin liegen, nicht davor: sonst lesen zwei gleichzeitige Aufrufer denselben Kontostand, bestehen beide und überziehen das Konto. Ein Doppeltipp auf *Einlösen* genügt dafür. `FaelligkeitErledigen` aus Plan 1 löst dieselbe Stelle genauso.
-  - `BelohnungEinloesen.einloesbarkeit(belohnung: Belohnung): Einloesbarkeit` für die Anzeige
+  - `BelohnungEinloesen.einloesbarkeit(belohnung: Belohnung, kontostand: Int): Einloesbarkeit` für die Anzeige. Der Kontostand kommt von außen statt aus dem Repository: der Shop-Bildschirm hat ihn bereits aus seinem Flow und würde sonst je Kachel ein zweites Mal lesen — mit dem Risiko, andere fehlende Punkte anzuzeigen, als der Kontostand darüber hergibt. `loese()` liest ihn innerhalb der Transaktion, wo er verbindlich ist. So steht die Serienberechnung trotzdem nur an einer Stelle.
 
 - [ ] **Step 1: Fake ergänzen und fehlschlagenden Test schreiben**
 
@@ -887,12 +887,21 @@ class BelohnungEinloesen @Inject constructor(
     private val uhr: Clock,
 ) {
 
-    suspend fun einloesbarkeit(belohnung: Belohnung): Einloesbarkeit = pruefer.pruefe(
-        belohnung = belohnung,
-        kontostand = buchungen.kontostand(),
-        serieDerBedingung = serieFuer(belohnung),
-        heute = LocalDate.now(uhr),
-    )
+    /**
+     * Der Kontostand kommt von aussen, statt hier gelesen zu werden. Zwei Aufrufer
+     * brauchen ihn naemlich aus verschiedenen Quellen: der Shop-Bildschirm hat ihn
+     * bereits aus seinem Flow und wuerde sonst je Kachel ein zweites Mal lesen --
+     * mit dem Risiko, andere fehlende Punkte anzuzeigen als der Kontostand darueber
+     * hergibt. loese() dagegen liest ihn innerhalb der Transaktion, wo er
+     * verbindlich ist. So bleibt die Serienberechnung trotzdem an einer Stelle.
+     */
+    suspend fun einloesbarkeit(belohnung: Belohnung, kontostand: Int): Einloesbarkeit =
+        pruefer.pruefe(
+            belohnung = belohnung,
+            kontostand = kontostand,
+            serieDerBedingung = serieFuer(belohnung),
+            heute = LocalDate.now(uhr),
+        )
 
     // Lesen, Pruefen, Buchen und Anlegen liegen zusammen in der Transaktion. Die
     // Reihenfolge allein reicht nicht: stuende die Pruefung davor, laesen zwei
@@ -905,7 +914,9 @@ class BelohnungEinloesen @Inject constructor(
     private suspend fun loese(belohnungId: Long): EinloeseErgebnis {
         val belohnung = belohnungen.nachId(belohnungId) ?: return EinloeseErgebnis.Unbekannt
 
-        val pruefung = einloesbarkeit(belohnung)
+        // Der Lesezugriff steht hier drin, nicht davor -- er ist Teil der Pruefung,
+        // die zwei gleichzeitige Aufrufer trennen muss.
+        val pruefung = einloesbarkeit(belohnung, buchungen.kontostand())
         if (!pruefung.moeglich) return EinloeseErgebnis.Abgelehnt(pruefung)
 
         val jetzt = LocalDateTime.now(uhr)
@@ -1202,10 +1213,6 @@ class BelohnungenViewModelTest {
                 belohnungen, buchungen, faelligkeiten,
                 BelohnungsPruefer(), SerienRechner(), FakeTransaktionen(), uhr,
             ),
-            pruefer = BelohnungsPruefer(),
-            faelligkeiten = faelligkeiten,
-            serienRechner = SerienRechner(),
-            uhr = uhr,
         )
     }
 
@@ -1291,11 +1298,6 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import de.vanhake.dayorganizer.data.repository.BelohnungRepository
 import de.vanhake.dayorganizer.data.repository.BuchungRepository
-import de.vanhake.dayorganizer.data.repository.FaelligkeitRepository
-import de.vanhake.dayorganizer.domain.model.Belohnung
-import de.vanhake.dayorganizer.domain.model.Belohnungsbedingung
-import de.vanhake.dayorganizer.domain.rechner.BelohnungsPruefer
-import de.vanhake.dayorganizer.domain.rechner.SerienRechner
 import de.vanhake.dayorganizer.domainuse.BelohnungEinloesen
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -1303,8 +1305,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.time.Clock
-import java.time.LocalDate
 import javax.inject.Inject
 
 @HiltViewModel
@@ -1312,10 +1312,6 @@ class BelohnungenViewModel @Inject constructor(
     private val belohnungen: BelohnungRepository,
     private val buchungen: BuchungRepository,
     private val einloesenUseCase: BelohnungEinloesen,
-    private val pruefer: BelohnungsPruefer,
-    private val faelligkeiten: FaelligkeitRepository,
-    private val serienRechner: SerienRechner,
-    private val uhr: Clock,
 ) : ViewModel() {
 
     val zustand: StateFlow<BelohnungenZustand> = combine(
@@ -1333,12 +1329,7 @@ class BelohnungenViewModel @Inject constructor(
                     name = belohnung.name,
                     beschreibung = belohnung.beschreibung,
                     preisPunkte = belohnung.preisPunkte,
-                    einloesbarkeit = pruefer.pruefe(
-                        belohnung = belohnung,
-                        kontostand = kontostand,
-                        serieDerBedingung = serieFuer(belohnung),
-                        heute = LocalDate.now(uhr),
-                    ),
+                    einloesbarkeit = einloesenUseCase.einloesbarkeit(belohnung, kontostand),
                 )
             },
             einloesungen = einloesungen,
@@ -1350,15 +1341,15 @@ class BelohnungenViewModel @Inject constructor(
 
     fun archivieren(belohnungId: Long) = viewModelScope.launch { belohnungen.archivieren(belohnungId) }
 
-    private suspend fun serieFuer(belohnung: Belohnung): Int {
-        val bedingung = belohnung.bedingung as? Belohnungsbedingung.MindestSerie ?: return 0
-        return serienRechner.aktuelleSerie(
-            faelligkeiten.historie(bedingung.aktivitaetId),
-            LocalDate.now(uhr),
-        )
-    }
 }
 ```
+
+Das ViewModel rechnet die Serie **nicht** selbst nach, sondern fragt
+`einloesenUseCase.einloesbarkeit(belohnung, kontostand)`. Den Kontostand reicht es
+aus seinem eigenen Flow durch — so passt die angezeigte Lücke immer zum
+angezeigten Kontostand, es entsteht kein zusätzlicher Lesevorgang je Kachel, und
+die Serienberechnung bleibt an genau einer Stelle. `Flow.map` darf `suspend`
+aufrufen, der Aufruf passt also direkt in den bestehenden Block.
 
 - [ ] **Step 7: Test laufen lassen und grünen Lauf bestätigen**
 

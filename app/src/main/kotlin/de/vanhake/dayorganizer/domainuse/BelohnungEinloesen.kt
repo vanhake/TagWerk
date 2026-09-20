@@ -33,12 +33,21 @@ class BelohnungEinloesen @Inject constructor(
     private val uhr: Clock,
 ) {
 
-    suspend fun einloesbarkeit(belohnung: Belohnung): Einloesbarkeit = pruefer.pruefe(
-        belohnung = belohnung,
-        kontostand = buchungen.kontostand(),
-        serieDerBedingung = serieFuer(belohnung),
-        heute = LocalDate.now(uhr),
-    )
+    /**
+     * Der Kontostand kommt von aussen, statt hier gelesen zu werden. Zwei Aufrufer
+     * brauchen ihn naemlich aus verschiedenen Quellen: der Shop-Bildschirm hat ihn
+     * bereits aus seinem Flow und wuerde sonst je Kachel ein zweites Mal lesen --
+     * mit dem Risiko, andere fehlende Punkte anzuzeigen als der Kontostand darueber
+     * hergibt. loese() dagegen liest ihn innerhalb der Transaktion, wo er
+     * verbindlich ist. So bleibt die Serienberechnung trotzdem an einer Stelle.
+     */
+    suspend fun einloesbarkeit(belohnung: Belohnung, kontostand: Int): Einloesbarkeit =
+        pruefer.pruefe(
+            belohnung = belohnung,
+            kontostand = kontostand,
+            serieDerBedingung = serieFuer(belohnung),
+            heute = LocalDate.now(uhr),
+        )
 
     // Lesen, Pruefen, Buchen und Anlegen liegen zusammen in der Transaktion. Die
     // Reihenfolge allein reicht nicht: stuende die Pruefung davor, laesen zwei
@@ -51,7 +60,9 @@ class BelohnungEinloesen @Inject constructor(
     private suspend fun loese(belohnungId: Long): EinloeseErgebnis {
         val belohnung = belohnungen.nachId(belohnungId) ?: return EinloeseErgebnis.Unbekannt
 
-        val pruefung = einloesbarkeit(belohnung)
+        // Der Lesezugriff steht hier drin, nicht davor -- er ist Teil der Pruefung,
+        // die zwei gleichzeitige Aufrufer trennen muss.
+        val pruefung = einloesbarkeit(belohnung, buchungen.kontostand())
         if (!pruefung.moeglich) return EinloeseErgebnis.Abgelehnt(pruefung)
 
         val jetzt = LocalDateTime.now(uhr)
