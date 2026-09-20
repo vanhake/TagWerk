@@ -35,7 +35,11 @@ class RaumBelohnungRepository @Inject constructor(
         if (belohnung.id == 0L) {
             dao.einfuegen(belohnung.zuEntity())
         } else {
-            dao.aktualisieren(belohnung.zuEntity())
+            val betroffeneZeilen = dao.aktualisieren(belohnung.zuEntity())
+            check(betroffeneZeilen > 0) {
+                "Belohnung mit id=${belohnung.id} konnte nicht aktualisiert werden -- " +
+                    "kein passender Datensatz vorhanden"
+            }
             belohnung.id
         }
 

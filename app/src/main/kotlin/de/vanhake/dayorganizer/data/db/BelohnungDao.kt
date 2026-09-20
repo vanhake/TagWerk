@@ -10,7 +10,11 @@ import kotlinx.coroutines.flow.Flow
 interface BelohnungDao {
 
     @Insert suspend fun einfuegen(eintrag: BelohnungEntity): Long
-    @Update suspend fun aktualisieren(eintrag: BelohnungEntity)
+
+    /** Rueckgabe ist die Anzahl betroffener Zeilen -- 0, wenn keine Belohnung mit dieser id
+     * existiert. RaumBelohnungRepository.speichern wertet das aus, statt einen fehlgeschlagenen
+     * Update-Aufruf stillschweigend als Erfolg zu melden. */
+    @Update suspend fun aktualisieren(eintrag: BelohnungEntity): Int
 
     @Query("SELECT * FROM belohnung WHERE id = :id")
     suspend fun nachId(id: Long): BelohnungEntity?
@@ -26,9 +30,9 @@ interface BelohnungDao {
 
     @Insert suspend fun einloesungEinfuegen(eintrag: EinloesungEntity)
 
-    @Query("SELECT * FROM einloesung ORDER BY zeitpunkt DESC")
+    @Query("SELECT * FROM einloesung ORDER BY zeitpunkt DESC, id DESC")
     fun beobachteEinloesungen(): Flow<List<EinloesungEntity>>
 
-    @Query("SELECT * FROM einloesung ORDER BY zeitpunkt DESC")
+    @Query("SELECT * FROM einloesung ORDER BY zeitpunkt DESC, id DESC")
     suspend fun alleEinloesungen(): List<EinloesungEntity>
 }

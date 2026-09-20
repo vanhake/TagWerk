@@ -5,6 +5,7 @@ import de.vanhake.dayorganizer.domain.model.Belohnungsbedingung
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class BelohnungMapperTest {
 
@@ -18,6 +19,14 @@ class BelohnungMapperTest {
     }
 
     @Test
+    fun `Belohnung ohne Bedingung speichert bedingungTyp als null`() {
+        val entity = Belohnung(id = 1, name = "Kinoabend", beschreibung = "mit Popcorn", preisPunkte = 200)
+            .zuEntity()
+
+        assertNull(entity.bedingungTyp)
+    }
+
+    @Test
     fun `Serienbedingung uebersteht den Rundlauf`() {
         rundlauf(
             Belohnung(
@@ -28,6 +37,16 @@ class BelohnungMapperTest {
     }
 
     @Test
+    fun `Serienbedingung speichert bedingungTyp als MINDESTSERIE`() {
+        val entity = Belohnung(
+            id = 2, name = "Neues Buch", preisPunkte = 300,
+            bedingung = Belohnungsbedingung.MindestSerie(aktivitaetId = 7, perioden = 14),
+        ).zuEntity()
+
+        assertEquals("MINDESTSERIE", entity.bedingungTyp)
+    }
+
+    @Test
     fun `Datumsbedingung uebersteht den Rundlauf`() {
         rundlauf(
             Belohnung(
@@ -35,6 +54,16 @@ class BelohnungMapperTest {
                 bedingung = Belohnungsbedingung.FruehestensAb(LocalDate.of(2026, 4, 1)),
             ),
         )
+    }
+
+    @Test
+    fun `Datumsbedingung speichert bedingungTyp als FRUEHESTENS_AB`() {
+        val entity = Belohnung(
+            id = 3, name = "Wochenendausflug", preisPunkte = 800,
+            bedingung = Belohnungsbedingung.FruehestensAb(LocalDate.of(2026, 4, 1)),
+        ).zuEntity()
+
+        assertEquals("FRUEHESTENS_AB", entity.bedingungTyp)
     }
 
     @Test
