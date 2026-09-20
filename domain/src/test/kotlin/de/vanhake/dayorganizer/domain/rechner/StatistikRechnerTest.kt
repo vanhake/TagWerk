@@ -125,4 +125,54 @@ class StatistikRechnerTest {
             bilanzen.drop(1).map { it.erledigt to it.gesamt },
         )
     }
+
+    @Test
+    fun `fremde Aktivitaeten zaehlen weder in die Quote noch in die Serie`() {
+        val fremd = tag(0, FaelligkeitStatus.VERPASST, id = 900).copy(aktivitaetId = 2)
+        val historie = listOf(
+            tag(0, FaelligkeitStatus.ERLEDIGT),
+            tag(1, FaelligkeitStatus.ERLEDIGT),
+            fremd,
+        )
+
+        val statistik = rechner.fuerAktivitaet(1, historie, start.plusDays(1))
+
+        // Ohne die Filterung auf aktivitaetId schluege das fremde VERPASST hier
+        // durch: die Quote fiele auf 2/3 und die Serie braeche am ersten Tag.
+        assertEquals(2, statistik.erledigt)
+        assertEquals(0, statistik.verpasst)
+        assertEquals(1f, statistik.quote)
+        assertEquals(2, statistik.aktuelleSerie)
+        assertEquals(2, statistik.laengsteSerie)
+    }
+
+    @Test
+    fun `der Punkteverlauf beginnt beim Stand vor dem Zeitraum`() {
+        val buchungen = listOf(
+            Buchung(
+                art = BuchungsArt.ERLEDIGUNG, betrag = 20,
+                zeitpunkt = start.minusDays(3).atTime(8, 0),
+            ),
+            Buchung(art = BuchungsArt.ERLEDIGUNG, betrag = 5, zeitpunkt = start.atTime(8, 0)),
+        )
+
+        val verlauf = rechner.punkteVerlauf(buchungen, start, start.plusDays(1))
+
+        assertEquals(listOf(start to 25, start.plusDays(1) to 25), verlauf)
+    }
+
+    @Test
+    fun `Buchungen nach dem Zeitraum tauchen im Verlauf nicht auf`() {
+        val buchungen = listOf(
+            Buchung(art = BuchungsArt.ERLEDIGUNG, betrag = 10, zeitpunkt = start.atTime(8, 0)),
+            Buchung(
+                art = BuchungsArt.EINLOESUNG, betrag = -200,
+                zeitpunkt = start.plusDays(5).atTime(19, 0),
+            ),
+        )
+
+        val verlauf = rechner.punkteVerlauf(buchungen, start, start.plusDays(1))
+
+        assertEquals(listOf(start to 10, start.plusDays(1) to 10), verlauf)
+    }
 }
