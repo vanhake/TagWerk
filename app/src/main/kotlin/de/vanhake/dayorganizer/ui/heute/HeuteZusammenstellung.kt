@@ -1,6 +1,7 @@
 package de.vanhake.dayorganizer.ui.heute
 
 import de.vanhake.dayorganizer.domain.model.Aktivitaet
+import de.vanhake.dayorganizer.domain.model.Belohnung
 import de.vanhake.dayorganizer.domain.model.Faelligkeit
 import de.vanhake.dayorganizer.domain.model.FaelligkeitStatus
 import java.time.LocalDateTime
@@ -15,6 +16,7 @@ object HeuteZusammenstellung {
     fun aus(
         faelligkeiten: List<Faelligkeit>,
         aktivitaeten: List<Aktivitaet>,
+        belohnungen: List<Belohnung>,
         kontostand: Int,
         jetzt: LocalDateTime,
     ): HeuteZustand {
@@ -55,6 +57,7 @@ object HeuteZusammenstellung {
             abgeschlossen = eintraege
                 .filter { it.first.status != FaelligkeitStatus.OFFEN }
                 .map { it.second },
+            naechsteBelohnung = NaechsteBelohnungWahl.aus(belohnungen, kontostand),
         )
     }
 }

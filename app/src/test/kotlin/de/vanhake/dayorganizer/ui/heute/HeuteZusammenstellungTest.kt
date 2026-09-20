@@ -48,6 +48,7 @@ class HeuteZusammenstellungTest {
                 ziel,
             ),
             aktivitaeten = listOf(tabletten, sport),
+            belohnungen = emptyList(),
             kontostand = 120,
             jetzt = jetzt,
         )
@@ -68,6 +69,7 @@ class HeuteZusammenstellungTest {
                 termin(12, 20, FaelligkeitStatus.OFFEN),
             ),
             aktivitaeten = listOf(tabletten),
+            belohnungen = emptyList(),
             kontostand = 0,
             jetzt = jetzt,
         )
@@ -83,7 +85,7 @@ class HeuteZusammenstellungTest {
             geplantFuer = null, sollAnzahl = 3, istAnzahl = 2,
         )
 
-        val zustand = HeuteZusammenstellung.aus(listOf(ziel), listOf(sport), 0, jetzt)
+        val zustand = HeuteZusammenstellung.aus(listOf(ziel), listOf(sport), emptyList(), 0, jetzt)
 
         val eintrag = zustand.anstehend.single()
         assertEquals(null, eintrag.zeitText)
@@ -97,6 +99,7 @@ class HeuteZusammenstellungTest {
         val zustand = HeuteZusammenstellung.aus(
             faelligkeiten = listOf(termin(10, 8, FaelligkeitStatus.OFFEN)),
             aktivitaeten = emptyList(),
+            belohnungen = emptyList(),
             kontostand = 0,
             jetzt = jetzt,
         )

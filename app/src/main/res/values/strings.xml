@@ -19,6 +19,8 @@
     <string name="warnung_beheben">Einstellung öffnen</string>
     <string name="punktestand">%1$d Punkte</string>
     <string name="tagesfortschritt">Heute %1$d von %2$d erledigt</string>
+    <string name="noch_bis_belohnung">Noch %1$d Punkte bis %2$s</string>
+    <string name="belohnung_bereit">%1$s ist freigeschaltet</string>
     <string name="ziel_fortschritt">%1$d von %2$d</string>
     <string name="abschnitt_ueberfaellig">Überfällig</string>
     <string name="abschnitt_anstehend">Jetzt dran</string>

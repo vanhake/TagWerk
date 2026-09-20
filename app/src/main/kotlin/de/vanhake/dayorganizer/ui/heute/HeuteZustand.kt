@@ -15,6 +15,12 @@ data class HeuteEintrag(
     val ueberfaellig: Boolean,
 )
 
+data class NaechsteBelohnung(
+    val name: String,
+    val preisPunkte: Int,
+    val fehlendePunkte: Int,
+)
+
 data class HeuteZustand(
     val kontostand: Int = 0,
     val erledigtHeute: Int = 0,
@@ -24,4 +30,5 @@ data class HeuteZustand(
     val spaeter: List<HeuteEintrag> = emptyList(),
     val abgeschlossen: List<HeuteEintrag> = emptyList(),
     val hinweise: List<Hinweis> = emptyList(),
+    val naechsteBelohnung: NaechsteBelohnung? = null,
 )

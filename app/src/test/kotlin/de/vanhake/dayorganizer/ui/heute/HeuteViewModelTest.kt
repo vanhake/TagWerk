@@ -2,6 +2,7 @@ package de.vanhake.dayorganizer.ui.heute
 
 import app.cash.turbine.test
 import de.vanhake.dayorganizer.FakeAktivitaetRepository
+import de.vanhake.dayorganizer.FakeBelohnungRepository
 import de.vanhake.dayorganizer.FakeBuchungRepository
 import de.vanhake.dayorganizer.FakeFaelligkeitRepository
 import de.vanhake.dayorganizer.FakeTransaktionen
@@ -77,12 +78,14 @@ class HeuteViewModelTest {
         buchungen: FakeBuchungRepository,
         uhr: Clock = this.uhr,
         anzeige: Erinnerungsanzeige = FakeAnzeige(),
+        belohnungen: FakeBelohnungRepository = FakeBelohnungRepository(),
     ): HeuteViewModel {
         val aktivitaeten = FakeAktivitaetRepository(listOf(tabletten))
         return HeuteViewModel(
             aktivitaeten = aktivitaeten,
             faelligkeiten = faelligkeiten,
             buchungen = buchungen,
+            belohnungen = belohnungen,
             erledigenUseCase = FaelligkeitErledigen(
                 aktivitaeten, faelligkeiten, buchungen, PunkteRechner(), SerienRechner(),
                 FakeTransaktionen(), { Einstellungen(tagesbonusPunkte = 0) }, uhr,

@@ -109,6 +109,16 @@ private fun Kopf(zustand: HeuteZustand) {
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
+            zustand.naechsteBelohnung?.let { ziel ->
+                Text(
+                    if (ziel.fehlendePunkte > 0) {
+                        stringResource(R.string.noch_bis_belohnung, ziel.fehlendePunkte, ziel.name)
+                    } else {
+                        stringResource(R.string.belohnung_bereit, ziel.name)
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
         }
     }
 }

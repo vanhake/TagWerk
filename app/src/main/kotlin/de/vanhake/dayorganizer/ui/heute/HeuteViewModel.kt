@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import de.vanhake.dayorganizer.data.EinstellungenSpeicher
 import de.vanhake.dayorganizer.data.repository.AktivitaetRepository
+import de.vanhake.dayorganizer.data.repository.BelohnungRepository
 import de.vanhake.dayorganizer.data.repository.BuchungRepository
 import de.vanhake.dayorganizer.data.repository.FaelligkeitRepository
 import de.vanhake.dayorganizer.domainuse.FaelligkeitAuslassen
@@ -33,6 +34,7 @@ class HeuteViewModel(
     private val aktivitaeten: AktivitaetRepository,
     private val faelligkeiten: FaelligkeitRepository,
     private val buchungen: BuchungRepository,
+    private val belohnungen: BelohnungRepository,
     private val erledigenUseCase: FaelligkeitErledigen,
     private val auslassenUseCase: FaelligkeitAuslassen,
     private val anzeige: Erinnerungsanzeige,
@@ -46,6 +48,7 @@ class HeuteViewModel(
         aktivitaeten: AktivitaetRepository,
         faelligkeiten: FaelligkeitRepository,
         buchungen: BuchungRepository,
+        belohnungen: BelohnungRepository,
         erledigenUseCase: FaelligkeitErledigen,
         auslassenUseCase: FaelligkeitAuslassen,
         anzeige: Erinnerungsanzeige,
@@ -54,7 +57,7 @@ class HeuteViewModel(
         einstellungen: EinstellungenSpeicher,
         uhr: Clock,
     ) : this(
-        aktivitaeten, faelligkeiten, buchungen, erledigenUseCase, auslassenUseCase, anzeige,
+        aktivitaeten, faelligkeiten, buchungen, belohnungen, erledigenUseCase, auslassenUseCase, anzeige,
         { alarmPlaner.neuPlanen() },
         {
             // BerechtigungsPruefer liest nur aus Context und kann DataStore nicht synchron
@@ -74,10 +77,11 @@ class HeuteViewModel(
     val zustand: StateFlow<HeuteZustand> = combine(
         tag.flatMapLatest { faelligkeiten.beobachteTag(it) },
         aktivitaeten.beobachteAktive(),
+        belohnungen.beobachteAktive(),
         buchungen.beobachteKontostand(),
         hinweise,
-    ) { faelligkeiten, aktivitaeten, kontostand, hinweise ->
-        HeuteZusammenstellung.aus(faelligkeiten, aktivitaeten, kontostand, LocalDateTime.now(uhr))
+    ) { faelligkeiten, aktivitaeten, belohnungen, kontostand, hinweise ->
+        HeuteZusammenstellung.aus(faelligkeiten, aktivitaeten, belohnungen, kontostand, LocalDateTime.now(uhr))
             .copy(hinweise = hinweise)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HeuteZustand())
 
