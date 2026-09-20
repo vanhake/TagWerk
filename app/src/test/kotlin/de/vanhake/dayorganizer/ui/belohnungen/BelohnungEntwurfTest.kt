@@ -124,4 +124,20 @@ class BelohnungEntwurfTest {
         )
         assertEquals(mitDatum, BelohnungEntwurf.aus(mitDatum).zuBelohnung())
     }
+
+    @Test
+    fun `eine archivierte Belohnung bleibt nach dem Rundlauf archiviert`() {
+        val archiviert = Belohnung(
+            id = 5,
+            name = "Kinoabend",
+            beschreibung = "Popcorn",
+            preisPunkte = 200,
+            archiviert = true,
+        )
+
+        val ergebnis = BelohnungEntwurf.aus(archiviert).zuBelohnung()
+
+        assertTrue(ergebnis.archiviert)
+        assertEquals(archiviert, ergebnis)
+    }
 }

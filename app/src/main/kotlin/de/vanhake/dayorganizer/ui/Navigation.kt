@@ -61,19 +61,24 @@ fun DayOrganizerNavigation() {
 
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                TABS.forEach { tab ->
-                    NavigationBarItem(
-                        selected = aktuell == tab.ziel,
-                        onClick = {
-                            navController.navigate(tab.ziel) {
-                                popUpTo(Ziele.HEUTE)
-                                launchSingleTop = true
-                            }
-                        },
-                        icon = { Icon(tab.icon, contentDescription = null) },
-                        label = { Text(stringResource(tab.titelId)) },
-                    )
+            // Nur auf den Tab-Zielen selbst zeigen: auf aktivitaet/{id} und belohnung/{id}
+            // waere ohnehin kein Tab markiert, und ein Tipp wuerfe ueber das popUpTo unten
+            // den halb ausgefuellten Bearbeiten-Bildschirm ohne Rueckfrage vom Stapel.
+            if (TABS.any { it.ziel == aktuell }) {
+                NavigationBar {
+                    TABS.forEach { tab ->
+                        NavigationBarItem(
+                            selected = aktuell == tab.ziel,
+                            onClick = {
+                                navController.navigate(tab.ziel) {
+                                    popUpTo(Ziele.HEUTE)
+                                    launchSingleTop = true
+                                }
+                            },
+                            icon = { Icon(tab.icon, contentDescription = null) },
+                            label = { Text(stringResource(tab.titelId)) },
+                        )
+                    }
                 }
             }
         },

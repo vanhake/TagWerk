@@ -91,12 +91,17 @@ class BelohnungenViewModelTest {
             skipItems(2)
             vm.einloesen(1)
             // Die Sperre aus Fund 3 erzeugt vor dem eigentlichen Buchen eine eigene
-            // Zwischenausgabe (wirdEingeloest = true, Kontostand noch unveraendert).
-            // Erst nach dispatcher.scheduler.advanceUntilIdle() ist die Koroutine fertig,
-            // und expectMostRecentItem() liefert unabhaengig von der Anzahl
-            // dazwischenliegender Ausgaben zuverlaessig die zuletzt abgesetzte.
+            // Zwischenausgabe (wirdEingeloest = true, Kontostand noch unveraendert). Seit
+            // Fund 4 laeuft die Zusammenfuehrung ueber flowOn(Dispatchers.Default) auf
+            // einem echten Thread, also ausserhalb der virtuellen Zeit von [dispatcher] --
+            // expectMostRecentItem() darf sich deshalb nicht mehr auf bereits gepufferte
+            // Ausgaben verlassen. Stattdessen wird wirklich auf die endgueltige Ausgabe
+            // gewartet, an der die Sperre wieder faellt.
             dispatcher.scheduler.advanceUntilIdle()
-            val danach = expectMostRecentItem()
+            var danach = awaitItem()
+            while (danach.kacheln.any { it.wirdEingeloest }) {
+                danach = awaitItem()
+            }
             assertEquals(50, danach.kontostand)
             assertEquals(listOf("Kinoabend"), danach.einloesungen.map { it.name })
             cancelAndIgnoreRemainingEvents()
@@ -117,8 +122,14 @@ class BelohnungenViewModelTest {
             skipItems(2)
             vm.einloesen(1)
             vm.einloesen(1)
+            // Wie im Test oben: flowOn(Dispatchers.Default) laesst expectMostRecentItem()
+            // nicht mehr zuverlaessig zu, also wird auf die endgueltige, entsperrte
+            // Ausgabe gewartet.
             dispatcher.scheduler.advanceUntilIdle()
-            val danach = expectMostRecentItem()
+            var danach = awaitItem()
+            while (danach.kacheln.any { it.wirdEingeloest }) {
+                danach = awaitItem()
+            }
             assertEquals(250, danach.kontostand)
             assertEquals(listOf("Kinoabend"), danach.einloesungen.map { it.name })
             cancelAndIgnoreRemainingEvents()

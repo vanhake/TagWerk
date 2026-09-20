@@ -7,10 +7,12 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import de.vanhake.dayorganizer.data.repository.BelohnungRepository
 import de.vanhake.dayorganizer.data.repository.BuchungRepository
 import de.vanhake.dayorganizer.domainuse.BelohnungEinloesen
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -49,7 +51,12 @@ class BelohnungenViewModel @Inject constructor(
             },
             einloesungen = einloesungen,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BelohnungenZustand())
+    }
+        // SerienRechner.aktuelleSerie laeuft je Emission und je Kachel mit Serienbedingung
+        // ueber die volle Historie -- ohne Dispatcher-Wechsel liefe das auf dem Hauptthread,
+        // siehe StatistikViewModel fuer dasselbe Muster.
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BelohnungenZustand())
 
     // Property und Methode heissen bewusst unterschiedlich, siehe HeuteViewModel.
     //

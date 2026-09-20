@@ -28,6 +28,7 @@ data class BelohnungEntwurf(
     val bedingungAktivitaetId: Long? = null,
     val bedingungPeriodenText: String = "7",
     val bedingungDatumText: String = "",
+    val archiviert: Boolean = false,
 ) {
 
     private val preis: Int get() = preisText.toIntOrNull() ?: 0
@@ -64,6 +65,7 @@ data class BelohnungEntwurf(
                 datumGeparst().getOrThrow(),
             )
         },
+        archiviert = archiviert,
     )
 
     companion object {
@@ -73,6 +75,7 @@ data class BelohnungEntwurf(
                 name = belohnung.name,
                 beschreibung = belohnung.beschreibung,
                 preisText = belohnung.preisPunkte.toString(),
+                archiviert = belohnung.archiviert,
             )
             return when (val b = belohnung.bedingung) {
                 null -> basis
