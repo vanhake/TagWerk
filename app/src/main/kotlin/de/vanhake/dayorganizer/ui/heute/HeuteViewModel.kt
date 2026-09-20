@@ -15,6 +15,7 @@ import de.vanhake.dayorganizer.platform.notification.Erinnerungsanzeige
 import de.vanhake.dayorganizer.platform.permission.BerechtigungsHinweise
 import de.vanhake.dayorganizer.platform.permission.BerechtigungsPruefer
 import de.vanhake.dayorganizer.platform.permission.Hinweis
+import de.vanhake.dayorganizer.platform.permission.waechterHaengt
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -62,9 +63,11 @@ class HeuteViewModel(
         {
             // BerechtigungsPruefer liest nur aus Context und kann DataStore nicht synchron
             // lesen, deshalb wird die Waechter-Frische hier -- suspend -- dazugemischt.
-            val letzterErfolg = einstellungen.letzterWaechterErfolg()
-            val haengt = letzterErfolg == null ||
-                Duration.between(letzterErfolg, LocalDateTime.now(uhr)) > WAECHTER_FRISCHE_GRENZE
+            val haengt = waechterHaengt(
+                letzterErfolg = einstellungen.letzterWaechterErfolg(),
+                installiertAm = pruefer.installiertAm(),
+                jetzt = LocalDateTime.now(uhr),
+            )
             BerechtigungsHinweise.fuer(pruefer.stand().copy(waechterHaengt = haengt))
         },
         uhr,
@@ -115,6 +118,5 @@ class HeuteViewModel(
     }
 
     private companion object {
-        val WAECHTER_FRISCHE_GRENZE: Duration = Duration.ofHours(36)
     }
 }
