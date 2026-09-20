@@ -94,4 +94,9 @@ class RaumBuchungRepository @Inject constructor(
 
     override suspend fun tagesbonusGebuchtAm(tag: LocalDate): Boolean =
         dao.anzahlTagesboni(tag.atStartOfDay(), tag.plusDays(1).atStartOfDay()) > 0
+
+    override suspend fun fuerZeitraum(von: LocalDate, bis: LocalDate): List<Buchung> =
+        dao.fuerZeitraum(von.atStartOfDay(), bis.plusDays(1).atStartOfDay()).map { it.zuDomaene() }
+
+    override suspend fun alle(): List<Buchung> = dao.alle().map { it.zuDomaene() }
 }

@@ -160,6 +160,19 @@ class FakeBuchungRepository(start: List<Buchung> = emptyList()) : BuchungReposit
         stand.value.any {
             it.art == BuchungsArt.TAGESBONUS && it.zeitpunkt.toLocalDate() == tag
         }
+
+    /** Spiegelt "WHERE zeitpunkt >= :von AND zeitpunkt < :bis ORDER BY zeitpunkt": [bis] ist
+     * als Tagesgrenze exklusiv, hier als Datum daher inklusiv -- der ganze Tag [bis] zaehlt noch. */
+    override suspend fun fuerZeitraum(von: LocalDate, bis: LocalDate): List<Buchung> =
+        stand.value
+            .filter {
+                val tag = it.zeitpunkt.toLocalDate()
+                !tag.isBefore(von) && !tag.isAfter(bis)
+            }
+            .sortedBy { it.zeitpunkt }
+
+    /** Spiegelt "SELECT * FROM buchung ORDER BY zeitpunkt". */
+    override suspend fun alle(): List<Buchung> = stand.value.sortedBy { it.zeitpunkt }
 }
 
 class FakeErinnerungRepository(start: List<Erinnerung> = emptyList()) : ErinnerungRepository {

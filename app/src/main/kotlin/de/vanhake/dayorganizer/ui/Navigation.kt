@@ -3,6 +3,7 @@ package de.vanhake.dayorganizer.ui
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
@@ -24,11 +25,13 @@ import de.vanhake.dayorganizer.ui.aktivitaeten.AktivitaetenScreen
 import de.vanhake.dayorganizer.ui.belohnungen.BelohnungBearbeitenScreen
 import de.vanhake.dayorganizer.ui.belohnungen.BelohnungenScreen
 import de.vanhake.dayorganizer.ui.heute.HeuteScreen
+import de.vanhake.dayorganizer.ui.statistik.StatistikScreen
 
 object Ziele {
     const val HEUTE = "heute"
     const val AKTIVITAETEN = "aktivitaeten"
     const val BELOHNUNGEN = "belohnungen"
+    const val STATISTIK = "statistik"
     const val AKTIVITAET_BEARBEITEN = "aktivitaet/{id}"
     const val BELOHNUNG_BEARBEITEN = "belohnung/{id}"
     fun bearbeiten(id: Long) = "aktivitaet/$id"
@@ -62,6 +65,12 @@ fun DayOrganizerNavigation() {
                     icon = { Icon(Icons.Default.Star, contentDescription = null) },
                     label = { Text(stringResource(R.string.tab_belohnungen)) },
                 )
+                NavigationBarItem(
+                    selected = aktuell == Ziele.STATISTIK,
+                    onClick = { navController.navigate(Ziele.STATISTIK) },
+                    icon = { Icon(Icons.Default.Insights, contentDescription = null) },
+                    label = { Text(stringResource(R.string.tab_statistik)) },
+                )
             }
         },
     ) { innen ->
@@ -93,6 +102,7 @@ fun DayOrganizerNavigation() {
                     fertig = { navController.popBackStack() },
                 )
             }
+            composable(Ziele.STATISTIK) { StatistikScreen() }
         }
     }
 }

@@ -35,4 +35,6 @@ interface BuchungRepository {
     suspend fun kontostand(): Int
     suspend fun serienbonusSchwellenSeit(aktivitaetId: Long, seit: LocalDateTime): Set<Int>
     suspend fun tagesbonusGebuchtAm(tag: LocalDate): Boolean
+    suspend fun fuerZeitraum(von: LocalDate, bis: LocalDate): List<Buchung>
+    suspend fun alle(): List<Buchung>
 }

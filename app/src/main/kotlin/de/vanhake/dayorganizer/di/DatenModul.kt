@@ -31,6 +31,7 @@ import de.vanhake.dayorganizer.data.repository.Transaktionen
 import de.vanhake.dayorganizer.domain.rechner.BelohnungsPruefer
 import de.vanhake.dayorganizer.domain.rechner.PunkteRechner
 import de.vanhake.dayorganizer.domain.rechner.SerienRechner
+import de.vanhake.dayorganizer.domain.rechner.StatistikRechner
 import de.vanhake.dayorganizer.domain.rechner.ZeitplanRechner
 import de.vanhake.dayorganizer.platform.notification.Erinnerungsanzeige
 import de.vanhake.dayorganizer.platform.notification.ErinnerungsNotifier
@@ -60,11 +61,9 @@ object DatenModul {
     @Provides @Singleton fun serienRechner(): SerienRechner = SerienRechner()
     @Provides @Singleton fun belohnungsPruefer(): BelohnungsPruefer = BelohnungsPruefer()
 
-    // StatistikRechner entsteht erst in Task 6; bis dahin bleibt diese
-    // Provides-Methode auskommentiert.
-    // @Provides @Singleton
-    // fun statistikRechner(serienRechner: SerienRechner): StatistikRechner =
-    //     StatistikRechner(serienRechner)
+    @Provides @Singleton
+    fun statistikRechner(serienRechner: SerienRechner): StatistikRechner =
+        StatistikRechner(serienRechner)
 }
 
 @Module

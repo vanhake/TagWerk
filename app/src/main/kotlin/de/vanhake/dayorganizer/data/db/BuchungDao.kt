@@ -32,4 +32,10 @@ interface BuchungDao {
 
     @Query("SELECT * FROM buchung ORDER BY zeitpunkt DESC LIMIT :anzahl")
     suspend fun letzte(anzahl: Int): List<BuchungEntity>
+
+    @Query("SELECT * FROM buchung WHERE zeitpunkt >= :von AND zeitpunkt < :bis ORDER BY zeitpunkt")
+    suspend fun fuerZeitraum(von: LocalDateTime, bis: LocalDateTime): List<BuchungEntity>
+
+    @Query("SELECT * FROM buchung ORDER BY zeitpunkt")
+    suspend fun alle(): List<BuchungEntity>
 }
