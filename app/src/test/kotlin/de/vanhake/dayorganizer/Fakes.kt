@@ -1,13 +1,16 @@
 package de.vanhake.dayorganizer
 
 import de.vanhake.dayorganizer.data.repository.AktivitaetRepository
+import de.vanhake.dayorganizer.data.repository.BelohnungRepository
 import de.vanhake.dayorganizer.data.repository.BuchungRepository
 import de.vanhake.dayorganizer.data.repository.ErinnerungRepository
 import de.vanhake.dayorganizer.data.repository.FaelligkeitRepository
 import de.vanhake.dayorganizer.data.repository.Transaktionen
 import de.vanhake.dayorganizer.domain.model.Aktivitaet
+import de.vanhake.dayorganizer.domain.model.Belohnung
 import de.vanhake.dayorganizer.domain.model.Buchung
 import de.vanhake.dayorganizer.domain.model.BuchungsArt
+import de.vanhake.dayorganizer.domain.model.Einloesung
 import de.vanhake.dayorganizer.domain.model.Erinnerung
 import de.vanhake.dayorganizer.domain.model.Faelligkeit
 import de.vanhake.dayorganizer.domain.model.FaelligkeitStatus
@@ -186,6 +189,58 @@ class FakeErinnerungRepository(start: List<Erinnerung> = emptyList()) : Erinneru
     override suspend fun entfernenFuerFaelligkeit(faelligkeitId: Long) {
         stand.value = stand.value.filterNot { it.faelligkeitId == faelligkeitId && !it.ausgeloest }
     }
+}
+
+class FakeBelohnungRepository(
+    start: List<Belohnung> = emptyList(),
+) : BelohnungRepository {
+    val stand = MutableStateFlow(start)
+    val einloesungen = MutableStateFlow<List<Einloesung>>(emptyList())
+    private var naechsteId = (start.maxOfOrNull { it.id } ?: 0L) + 1
+
+    /** Spiegelt "SELECT * FROM belohnung WHERE archiviert = 0 ORDER BY preisPunkte". */
+    override fun beobachteAktive(): Flow<List<Belohnung>> =
+        stand.map { liste -> liste.filterNot { it.archiviert }.sortedBy { it.preisPunkte } }
+
+    /** Spiegelt "SELECT * FROM belohnung ORDER BY archiviert, preisPunkte" -- aktive vor
+     * archivierten, jeweils nach Preis. */
+    override suspend fun alle(): List<Belohnung> =
+        stand.value.sortedWith(compareBy({ it.archiviert }, { it.preisPunkte }))
+
+    override suspend fun nachId(id: Long): Belohnung? = stand.value.find { it.id == id }
+
+    override suspend fun speichern(belohnung: Belohnung): Long {
+        if (belohnung.id == 0L) {
+            val id = naechsteId++
+            stand.value = stand.value + belohnung.copy(id = id)
+            return id
+        }
+        // Spiegelt Room's @Update: ohne passenden Datensatz gibt es keinen stillen Insert.
+        check(stand.value.any { it.id == belohnung.id }) {
+            "Belohnung mit id=${belohnung.id} konnte nicht aktualisiert werden -- " +
+                "kein passender Datensatz vorhanden"
+        }
+        stand.value = stand.value.map { if (it.id == belohnung.id) belohnung else it }
+        return belohnung.id
+    }
+
+    override suspend fun archivieren(id: Long) {
+        stand.value = stand.value.map { if (it.id == id) it.copy(archiviert = true) else it }
+    }
+
+    override suspend fun einloesungAnlegen(einloesung: Einloesung) {
+        einloesungen.value = einloesungen.value + einloesung.copy(id = einloesungen.value.size + 1L)
+    }
+
+    /** Spiegelt "ORDER BY zeitpunkt DESC, id DESC". */
+    private val einloesungOrdnung: Comparator<Einloesung> =
+        compareByDescending<Einloesung> { it.zeitpunkt }.thenByDescending { it.id }
+
+    override fun beobachteEinloesungen(): Flow<List<Einloesung>> =
+        einloesungen.map { liste -> liste.sortedWith(einloesungOrdnung) }
+
+    override suspend fun alleEinloesungen(): List<Einloesung> =
+        einloesungen.value.sortedWith(einloesungOrdnung)
 }
 
 /** Fuehrt den Block direkt aus. Die Fakes sind ohnehin single-threaded. */
