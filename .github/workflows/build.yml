@@ -23,17 +23,17 @@ jobs:
         uses: actions/checkout@v4
 
       - name: JDK 17 einrichten
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
-      # Der Runner bringt ein Android SDK mit, aber welche Versionen genau,
-      # aendert sich mit dem Image. Diese Action setzt ANDROID_HOME und
-      # akzeptiert die Lizenzen, damit der Build nicht an einer fehlenden
-      # Build-Tools-Version scheitert.
-      - name: Android SDK einrichten
-        uses: android-actions/setup-android@v3
+      # Kein zusaetzliches SDK-Setup: der ubuntu-latest-Runner bringt das
+      # Android SDK mit gesetztem ANDROID_HOME und akzeptierten Lizenzen mit,
+      # und das Android-Gradle-Plugin laedt fehlende Build-Tools selbst nach.
+      # android-actions/setup-android@v3 wurde hier bewusst wieder entfernt:
+      # es versucht das laengst entfernte SDK-Paket "tools" zu installieren
+      # und bricht daran ab.
 
       - name: Gradle einrichten
         uses: gradle/actions/setup-gradle@v4
@@ -61,6 +61,9 @@ jobs:
         with:
           name: testberichte-${{ github.run_number }}
           path: |
-            domain/build/reports/tests/
-            app/build/reports/tests/
+            domain/build/reports/tests/test
+            app/build/reports/tests/testDebugUnitTest
+          # Scheitert der Build vor den Tests, gibt es keine Berichte -- das
+          # ist kein zusaetzlicher Fehler, sondern der Normalfall.
+          if-no-files-found: ignore
           retention-days: 14
