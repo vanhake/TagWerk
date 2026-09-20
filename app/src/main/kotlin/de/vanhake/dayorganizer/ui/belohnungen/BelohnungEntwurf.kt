@@ -11,8 +11,14 @@ enum class BelohnungFehler {
     PREIS_NICHT_POSITIV,
     SERIE_OHNE_AKTIVITAET,
     SERIE_NICHT_POSITIV,
+    DATUM_FEHLT,
 }
 
+/**
+ * Bearbeitbarer Zwischenstand. Das Datum bleibt wie die Zahlenfelder Text, damit ein
+ * halb getipptes Feld (z. B. nach der ersten Ziffer) nicht sofort auf leer zurueckspringt --
+ * siehe AktivitaetEntwurf fuer dasselbe Muster.
+ */
 data class BelohnungEntwurf(
     val id: Long = 0,
     val name: String = "",
@@ -21,11 +27,13 @@ data class BelohnungEntwurf(
     val bedingungTyp: BedingungTyp = BedingungTyp.KEINE,
     val bedingungAktivitaetId: Long? = null,
     val bedingungPeriodenText: String = "7",
-    val bedingungDatum: LocalDate? = null,
+    val bedingungDatumText: String = "",
 ) {
 
     private val preis: Int get() = preisText.toIntOrNull() ?: 0
     private val perioden: Int get() = bedingungPeriodenText.toIntOrNull() ?: 0
+    private fun datumGeparst(): Result<LocalDate> =
+        runCatching { LocalDate.parse(bedingungDatumText.trim()) }
 
     fun pruefen(): List<BelohnungFehler> = buildList {
         if (name.isBlank()) add(BelohnungFehler.NAME_LEER)
@@ -34,9 +42,13 @@ data class BelohnungEntwurf(
             if (bedingungAktivitaetId == null) add(BelohnungFehler.SERIE_OHNE_AKTIVITAET)
             if (perioden <= 0) add(BelohnungFehler.SERIE_NICHT_POSITIV)
         }
+        if (bedingungTyp == BedingungTyp.FRUEHESTENS_AB && datumGeparst().isFailure) {
+            add(BelohnungFehler.DATUM_FEHLT)
+        }
     }
 
-    /** Nur aufrufen, wenn [pruefen] leer ist. */
+    /** Nur aufrufen, wenn [pruefen] leer ist -- dann ist datumGeparst() bereits
+     * erfolgreich, genau wie bedingungAktivitaetId bei MINDESTSERIE bereits gesetzt ist. */
     fun zuBelohnung(): Belohnung = Belohnung(
         id = id,
         name = name.trim(),
@@ -49,7 +61,7 @@ data class BelohnungEntwurf(
                 perioden = perioden,
             )
             BedingungTyp.FRUEHESTENS_AB -> Belohnungsbedingung.FruehestensAb(
-                requireNotNull(bedingungDatum) { "Datumsbedingung ohne Datum" },
+                datumGeparst().getOrThrow(),
             )
         },
     )
@@ -71,7 +83,7 @@ data class BelohnungEntwurf(
                 )
                 is Belohnungsbedingung.FruehestensAb -> basis.copy(
                     bedingungTyp = BedingungTyp.FRUEHESTENS_AB,
-                    bedingungDatum = b.datum,
+                    bedingungDatumText = b.datum.toString(),
                 )
             }
         }

@@ -24,7 +24,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.vanhake.dayorganizer.R
 import kotlinx.coroutines.launch
-import java.time.LocalDate
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -119,12 +118,10 @@ fun BelohnungBearbeitenScreen(
             }
 
             BedingungTyp.FRUEHESTENS_AB -> OutlinedTextField(
-                value = entwurf.bedingungDatum?.toString().orEmpty(),
-                onValueChange = { neu ->
-                    val datum = runCatching { LocalDate.parse(neu.trim()) }.getOrNull()
-                    viewModel.aendern { it.copy(bedingungDatum = datum) }
-                },
+                value = entwurf.bedingungDatumText,
+                onValueChange = { neu -> viewModel.aendern { it.copy(bedingungDatumText = neu) } },
                 label = { Text(stringResource(R.string.feld_bedingung_datum)) },
+                isError = BelohnungFehler.DATUM_FEHLT in fehler,
                 modifier = Modifier.fillMaxWidth(),
             )
         }

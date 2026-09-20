@@ -9,6 +9,10 @@ data class BelohnungKachel(
     val beschreibung: String,
     val preisPunkte: Int,
     val einloesbarkeit: Einloesbarkeit,
+    // Waehrend eine Einloesung dieser Kachel laeuft true, siehe BelohnungenViewModel.einloesen.
+    // Blendet den Knopf aus, bis die Transaktion durch ist -- sonst passt ein Doppeltipp
+    // zweimal hinein, obwohl einmal getippt werden sollte.
+    val wirdEingeloest: Boolean = false,
 )
 
 data class BelohnungenZustand(

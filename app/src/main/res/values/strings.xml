@@ -43,7 +43,6 @@
     <string name="speichern">Speichern</string>
     <string name="tab_belohnungen">Belohnungen</string>
     <string name="neue_belohnung">Neue Belohnung</string>
-    <string name="preis_punkte">%1$d Punkte</string>
     <string name="einloesen">Einlösen</string>
     <string name="bearbeiten">Bearbeiten</string>
     <string name="noch_punkte_noetig">Noch %1$d Punkte nötig</string>
@@ -60,4 +59,5 @@
     <string name="feld_bedingung_aktivitaet">Bei welcher Aktivität</string>
     <string name="feld_bedingung_perioden">Wie viele Perioden am Stück</string>
     <string name="feld_bedingung_datum">Datum im Format JJJJ-MM-TT</string>
+    <string name="bedingung_datum_fehlt">Bitte ein gültiges Datum im Format JJJJ-MM-TT eingeben</string>
 </resources>

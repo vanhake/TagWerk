@@ -90,8 +90,36 @@ class BelohnungenViewModelTest {
         vm.zustand.test {
             skipItems(2)
             vm.einloesen(1)
-            val danach = awaitItem()
+            // Die Sperre aus Fund 3 erzeugt vor dem eigentlichen Buchen eine eigene
+            // Zwischenausgabe (wirdEingeloest = true, Kontostand noch unveraendert).
+            // Erst nach dispatcher.scheduler.advanceUntilIdle() ist die Koroutine fertig,
+            // und expectMostRecentItem() liefert unabhaengig von der Anzahl
+            // dazwischenliegender Ausgaben zuverlaessig die zuletzt abgesetzte.
+            dispatcher.scheduler.advanceUntilIdle()
+            val danach = expectMostRecentItem()
             assertEquals(50, danach.kontostand)
+            assertEquals(listOf("Kinoabend"), danach.einloesungen.map { it.name })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // Guthaben reicht fuer zwei Einloesungen (450 bei Preis 200) -- ein Test mit knappem
+    // Guthaben bliebe gruen, auch wenn einloesen() den Use Case zweimal aufriefe, weil der
+    // zweite Aufruf dann ohnehin am Kontostand scheitern wuerde. Erst mit ausreichend
+    // Guthaben wird dieser Test zum Waechter fuer die Doppeltipp-Sperre.
+    @Test
+    fun `ein Doppeltipp loest nur einmal ein`() = runTest(dispatcher) {
+        val belohnungen = FakeBelohnungRepository(listOf(Belohnung(1, "Kinoabend", preisPunkte = 200)))
+        val buchungen = guthaben(450)
+        val vm = viewModel(belohnungen, buchungen)
+
+        vm.zustand.test {
+            skipItems(2)
+            vm.einloesen(1)
+            vm.einloesen(1)
+            dispatcher.scheduler.advanceUntilIdle()
+            val danach = expectMostRecentItem()
+            assertEquals(250, danach.kontostand)
             assertEquals(listOf("Kinoabend"), danach.einloesungen.map { it.name })
             cancelAndIgnoreRemainingEvents()
         }

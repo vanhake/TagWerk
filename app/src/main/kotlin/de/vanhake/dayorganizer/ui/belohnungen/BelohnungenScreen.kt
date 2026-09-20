@@ -52,7 +52,11 @@ fun BelohnungenScreen(
                 )
             }
 
-            items(zustand.kacheln, key = { it.id }) { kachel ->
+            // "kachel-"/"einloesung-" statt der nackten id: beide ids sind eigene,
+            // je bei 1 beginnende Autoincrement-Folgen. Ohne Praefix teilen sich
+            // die zwei items(...)-Aufrufe denselben Key-Namensraum der LazyColumn
+            // und kollidieren sobald beide ids gleich sind -- Compose stuerzt dann ab.
+            items(zustand.kacheln, key = { "kachel-${it.id}" }) { kachel ->
                 Kachel(
                     kachel = kachel,
                     kontostand = zustand.kontostand,
@@ -68,7 +72,7 @@ fun BelohnungenScreen(
                         style = MaterialTheme.typography.titleSmall,
                     )
                 }
-                items(zustand.einloesungen, key = { it.id }) { einloesung ->
+                items(zustand.einloesungen, key = { "einloesung-${it.id}" }) { einloesung ->
                     Text(
                         stringResource(
                             R.string.einloesung_zeile,
@@ -97,7 +101,7 @@ private fun Kachel(
                 Text(kachel.beschreibung, style = MaterialTheme.typography.bodySmall)
             }
             Text(
-                stringResource(R.string.preis_punkte, kachel.preisPunkte),
+                stringResource(R.string.punktestand, kachel.preisPunkte),
                 style = MaterialTheme.typography.bodyMedium,
             )
             LinearProgressIndicator(
@@ -107,7 +111,10 @@ private fun Kachel(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = einloesen, enabled = kachel.einloesbarkeit.moeglich) {
+                Button(
+                    onClick = einloesen,
+                    enabled = kachel.einloesbarkeit.moeglich && !kachel.wirdEingeloest,
+                ) {
                     Text(stringResource(R.string.einloesen))
                 }
                 Button(onClick = bearbeiten) { Text(stringResource(R.string.bearbeiten)) }
