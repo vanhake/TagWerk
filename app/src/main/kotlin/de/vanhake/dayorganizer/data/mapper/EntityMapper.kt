@@ -1,11 +1,16 @@
 package de.vanhake.dayorganizer.data.mapper
 
 import de.vanhake.dayorganizer.data.db.AktivitaetEntity
+import de.vanhake.dayorganizer.data.db.BelohnungEntity
 import de.vanhake.dayorganizer.data.db.BuchungEntity
+import de.vanhake.dayorganizer.data.db.EinloesungEntity
 import de.vanhake.dayorganizer.data.db.FaelligkeitEntity
 import de.vanhake.dayorganizer.domain.model.Aktivitaet
+import de.vanhake.dayorganizer.domain.model.Belohnung
+import de.vanhake.dayorganizer.domain.model.Belohnungsbedingung
 import de.vanhake.dayorganizer.domain.model.Buchung
 import de.vanhake.dayorganizer.domain.model.BuchungsArt
+import de.vanhake.dayorganizer.domain.model.Einloesung
 import de.vanhake.dayorganizer.domain.model.Faelligkeit
 import de.vanhake.dayorganizer.domain.model.FaelligkeitStatus
 
@@ -116,4 +121,47 @@ fun Buchung.zuEntity(): BuchungEntity = BuchungEntity(
     belohnungId = belohnungId,
     schwelle = schwelle,
     notiz = notiz,
+)
+
+fun Belohnung.zuEntity(): BelohnungEntity = BelohnungEntity(
+    id = id,
+    name = name,
+    beschreibung = beschreibung,
+    preisPunkte = preisPunkte,
+    bedingungTyp = when (bedingung) {
+        null -> null
+        is Belohnungsbedingung.MindestSerie -> "MINDESTSERIE"
+        is Belohnungsbedingung.FruehestensAb -> "FRUEHESTENS_AB"
+    },
+    bedingungAktivitaetId = (bedingung as? Belohnungsbedingung.MindestSerie)?.aktivitaetId,
+    bedingungPerioden = (bedingung as? Belohnungsbedingung.MindestSerie)?.perioden,
+    bedingungDatum = (bedingung as? Belohnungsbedingung.FruehestensAb)?.datum,
+    archiviert = archiviert,
+)
+
+fun BelohnungEntity.zuDomaene(): Belohnung = Belohnung(
+    id = id,
+    name = name,
+    beschreibung = beschreibung,
+    preisPunkte = preisPunkte,
+    bedingung = when (bedingungTyp) {
+        "MINDESTSERIE" -> Belohnungsbedingung.MindestSerie(
+            aktivitaetId = requireNotNull(bedingungAktivitaetId),
+            perioden = requireNotNull(bedingungPerioden),
+        )
+        "FRUEHESTENS_AB" -> Belohnungsbedingung.FruehestensAb(requireNotNull(bedingungDatum))
+        null -> null
+        else -> error("Unbekannte Belohnungsbedingung: $bedingungTyp")
+    },
+    archiviert = archiviert,
+)
+
+fun Einloesung.zuEntity(): EinloesungEntity = EinloesungEntity(
+    id = id, belohnungId = belohnungId, name = name,
+    preisPunkte = preisPunkte, zeitpunkt = zeitpunkt,
+)
+
+fun EinloesungEntity.zuDomaene(): Einloesung = Einloesung(
+    id = id, belohnungId = belohnungId, name = name,
+    preisPunkte = preisPunkte, zeitpunkt = zeitpunkt,
 )

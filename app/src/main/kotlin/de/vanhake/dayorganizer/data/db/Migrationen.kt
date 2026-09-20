@@ -24,3 +24,35 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
         db.execSQL("CREATE INDEX IF NOT EXISTS `index_erinnerung_faelligkeitId` ON `erinnerung` (`faelligkeitId`)")
     }
 }
+
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `belohnung` (
+                `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                `name` TEXT NOT NULL,
+                `beschreibung` TEXT NOT NULL,
+                `preisPunkte` INTEGER NOT NULL,
+                `bedingungTyp` TEXT,
+                `bedingungAktivitaetId` INTEGER,
+                `bedingungPerioden` INTEGER,
+                `bedingungDatum` TEXT,
+                `archiviert` INTEGER NOT NULL
+            )
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `einloesung` (
+                `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                `belohnungId` INTEGER NOT NULL,
+                `name` TEXT NOT NULL,
+                `preisPunkte` INTEGER NOT NULL,
+                `zeitpunkt` TEXT NOT NULL
+            )
+            """.trimIndent(),
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_einloesung_zeitpunkt` ON `einloesung` (`zeitpunkt`)")
+    }
+}
