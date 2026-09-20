@@ -650,11 +650,11 @@ git commit -m "feat(data): Persistenz fuer Belohnungen und Einloesungen"
 - Test: `app/src/test/kotlin/de/vanhake/dayorganizer/domainuse/BelohnungEinloesenTest.kt`
 
 **Interfaces:**
-- Consumes: `BelohnungsPruefer` aus Task 1, `BelohnungRepository` aus Task 2, `BuchungRepository`, `FaelligkeitRepository`, `SerienRechner` aus Plan 1
+- Consumes: `BelohnungsPruefer` aus Task 1, `BelohnungRepository` aus Task 2, `BuchungRepository`, `FaelligkeitRepository`, `SerienRechner`, `Transaktionen` aus Plan 1
 - Produces:
   - `sealed interface EinloeseErgebnis` mit `Erfolg(einloesung: Einloesung)` und `Abgelehnt(einloesbarkeit: Einloesbarkeit)` sowie `Unbekannt`
-  - `BelohnungEinloesen.invoke(belohnungId: Long): EinloeseErgebnis` — prüft, bucht negativ und legt die Einlösung an; niemals in umgekehrter Reihenfolge, damit ein Abbruch nicht eine Einlösung ohne Buchung hinterlässt
-  - `BelohnungEinloesen.einloesbarkeit(belohnung: Belohnung): Einloesbarkeit` für die Anzeige
+  - `BelohnungEinloesen.invoke(belohnungId: Long): EinloeseErgebnis` — prüft, bucht negativ und legt die Einlösung an, **alles in einer Transaktion**. Die Prüfung muss mit drin liegen, nicht davor: sonst lesen zwei gleichzeitige Aufrufer denselben Kontostand, bestehen beide und überziehen das Konto. Ein Doppeltipp auf *Einlösen* genügt dafür. `FaelligkeitErledigen` aus Plan 1 löst dieselbe Stelle genauso.
+  - `BelohnungEinloesen.einloesbarkeit(belohnung: Belohnung, kontostand: Int): Einloesbarkeit` für die Anzeige. Der Kontostand kommt von außen statt aus dem Repository: der Shop-Bildschirm hat ihn bereits aus seinem Flow und würde sonst je Kachel ein zweites Mal lesen — mit dem Risiko, andere fehlende Punkte anzuzeigen, als der Kontostand darüber hergibt. `loese()` liest ihn innerhalb der Transaktion, wo er verbindlich ist. So steht die Serienberechnung trotzdem nur an einer Stelle.
 
 - [ ] **Step 1: Fake ergänzen und fehlschlagenden Test schreiben**
 
@@ -705,6 +705,7 @@ package de.vanhake.dayorganizer.domainuse
 import de.vanhake.dayorganizer.FakeBelohnungRepository
 import de.vanhake.dayorganizer.FakeBuchungRepository
 import de.vanhake.dayorganizer.FakeFaelligkeitRepository
+import de.vanhake.dayorganizer.FakeTransaktionen
 import de.vanhake.dayorganizer.domain.model.Belohnung
 import de.vanhake.dayorganizer.domain.model.Belohnungsbedingung
 import de.vanhake.dayorganizer.domain.model.Buchung
@@ -745,12 +746,14 @@ class BelohnungEinloesenTest {
         belohnungen: FakeBelohnungRepository,
         buchungen: FakeBuchungRepository,
         faelligkeiten: FakeFaelligkeitRepository = FakeFaelligkeitRepository(),
+        transaktionen: FakeTransaktionen = FakeTransaktionen(),
     ) = BelohnungEinloesen(
         belohnungen = belohnungen,
         buchungen = buchungen,
         faelligkeiten = faelligkeiten,
         pruefer = BelohnungsPruefer(),
         serienRechner = SerienRechner(),
+        transaktionen = transaktionen,
         uhr = uhr,
     )
 
@@ -828,6 +831,16 @@ class BelohnungEinloesenTest {
 
         assertEquals(EinloeseErgebnis.Unbekannt, ergebnis)
     }
+
+    @Test
+    fun `Pruefung, Buchung und Einloesung liegen in einer Transaktion`() = runTest {
+        val transaktionen = FakeTransaktionen()
+        val belohnungen = FakeBelohnungRepository(listOf(kinoabend))
+
+        useCase(belohnungen, guthaben(250), transaktionen = transaktionen)(1)
+
+        assertEquals(1, transaktionen.aufrufe)
+    }
 }
 ```
 
@@ -844,6 +857,7 @@ package de.vanhake.dayorganizer.domainuse
 import de.vanhake.dayorganizer.data.repository.BelohnungRepository
 import de.vanhake.dayorganizer.data.repository.BuchungRepository
 import de.vanhake.dayorganizer.data.repository.FaelligkeitRepository
+import de.vanhake.dayorganizer.data.repository.Transaktionen
 import de.vanhake.dayorganizer.domain.model.Belohnung
 import de.vanhake.dayorganizer.domain.model.Belohnungsbedingung
 import de.vanhake.dayorganizer.domain.model.Buchung
@@ -869,26 +883,44 @@ class BelohnungEinloesen @Inject constructor(
     private val faelligkeiten: FaelligkeitRepository,
     private val pruefer: BelohnungsPruefer,
     private val serienRechner: SerienRechner,
+    private val transaktionen: Transaktionen,
     private val uhr: Clock,
 ) {
 
-    suspend fun einloesbarkeit(belohnung: Belohnung): Einloesbarkeit = pruefer.pruefe(
-        belohnung = belohnung,
-        kontostand = buchungen.kontostand(),
-        serieDerBedingung = serieFuer(belohnung),
-        heute = LocalDate.now(uhr),
-    )
+    /**
+     * Der Kontostand kommt von aussen, statt hier gelesen zu werden. Zwei Aufrufer
+     * brauchen ihn naemlich aus verschiedenen Quellen: der Shop-Bildschirm hat ihn
+     * bereits aus seinem Flow und wuerde sonst je Kachel ein zweites Mal lesen --
+     * mit dem Risiko, andere fehlende Punkte anzuzeigen als der Kontostand darueber
+     * hergibt. loese() dagegen liest ihn innerhalb der Transaktion, wo er
+     * verbindlich ist. So bleibt die Serienberechnung trotzdem an einer Stelle.
+     */
+    suspend fun einloesbarkeit(belohnung: Belohnung, kontostand: Int): Einloesbarkeit =
+        pruefer.pruefe(
+            belohnung = belohnung,
+            kontostand = kontostand,
+            serieDerBedingung = serieFuer(belohnung),
+            heute = LocalDate.now(uhr),
+        )
 
-    suspend operator fun invoke(belohnungId: Long): EinloeseErgebnis {
+    // Lesen, Pruefen, Buchen und Anlegen liegen zusammen in der Transaktion. Die
+    // Reihenfolge allein reicht nicht: stuende die Pruefung davor, laesen zwei
+    // gleichzeitige Aufrufer denselben Kontostand, bestuenden beide und ueberzoegen
+    // das Konto -- ein Doppeltipp auf Einloesen genuegt. FaelligkeitErledigen loest
+    // dieselbe Stelle genauso.
+    suspend operator fun invoke(belohnungId: Long): EinloeseErgebnis =
+        transaktionen.inTransaktion { loese(belohnungId) }
+
+    private suspend fun loese(belohnungId: Long): EinloeseErgebnis {
         val belohnung = belohnungen.nachId(belohnungId) ?: return EinloeseErgebnis.Unbekannt
 
-        val pruefung = einloesbarkeit(belohnung)
+        // Der Lesezugriff steht hier drin, nicht davor -- er ist Teil der Pruefung,
+        // die zwei gleichzeitige Aufrufer trennen muss.
+        val pruefung = einloesbarkeit(belohnung, buchungen.kontostand())
         if (!pruefung.moeglich) return EinloeseErgebnis.Abgelehnt(pruefung)
 
         val jetzt = LocalDateTime.now(uhr)
 
-        // Erst buchen, dann die Einloesung anlegen. Bricht etwas ab, fehlt hoechstens
-        // der Historieneintrag — nie umgekehrt ein Eintrag ohne Abbuchung.
         buchungen.buchen(
             listOf(
                 Buchung(
@@ -922,7 +954,7 @@ class BelohnungEinloesen @Inject constructor(
 - [ ] **Step 4: Test laufen lassen und grünen Lauf bestätigen**
 
 Run: `./gradlew :app:testDebugUnitTest --tests "*BelohnungEinloesenTest*"`
-Expected: `BUILD SUCCESSFUL`, 5 Tests bestanden.
+Expected: `BUILD SUCCESSFUL`, 6 Tests bestanden.
 
 - [ ] **Step 5: Commit**
 
@@ -934,6 +966,28 @@ git commit -m "feat(domainuse): Belohnung einloesen mit Pruefung und negativer B
 ---
 
 ### Task 4: Belohnungs-Screen
+
+> **Nachtrag nach der Umsetzung (Commit `2cc93d1`).** Der Code unten enthielt
+> drei Fehler, die erst im Review auffielen. Der Quelltext im Projekt ist die
+> gültige Fassung; wo er von den Blöcken hier abweicht, hat er recht.
+>
+> 1. **Die beiden `items(...)` der `LazyColumn` benutzten beide `key = { it.id }`.**
+>    Keys teilen sich einen Namensraum über alle `items`-Aufrufe hinweg, und
+>    Belohnungs- und Einlösungs-ids sind zwei getrennte Autoincrement-Folgen ab 1.
+>    Nach der ersten Einlösung wirft Compose. Die Keys sind jetzt präfigiert.
+> 2. **Die Datumsbedingung war unbedienbar und stürzte beim Speichern ab.** Der
+>    Entwurf hielt das geparste `LocalDate` und das Feld renderte sich daraus, also
+>    sprang jede angetippte Ziffer sofort zurück auf leer. Da `pruefen()` nur
+>    `MINDESTSERIE` prüfte, lief `speichern()` durch bis zum `requireNotNull` in
+>    `zuBelohnung()` und riss die App mit. Der Entwurf hält das Datum jetzt als
+>    `bedingungDatumText`, geparst wird erst in `pruefen()` und `zuBelohnung()`, und
+>    `BelohnungFehler` hat einen fünften Wert `DATUM_FEHLT`. Das ist dieselbe Regel,
+>    die `AktivitaetEntwurf` und `UhrzeitenFeld` aus Plan 1 schon befolgen.
+> 3. **Ein Doppeltipp löste zweimal ein.** Die Transaktion im Use Case schützt das
+>    nicht: zwei aufeinanderfolgende Einlösungen sind jede für sich gültig, und es
+>    gibt keinen Storno. Das ViewModel führt jetzt eine synchrone Sperre je
+>    Belohnung, sichtbar als `BelohnungKachel.wirdEingeloest`; der Knopf ist
+>    währenddessen aus. Dazu liegt ein `runCatching` um den Aufruf.
 
 **Files:**
 - Create: `app/src/main/kotlin/de/vanhake/dayorganizer/ui/belohnungen/BelohnungenZustand.kt`
@@ -1136,6 +1190,7 @@ import app.cash.turbine.test
 import de.vanhake.dayorganizer.FakeBelohnungRepository
 import de.vanhake.dayorganizer.FakeBuchungRepository
 import de.vanhake.dayorganizer.FakeFaelligkeitRepository
+import de.vanhake.dayorganizer.FakeTransaktionen
 import de.vanhake.dayorganizer.domain.model.Belohnung
 import de.vanhake.dayorganizer.domain.model.Buchung
 import de.vanhake.dayorganizer.domain.model.BuchungsArt
@@ -1178,12 +1233,8 @@ class BelohnungenViewModelTest {
             buchungen = buchungen,
             einloesenUseCase = BelohnungEinloesen(
                 belohnungen, buchungen, faelligkeiten,
-                BelohnungsPruefer(), SerienRechner(), uhr,
+                BelohnungsPruefer(), SerienRechner(), FakeTransaktionen(), uhr,
             ),
-            pruefer = BelohnungsPruefer(),
-            faelligkeiten = faelligkeiten,
-            serienRechner = SerienRechner(),
-            uhr = uhr,
         )
     }
 
@@ -1269,11 +1320,6 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import de.vanhake.dayorganizer.data.repository.BelohnungRepository
 import de.vanhake.dayorganizer.data.repository.BuchungRepository
-import de.vanhake.dayorganizer.data.repository.FaelligkeitRepository
-import de.vanhake.dayorganizer.domain.model.Belohnung
-import de.vanhake.dayorganizer.domain.model.Belohnungsbedingung
-import de.vanhake.dayorganizer.domain.rechner.BelohnungsPruefer
-import de.vanhake.dayorganizer.domain.rechner.SerienRechner
 import de.vanhake.dayorganizer.domainuse.BelohnungEinloesen
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -1281,8 +1327,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.time.Clock
-import java.time.LocalDate
 import javax.inject.Inject
 
 @HiltViewModel
@@ -1290,10 +1334,6 @@ class BelohnungenViewModel @Inject constructor(
     private val belohnungen: BelohnungRepository,
     private val buchungen: BuchungRepository,
     private val einloesenUseCase: BelohnungEinloesen,
-    private val pruefer: BelohnungsPruefer,
-    private val faelligkeiten: FaelligkeitRepository,
-    private val serienRechner: SerienRechner,
-    private val uhr: Clock,
 ) : ViewModel() {
 
     val zustand: StateFlow<BelohnungenZustand> = combine(
@@ -1311,12 +1351,7 @@ class BelohnungenViewModel @Inject constructor(
                     name = belohnung.name,
                     beschreibung = belohnung.beschreibung,
                     preisPunkte = belohnung.preisPunkte,
-                    einloesbarkeit = pruefer.pruefe(
-                        belohnung = belohnung,
-                        kontostand = kontostand,
-                        serieDerBedingung = serieFuer(belohnung),
-                        heute = LocalDate.now(uhr),
-                    ),
+                    einloesbarkeit = einloesenUseCase.einloesbarkeit(belohnung, kontostand),
                 )
             },
             einloesungen = einloesungen,
@@ -1328,15 +1363,15 @@ class BelohnungenViewModel @Inject constructor(
 
     fun archivieren(belohnungId: Long) = viewModelScope.launch { belohnungen.archivieren(belohnungId) }
 
-    private suspend fun serieFuer(belohnung: Belohnung): Int {
-        val bedingung = belohnung.bedingung as? Belohnungsbedingung.MindestSerie ?: return 0
-        return serienRechner.aktuelleSerie(
-            faelligkeiten.historie(bedingung.aktivitaetId),
-            LocalDate.now(uhr),
-        )
-    }
 }
 ```
+
+Das ViewModel rechnet die Serie **nicht** selbst nach, sondern fragt
+`einloesenUseCase.einloesbarkeit(belohnung, kontostand)`. Den Kontostand reicht es
+aus seinem eigenen Flow durch — so passt die angezeigte Lücke immer zum
+angezeigten Kontostand, es entsteht kein zusätzlicher Lesevorgang je Kachel, und
+die Serienberechnung bleibt an genau einer Stelle. `Flow.map` darf `suspend`
+aufrufen, der Aufruf passt also direkt in den bestehenden Block.
 
 - [ ] **Step 7: Test laufen lassen und grünen Lauf bestätigen**
 
@@ -1895,6 +1930,14 @@ git commit -m "feat(ui): naechste Belohnung als Ziel auf dem Heute-Screen"
 
 Ausgelassene Fälligkeiten aus der Quote herauszurechnen ist eine bewusste Entscheidung: wer bewusst verzichtet, soll seine Statistik nicht verderben.
 
+`tagesBilanzen` zählt nur Fälligkeiten, deren Periode genau dieser eine Tag ist.
+Ein Wochenziel gehört der Woche, nicht dem Dienstag: seine Periode deckt alle
+sieben Tage ab, und ohne diesen Filter meldete ein einziges erledigtes
+Wochenziel sieben erledigte Tage — auch den Sonntag, an dem nichts geschah. Ein
+offenes drückte umgekehrt eine ganze Woche. Dieselbe Regel gilt in
+`FaelligkeitErledigen` für den Tagesbonus. Wochenziele erscheinen dafür nicht in
+der Heatmap, sondern in der Quote je Aktivität.
+
 - [ ] **Step 1: Fehlschlagenden Test schreiben**
 
 ```kotlin
@@ -2059,7 +2102,7 @@ class StatistikRechner(private val serienRechner: SerienRechner = SerienRechner(
         .takeWhile { !it.isAfter(bis) }
         .map { tag ->
             val desTages = faelligkeiten.filter {
-                !it.periodeVon.isAfter(tag) && !it.periodeBis.isBefore(tag)
+                it.periodeVon == it.periodeBis && it.periodeVon == tag
             }
             TagesBilanz(
                 tag = tag,

@@ -3,6 +3,7 @@ package de.vanhake.dayorganizer.data.db
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Before
@@ -182,5 +183,247 @@ class DaoTest {
     @Test
     fun leeres_Journal_hat_Kontostand_null() = runTest {
         assertEquals(0, db.buchungDao().kontostandJetzt())
+    }
+
+    private fun belohnung(
+        name: String = "Kinoabend",
+        preisPunkte: Int = 100,
+        bedingungTyp: String? = null,
+        bedingungAktivitaetId: Long? = null,
+        bedingungPerioden: Int? = null,
+        bedingungDatum: LocalDate? = null,
+        archiviert: Boolean = false,
+    ) = BelohnungEntity(
+        name = name,
+        beschreibung = "",
+        preisPunkte = preisPunkte,
+        bedingungTyp = bedingungTyp,
+        bedingungAktivitaetId = bedingungAktivitaetId,
+        bedingungPerioden = bedingungPerioden,
+        bedingungDatum = bedingungDatum,
+        archiviert = archiviert,
+    )
+
+    private fun einloesung(
+        belohnungId: Long,
+        name: String = "Kinoabend",
+        preisPunkte: Int = 100,
+        zeitpunkt: LocalDateTime,
+    ) = EinloesungEntity(
+        belohnungId = belohnungId,
+        name = name,
+        preisPunkte = preisPunkte,
+        zeitpunkt = zeitpunkt,
+    )
+
+    @Test
+    fun beobachteAktive_sortiert_archivierte_Belohnungen_aus_und_sortiert_nach_preisPunkte() = runTest {
+        db.belohnungDao().einfuegen(belohnung(name = "Teuer", preisPunkte = 500))
+        db.belohnungDao().einfuegen(belohnung(name = "Guenstig", preisPunkte = 50))
+        db.belohnungDao().einfuegen(belohnung(name = "Archiviert", preisPunkte = 10, archiviert = true))
+
+        val aktive = db.belohnungDao().beobachteAktive().first()
+
+        assertEquals(listOf("Guenstig", "Teuer"), aktive.map { it.name })
+    }
+
+    @Test
+    fun alle_liefert_aktive_vor_archivierten_und_je_nach_preisPunkte() = runTest {
+        db.belohnungDao().einfuegen(belohnung(name = "TeuerArchiviert", preisPunkte = 900, archiviert = true))
+        db.belohnungDao().einfuegen(belohnung(name = "GuenstigAktiv", preisPunkte = 20))
+        db.belohnungDao().einfuegen(belohnung(name = "TeuerAktiv", preisPunkte = 400))
+        db.belohnungDao().einfuegen(belohnung(name = "GuenstigArchiviert", preisPunkte = 5, archiviert = true))
+
+        val alle = db.belohnungDao().alle()
+
+        assertEquals(
+            listOf("GuenstigAktiv", "TeuerAktiv", "GuenstigArchiviert", "TeuerArchiviert"),
+            alle.map { it.name },
+        )
+    }
+
+    @Test
+    fun archivieren_trifft_nur_die_angegebene_Belohnung() = runTest {
+        val idA = db.belohnungDao().einfuegen(belohnung(name = "A"))
+        val idB = db.belohnungDao().einfuegen(belohnung(name = "B"))
+
+        db.belohnungDao().archivieren(idA)
+
+        assertEquals(true, db.belohnungDao().nachId(idA)?.archiviert)
+        assertEquals(false, db.belohnungDao().nachId(idB)?.archiviert)
+    }
+
+    @Test
+    fun Belohnung_ohne_Bedingung_uebersteht_den_Rundlauf() = runTest {
+        val id = db.belohnungDao().einfuegen(belohnung(name = "Ohne Bedingung"))
+
+        val gelesen = db.belohnungDao().nachId(id)
+
+        assertEquals(null, gelesen?.bedingungTyp)
+        assertEquals(null, gelesen?.bedingungAktivitaetId)
+        assertEquals(null, gelesen?.bedingungPerioden)
+        assertEquals(null, gelesen?.bedingungDatum)
+    }
+
+    @Test
+    fun Belohnung_mit_MindestSerie_uebersteht_den_Rundlauf() = runTest {
+        val id = db.belohnungDao().einfuegen(
+            belohnung(
+                name = "Serienbedingung",
+                bedingungTyp = "MINDESTSERIE",
+                bedingungAktivitaetId = 7,
+                bedingungPerioden = 14,
+            ),
+        )
+
+        val gelesen = db.belohnungDao().nachId(id)
+
+        assertEquals("MINDESTSERIE", gelesen?.bedingungTyp)
+        assertEquals(7L, gelesen?.bedingungAktivitaetId)
+        assertEquals(14, gelesen?.bedingungPerioden)
+        assertEquals(null, gelesen?.bedingungDatum)
+    }
+
+    @Test
+    fun Belohnung_mit_FruehestensAb_uebersteht_den_Rundlauf() = runTest {
+        val id = db.belohnungDao().einfuegen(
+            belohnung(
+                name = "Datumsbedingung",
+                bedingungTyp = "FRUEHESTENS_AB",
+                bedingungDatum = LocalDate.of(2026, 4, 1),
+            ),
+        )
+
+        val gelesen = db.belohnungDao().nachId(id)
+
+        assertEquals("FRUEHESTENS_AB", gelesen?.bedingungTyp)
+        assertEquals(LocalDate.of(2026, 4, 1), gelesen?.bedingungDatum)
+        assertEquals(null, gelesen?.bedingungAktivitaetId)
+        assertEquals(null, gelesen?.bedingungPerioden)
+    }
+
+    @Test
+    fun EinloesungEntity_uebersteht_den_Rundlauf() = runTest {
+        val belohnungId = db.belohnungDao().einfuegen(belohnung(name = "Kinoabend", preisPunkte = 200))
+        val zeitpunkt = LocalDateTime.of(2026, 3, 1, 8, 0)
+
+        db.belohnungDao().einloesungEinfuegen(
+            einloesung(belohnungId = belohnungId, name = "Kinoabend", preisPunkte = 200, zeitpunkt = zeitpunkt),
+        )
+
+        val gelesen = db.belohnungDao().alleEinloesungen().single()
+
+        assertEquals(belohnungId, gelesen.belohnungId)
+        assertEquals("Kinoabend", gelesen.name)
+        assertEquals(200, gelesen.preisPunkte)
+        assertEquals(zeitpunkt, gelesen.zeitpunkt)
+    }
+
+    @Test
+    fun beobachteEinloesungen_liefert_absteigend_nach_zeitpunkt() = runTest {
+        val belohnungId = db.belohnungDao().einfuegen(belohnung(name = "Kinoabend", preisPunkte = 200))
+        db.belohnungDao().einloesungEinfuegen(
+            einloesung(belohnungId = belohnungId, name = "Fruehe", zeitpunkt = LocalDateTime.of(2026, 3, 1, 8, 0)),
+        )
+        db.belohnungDao().einloesungEinfuegen(
+            einloesung(belohnungId = belohnungId, name = "Spaete", zeitpunkt = LocalDateTime.of(2026, 3, 2, 8, 0)),
+        )
+
+        val einloesungen = db.belohnungDao().beobachteEinloesungen().first()
+
+        assertEquals(listOf("Spaete", "Fruehe"), einloesungen.map { it.name })
+    }
+
+    // Zwei Einloesungen im selben Moment sind keine Theorie: wer zweimal kurz
+    // hintereinander einloest, trifft dieselbe Minute, und LocalDateTime.toString
+    // kuerzt Sekunden weg, wenn sie null sind.
+    //
+    // Ehrlichkeitshalber: dieser Test kann den id-Tiebreaker NICHT beweisen. Ohne
+    // ihn besteht er ebenfalls -- per Mutationstest geprueft -- weil SQLite bei
+    // diesem Tabellenscan zufaellig schon in id-absteigender Reihenfolge liefert.
+    // Genau das ist der Grund fuer den Tiebreaker: "zufaellig richtig" ist keine
+    // Zusage, und sobald ein Index oder eine andere Engine-Version den Plan
+    // aendert, kippt die Reihenfolge stillschweigend. Der Test haelt die heute
+    // beobachtete Ordnung fest, damit ein solcher Wechsel auffaellt; die Zusage
+    // selbst steht in der @Query.
+    @Test
+    fun bei_gleichem_zeitpunkt_steht_die_neuere_Einloesung_oben() = runTest {
+        val belohnungId = db.belohnungDao().einfuegen(belohnung(name = "Kinoabend", preisPunkte = 200))
+        val gleich = LocalDateTime.of(2026, 3, 1, 8, 0)
+        db.belohnungDao().einloesungEinfuegen(
+            einloesung(belohnungId = belohnungId, name = "Zuerst", zeitpunkt = gleich),
+        )
+        db.belohnungDao().einloesungEinfuegen(
+            einloesung(belohnungId = belohnungId, name = "Danach", zeitpunkt = gleich),
+        )
+
+        assertEquals(
+            listOf("Danach", "Zuerst"),
+            db.belohnungDao().beobachteEinloesungen().first().map { it.name },
+        )
+        assertEquals(
+            listOf("Danach", "Zuerst"),
+            db.belohnungDao().alleEinloesungen().map { it.name },
+        )
+    }
+
+    private fun buchung(zeitpunkt: LocalDateTime, betrag: Int = 1, notiz: String = "") =
+        BuchungEntity(
+            art = "ERLEDIGUNG", betrag = betrag, zeitpunkt = zeitpunkt,
+            aktivitaetId = null, faelligkeitId = null, belohnungId = null,
+            schwelle = null, notiz = notiz,
+        )
+
+    // Der Zeitpunkt liegt als ISO-Text in der Datenbank, der Vergleich ist also
+    // lexikographisch. Diese Tests pruefen, dass die Tagesgrenzen trotzdem dort
+    // liegen, wo sie liegen sollen -- spaet am letzten Tag zaehlt noch dazu,
+    // Mitternacht des Folgetags nicht mehr.
+    @Test
+    fun fuerZeitraum_schliesst_den_ganzen_letzten_Tag_ein() = runTest {
+        db.buchungDao().einfuegen(
+            listOf(
+                buchung(LocalDateTime.of(2026, 3, 1, 23, 59), notiz = "Tag davor"),
+                buchung(LocalDateTime.of(2026, 3, 2, 0, 0), notiz = "Beginn"),
+                buchung(LocalDateTime.of(2026, 3, 4, 23, 59, 59), notiz = "spaet am Ende"),
+                buchung(LocalDateTime.of(2026, 3, 5, 0, 0), notiz = "Tag danach"),
+            ),
+        )
+
+        val treffer = db.buchungDao().fuerZeitraum(
+            LocalDate.of(2026, 3, 2).atStartOfDay(),
+            LocalDate.of(2026, 3, 4).plusDays(1).atStartOfDay(),
+        )
+
+        assertEquals(listOf("Beginn", "spaet am Ende"), treffer.map { it.notiz })
+    }
+
+    @Test
+    fun fuerZeitraum_liefert_aufsteigend_nach_zeitpunkt() = runTest {
+        db.buchungDao().einfuegen(
+            listOf(
+                buchung(LocalDateTime.of(2026, 3, 3, 20, 0), notiz = "Abend"),
+                buchung(LocalDateTime.of(2026, 3, 2, 8, 0), notiz = "Morgen"),
+                buchung(LocalDateTime.of(2026, 3, 2, 12, 30), notiz = "Mittag"),
+            ),
+        )
+
+        val treffer = db.buchungDao().fuerZeitraum(
+            LocalDate.of(2026, 3, 2).atStartOfDay(),
+            LocalDate.of(2026, 3, 4).atStartOfDay(),
+        )
+
+        assertEquals(listOf("Morgen", "Mittag", "Abend"), treffer.map { it.notiz })
+    }
+
+    @Test
+    fun alle_liefert_das_ganze_Journal_aufsteigend() = runTest {
+        db.buchungDao().einfuegen(
+            listOf(
+                buchung(LocalDateTime.of(2026, 3, 10, 8, 0), notiz = "spaet"),
+                buchung(LocalDateTime.of(2025, 12, 24, 18, 0), notiz = "frueh"),
+            ),
+        )
+
+        assertEquals(listOf("frueh", "spaet"), db.buchungDao().alle().map { it.notiz })
     }
 }

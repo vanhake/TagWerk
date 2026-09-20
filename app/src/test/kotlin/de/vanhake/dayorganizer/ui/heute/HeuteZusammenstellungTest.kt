@@ -1,6 +1,7 @@
 package de.vanhake.dayorganizer.ui.heute
 
 import de.vanhake.dayorganizer.domain.model.Aktivitaet
+import de.vanhake.dayorganizer.domain.model.Belohnung
 import de.vanhake.dayorganizer.domain.model.Faelligkeit
 import de.vanhake.dayorganizer.domain.model.FaelligkeitStatus
 import de.vanhake.dayorganizer.domain.model.Zeitplan
@@ -10,6 +11,7 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 
 class HeuteZusammenstellungTest {
 
@@ -48,6 +50,7 @@ class HeuteZusammenstellungTest {
                 ziel,
             ),
             aktivitaeten = listOf(tabletten, sport),
+            belohnungen = emptyList(),
             kontostand = 120,
             jetzt = jetzt,
         )
@@ -68,6 +71,7 @@ class HeuteZusammenstellungTest {
                 termin(12, 20, FaelligkeitStatus.OFFEN),
             ),
             aktivitaeten = listOf(tabletten),
+            belohnungen = emptyList(),
             kontostand = 0,
             jetzt = jetzt,
         )
@@ -83,7 +87,7 @@ class HeuteZusammenstellungTest {
             geplantFuer = null, sollAnzahl = 3, istAnzahl = 2,
         )
 
-        val zustand = HeuteZusammenstellung.aus(listOf(ziel), listOf(sport), 0, jetzt)
+        val zustand = HeuteZusammenstellung.aus(listOf(ziel), listOf(sport), emptyList(), 0, jetzt)
 
         val eintrag = zustand.anstehend.single()
         assertEquals(null, eintrag.zeitText)
@@ -92,11 +96,33 @@ class HeuteZusammenstellungTest {
         assertEquals("Sport", eintrag.aktivitaetName)
     }
 
+    // Ohne diesen Test bliebe alles gruen, wenn aus() den Parameter belohnungen
+    // stillschweigend ignorierte: jeder andere Test uebergibt hier emptyList().
+    @Test
+    fun `die naechste Belohnung wird in den Zustand uebernommen`() {
+        val zustand = HeuteZusammenstellung.aus(
+            faelligkeiten = emptyList(),
+            aktivitaeten = emptyList(),
+            belohnungen = listOf(
+                Belohnung(id = 1, name = "Kinoabend", preisPunkte = 200),
+                Belohnung(id = 2, name = "Wochenendausflug", preisPunkte = 800),
+            ),
+            kontostand = 160,
+            jetzt = jetzt,
+        )
+
+        val ziel = assertNotNull(zustand.naechsteBelohnung)
+        assertEquals("Kinoabend", ziel.name)
+        assertEquals(200, ziel.preisPunkte)
+        assertEquals(40, ziel.fehlendePunkte)
+    }
+
     @Test
     fun `Faelligkeiten ohne passende Aktivitaet werden uebersprungen`() {
         val zustand = HeuteZusammenstellung.aus(
             faelligkeiten = listOf(termin(10, 8, FaelligkeitStatus.OFFEN)),
             aktivitaeten = emptyList(),
+            belohnungen = emptyList(),
             kontostand = 0,
             jetzt = jetzt,
         )

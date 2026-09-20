@@ -10,8 +10,10 @@ import androidx.room.TypeConverters
         FaelligkeitEntity::class,
         BuchungEntity::class,
         ErinnerungEntity::class,
+        BelohnungEntity::class,
+        EinloesungEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -20,4 +22,5 @@ abstract class DayOrganizerDatenbank : RoomDatabase() {
     abstract fun faelligkeitDao(): FaelligkeitDao
     abstract fun buchungDao(): BuchungDao
     abstract fun erinnerungDao(): ErinnerungDao
+    abstract fun belohnungDao(): BelohnungDao
 }

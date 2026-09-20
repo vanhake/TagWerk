@@ -35,6 +35,30 @@ class MigrationTest {
         db.close()
     }
 
+    @Test
+    fun migration_2_auf_3_legt_Belohnung_und_Einloesung_an() {
+        helfer.createDatabase(DB_NAME, 2).close()
+
+        val db = helfer.runMigrationsAndValidate(DB_NAME, 3, true, MIGRATION_1_2, MIGRATION_2_3)
+
+        db.query("SELECT COUNT(*) FROM belohnung").use {
+            it.moveToFirst()
+            assertEquals(0, it.getInt(0))
+        }
+        db.query("SELECT COUNT(*) FROM einloesung").use {
+            it.moveToFirst()
+            assertEquals(0, it.getInt(0))
+        }
+        db.close()
+    }
+
+    @Test
+    fun migration_1_auf_3_laeuft_durch() {
+        helfer.createDatabase(DB_NAME, 1).close()
+
+        helfer.runMigrationsAndValidate(DB_NAME, 3, true, MIGRATION_1_2, MIGRATION_2_3).close()
+    }
+
     private companion object {
         const val DB_NAME = "migrationstest.db"
     }

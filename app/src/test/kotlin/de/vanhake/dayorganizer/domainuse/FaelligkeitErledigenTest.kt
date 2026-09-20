@@ -5,6 +5,7 @@ import de.vanhake.dayorganizer.FakeBuchungRepository
 import de.vanhake.dayorganizer.FakeFaelligkeitRepository
 import de.vanhake.dayorganizer.FakeTransaktionen
 import de.vanhake.dayorganizer.data.Einstellungen
+import de.vanhake.dayorganizer.data.repository.FaelligkeitRepository
 import de.vanhake.dayorganizer.domain.model.Aktivitaet
 import de.vanhake.dayorganizer.domain.model.BuchungsArt
 import de.vanhake.dayorganizer.domain.model.Faelligkeit
@@ -21,6 +22,20 @@ import java.time.LocalTime
 import java.time.ZoneId
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+/** Spion um den entscheidenden Lesezugriff: schlaegt sofort fehl, wenn der Status ausserhalb
+ * der Transaktion gelesen wird. Ohne diese Absicherung lesen zwei gleichzeitige Aufrufer
+ * denselben Status, bestehen beide die Pruefung und buchen doppelt. */
+private class StatusSpion(
+    private val delegate: FaelligkeitRepository,
+    private val transaktionen: FakeTransaktionen,
+) : FaelligkeitRepository by delegate {
+    override suspend fun nachId(id: Long): Faelligkeit? {
+        assertTrue(transaktionen.aktiv, "nachId() wurde ausserhalb der Transaktion gelesen")
+        return delegate.nachId(id)
+    }
+}
 
 class FaelligkeitErledigenTest {
 
@@ -54,7 +69,7 @@ class FaelligkeitErledigenTest {
     private fun useCase(
         uhr: Clock,
         aktivitaeten: FakeAktivitaetRepository,
-        faelligkeiten: FakeFaelligkeitRepository,
+        faelligkeiten: FaelligkeitRepository,
         buchungen: FakeBuchungRepository,
         tagesbonus: Int = 0,
         transaktionen: FakeTransaktionen = FakeTransaktionen(),
@@ -250,12 +265,15 @@ class FaelligkeitErledigenTest {
         val b = FakeBuchungRepository()
         val transaktionen = FakeTransaktionen()
         val use = useCase(
-            uhrUm(8, 10), FakeAktivitaetRepository(listOf(tabletten)), f, b,
+            uhrUm(8, 10), FakeAktivitaetRepository(listOf(tabletten)),
+            StatusSpion(f, transaktionen), b,
             transaktionen = transaktionen,
         )
 
         use(10)
 
+        // Der Spion wirft bereits waehrend des Aufrufs, falls nachId() ausserhalb der
+        // Transaktion gelesen wurde -- diese Zusicherung bestaetigt nur den Rahmen.
         assertEquals(1, transaktionen.aufrufe)
     }
 
