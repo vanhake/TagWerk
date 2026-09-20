@@ -8,7 +8,7 @@ import javax.inject.Inject
 
 interface ErinnerungRepository {
     suspend fun anlegenFallsNeu(neue: List<Erinnerung>)
-    suspend fun naechsteAb(zeitpunkt: LocalDateTime): Erinnerung?
+    suspend fun naechsteOffene(): Erinnerung?
     suspend fun faelligeBis(zeitpunkt: LocalDateTime): List<Erinnerung>
     suspend fun alsAusgeloestMarkieren(id: Long)
     suspend fun entfernenFuerFaelligkeit(faelligkeitId: Long)
@@ -38,8 +38,8 @@ class RaumErinnerungRepository @Inject constructor(
     override suspend fun anlegenFallsNeu(neue: List<Erinnerung>) =
         dao.anlegenFallsNeu(neue.map { it.zuEntity() })
 
-    override suspend fun naechsteAb(zeitpunkt: LocalDateTime): Erinnerung? =
-        dao.naechsteAb(zeitpunkt)?.zuDomaene()
+    override suspend fun naechsteOffene(): Erinnerung? =
+        dao.naechsteOffene()?.zuDomaene()
 
     override suspend fun faelligeBis(zeitpunkt: LocalDateTime): List<Erinnerung> =
         dao.faelligeBis(zeitpunkt).map { it.zuDomaene() }

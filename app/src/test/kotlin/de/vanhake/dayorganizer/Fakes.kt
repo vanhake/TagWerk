@@ -153,9 +153,8 @@ class FakeErinnerungRepository(start: List<Erinnerung> = emptyList()) : Erinneru
         stand.value = ergaenzt.sortedBy { it.zeitpunkt }
     }
 
-    override suspend fun naechsteAb(zeitpunkt: LocalDateTime): Erinnerung? =
-        stand.value.filter { !it.ausgeloest && !it.zeitpunkt.isBefore(zeitpunkt) }
-            .minByOrNull { it.zeitpunkt }
+    override suspend fun naechsteOffene(): Erinnerung? =
+        stand.value.filter { !it.ausgeloest }.minByOrNull { it.zeitpunkt }
 
     override suspend fun faelligeBis(zeitpunkt: LocalDateTime): List<Erinnerung> =
         stand.value.filter { !it.ausgeloest && !it.zeitpunkt.isAfter(zeitpunkt) }

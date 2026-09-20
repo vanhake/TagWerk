@@ -112,4 +112,42 @@ class AlarmPlanerTest {
 
         assertEquals(0, shadowAlarmManager.scheduledAlarms.size)
     }
+
+    @Test
+    fun `eine vergangene Erinnerung wird sofort eingeplant`() = runTest {
+        val vergangen = LocalDateTime.of(2026, 3, 1, 20, 0)
+        val repo = FakeErinnerungRepository(listOf(erinnerung(1, vergangen)))
+        val planer = AlarmPlaner(kontext, repo, uhr)
+
+        planer.neuPlanen()
+
+        val alarme = shadowAlarmManager.scheduledAlarms
+        assertEquals(1, alarme.size)
+        assertEquals(uhr.instant().toEpochMilli(), alarme.single().triggerAtMs)
+    }
+
+    @Test
+    fun `von einer vergangenen und einer kuenftigen Erinnerung gewinnt die vergangene`() = runTest {
+        val vergangen = LocalDateTime.of(2026, 3, 1, 20, 0)
+        val kuenftig = LocalDateTime.of(2026, 3, 2, 12, 0)
+        val repo = FakeErinnerungRepository(listOf(erinnerung(1, kuenftig), erinnerung(2, vergangen)))
+        val planer = AlarmPlaner(kontext, repo, uhr)
+
+        planer.neuPlanen()
+
+        val alarme = shadowAlarmManager.scheduledAlarms
+        assertEquals(1, alarme.size)
+        assertEquals(uhr.instant().toEpochMilli(), alarme.single().triggerAtMs)
+    }
+
+    @Test
+    fun `eine bereits ausgeloeste vergangene Erinnerung wird weiterhin ignoriert`() = runTest {
+        val vergangen = LocalDateTime.of(2026, 3, 1, 20, 0)
+        val repo = FakeErinnerungRepository(listOf(erinnerung(1, vergangen, ausgeloest = true)))
+        val planer = AlarmPlaner(kontext, repo, uhr)
+
+        planer.neuPlanen()
+
+        assertEquals(0, shadowAlarmManager.scheduledAlarms.size)
+    }
 }

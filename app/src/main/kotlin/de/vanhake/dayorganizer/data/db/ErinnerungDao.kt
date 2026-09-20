@@ -13,10 +13,9 @@ interface ErinnerungDao {
     suspend fun anlegenFallsNeu(eintraege: List<ErinnerungEntity>)
 
     @Query(
-        "SELECT * FROM erinnerung WHERE ausgeloest = 0 AND zeitpunkt >= :zeitpunkt " +
-            "ORDER BY zeitpunkt LIMIT 1",
+        "SELECT * FROM erinnerung WHERE ausgeloest = 0 ORDER BY zeitpunkt LIMIT 1",
     )
-    suspend fun naechsteAb(zeitpunkt: LocalDateTime): ErinnerungEntity?
+    suspend fun naechsteOffene(): ErinnerungEntity?
 
     @Query(
         "SELECT * FROM erinnerung WHERE ausgeloest = 0 AND zeitpunkt <= :zeitpunkt ORDER BY zeitpunkt",

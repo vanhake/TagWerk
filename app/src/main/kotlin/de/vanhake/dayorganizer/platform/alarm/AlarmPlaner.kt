@@ -27,14 +27,19 @@ class AlarmPlaner @Inject constructor(
 
     suspend fun neuPlanen() {
         val manager = kontext.getSystemService<AlarmManager>() ?: return
-        val naechste = erinnerungen.naechsteAb(LocalDateTime.now(uhr))
+        val naechste = erinnerungen.naechsteOffene()
 
         if (naechste == null) {
             manager.cancel(alarmIntent())
             return
         }
 
-        val zeitpunktMillis = alsEpochMillis(naechste.zeitpunkt, ZoneId.systemDefault())
+        // Eine vergangene, noch nicht ausgeloeste Erinnerung wird sofort eingeplant statt
+        // uebersprungen: verspaetet ist bei einer Medikamentenerinnerung besser als gar nicht.
+        val zeitpunktMillis = maxOf(
+            alsEpochMillis(naechste.zeitpunkt, ZoneId.systemDefault()),
+            uhr.instant().toEpochMilli(),
+        )
 
         if (manager.canScheduleExactAlarms()) {
             manager.setExactAndAllowWhileIdle(

@@ -3,7 +3,11 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- USE_EXACT_ALARM statt SCHEDULE_EXACT_ALARM: wird bei Installation sofort gewaehrt
+         (kein manueller Schritt in den Systemeinstellungen) und ist laut Play-Store-Richtlinie
+         ausdruecklich fuer Alarm- und Medikamentenerinnerungs-Apps vorgesehen. Die Einschraenkung
+         auf den Play Store gilt hier nicht, da die App nur als APK verteilt wird. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
