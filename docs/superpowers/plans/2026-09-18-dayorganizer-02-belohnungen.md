@@ -967,6 +967,28 @@ git commit -m "feat(domainuse): Belohnung einloesen mit Pruefung und negativer B
 
 ### Task 4: Belohnungs-Screen
 
+> **Nachtrag nach der Umsetzung (Commit `2cc93d1`).** Der Code unten enthielt
+> drei Fehler, die erst im Review auffielen. Der Quelltext im Projekt ist die
+> gültige Fassung; wo er von den Blöcken hier abweicht, hat er recht.
+>
+> 1. **Die beiden `items(...)` der `LazyColumn` benutzten beide `key = { it.id }`.**
+>    Keys teilen sich einen Namensraum über alle `items`-Aufrufe hinweg, und
+>    Belohnungs- und Einlösungs-ids sind zwei getrennte Autoincrement-Folgen ab 1.
+>    Nach der ersten Einlösung wirft Compose. Die Keys sind jetzt präfigiert.
+> 2. **Die Datumsbedingung war unbedienbar und stürzte beim Speichern ab.** Der
+>    Entwurf hielt das geparste `LocalDate` und das Feld renderte sich daraus, also
+>    sprang jede angetippte Ziffer sofort zurück auf leer. Da `pruefen()` nur
+>    `MINDESTSERIE` prüfte, lief `speichern()` durch bis zum `requireNotNull` in
+>    `zuBelohnung()` und riss die App mit. Der Entwurf hält das Datum jetzt als
+>    `bedingungDatumText`, geparst wird erst in `pruefen()` und `zuBelohnung()`, und
+>    `BelohnungFehler` hat einen fünften Wert `DATUM_FEHLT`. Das ist dieselbe Regel,
+>    die `AktivitaetEntwurf` und `UhrzeitenFeld` aus Plan 1 schon befolgen.
+> 3. **Ein Doppeltipp löste zweimal ein.** Die Transaktion im Use Case schützt das
+>    nicht: zwei aufeinanderfolgende Einlösungen sind jede für sich gültig, und es
+>    gibt keinen Storno. Das ViewModel führt jetzt eine synchrone Sperre je
+>    Belohnung, sichtbar als `BelohnungKachel.wirdEingeloest`; der Knopf ist
+>    währenddessen aus. Dazu liegt ein `runCatching` um den Aufruf.
+
 **Files:**
 - Create: `app/src/main/kotlin/de/vanhake/dayorganizer/ui/belohnungen/BelohnungenZustand.kt`
 - Create: `app/src/main/kotlin/de/vanhake/dayorganizer/ui/belohnungen/BelohnungenViewModel.kt`
