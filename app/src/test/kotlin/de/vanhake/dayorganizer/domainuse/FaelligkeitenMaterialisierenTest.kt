@@ -116,6 +116,65 @@ class FaelligkeitenMaterialisierenTest {
     }
 
     @Test
+    fun `eine erst nachmittags angelegte Aktivitaet bekommt keine ueberfaellige Faelligkeit fuer heute`() = runTest {
+        val nachmittagsUhr = Clock.fixed(
+            LocalDateTime.of(2026, 3, 2, 14, 0).atZone(zone).toInstant(),
+            zone,
+        )
+        val tablettenZweimalTaeglich = tabletten.copy(
+            zeitplan = Zeitplan.FesteZeiten(
+                zeiten = listOf(java.time.LocalTime.of(8, 0), java.time.LocalTime.of(20, 0)),
+                wochentage = DayOfWeek.entries.toSet(),
+            ),
+        )
+        val faelligkeiten = FakeFaelligkeitRepository()
+        val use = FaelligkeitenMaterialisieren(
+            aktivitaeten = FakeAktivitaetRepository(listOf(tablettenZweimalTaeglich)),
+            faelligkeiten = faelligkeiten,
+            erinnerungen = FakeErinnerungRepository(),
+            zeitplanRechner = ZeitplanRechner(),
+            uhr = nachmittagsUhr,
+        )
+
+        use(vorausTage = 1)
+
+        val heutigeZeitpunkte = faelligkeiten.stand.value
+            .filter { it.periodeVon == LocalDate.of(2026, 3, 2) }
+            .map { it.geplantFuer }
+        assertEquals(listOf(LocalDateTime.of(2026, 3, 2, 20, 0)), heutigeZeitpunkte)
+
+        val morgigeZeitpunkte = faelligkeiten.stand.value
+            .filter { it.periodeVon == LocalDate.of(2026, 3, 3) }
+            .map { it.geplantFuer }
+        assertEquals(
+            listOf(LocalDateTime.of(2026, 3, 3, 8, 0), LocalDateTime.of(2026, 3, 3, 20, 0)),
+            morgigeZeitpunkte,
+        )
+    }
+
+    @Test
+    fun `ein Zaehlziel ist vom Anlegezeitpunkt-Filter nicht betroffen`() = runTest {
+        val nachmittagsUhr = Clock.fixed(
+            LocalDateTime.of(2026, 3, 2, 14, 0).atZone(zone).toInstant(),
+            zone,
+        )
+        val sport = tabletten.copy(id = 2, name = "Sport", zeitplan = Zeitplan.Wochenziel(anzahl = 3))
+        val faelligkeiten = FakeFaelligkeitRepository()
+        val use = FaelligkeitenMaterialisieren(
+            aktivitaeten = FakeAktivitaetRepository(listOf(sport)),
+            faelligkeiten = faelligkeiten,
+            erinnerungen = FakeErinnerungRepository(),
+            zeitplanRechner = ZeitplanRechner(),
+            uhr = nachmittagsUhr,
+        )
+
+        use(vorausTage = 6)
+
+        assertEquals(1, faelligkeiten.stand.value.size)
+        assertNull(faelligkeiten.stand.value.single().geplantFuer)
+    }
+
+    @Test
     fun `fuerZeitraum liefert terminierte Faelligkeiten vor Zielen der gleichen Periode`() = runTest {
         val periodeVon = LocalDate.of(2026, 3, 2)
         val periodeBis = LocalDate.of(2026, 3, 8)

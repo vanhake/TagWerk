@@ -44,6 +44,7 @@ data class AktivitaetEntwurf(
     val nachfassAbstandText: String = "15",
     val aktiv: Boolean = true,
     val archiviertAm: LocalDate? = null,
+    val erstelltAm: LocalDate? = null,
 ) {
 
     private val basisPunkte: Int get() = basisPunkteText.toIntOrNull() ?: 0
@@ -78,8 +79,10 @@ data class AktivitaetEntwurf(
         }
     }
 
-    /** Nur aufrufen, wenn [pruefen] leer ist. */
-    fun zuAktivitaet(erstelltAm: LocalDate): Aktivitaet = Aktivitaet(
+    /** Nur aufrufen, wenn [pruefen] leer ist. [heute] gilt nur, wenn der Entwurf noch kein
+     * eigenes [erstelltAm] traegt -- ein neu angelegter Entwurf bekommt so das heutige Datum,
+     * eine bestehende Aktivitaet behaelt ihr echtes Anlegedatum ueber jedes Speichern hinweg. */
+    fun zuAktivitaet(heute: LocalDate): Aktivitaet = Aktivitaet(
         id = id,
         name = name.trim(),
         notiz = notiz.trim(),
@@ -98,7 +101,7 @@ data class AktivitaetEntwurf(
         serienSchwellen = serienSchwellen,
         nachfassAnzahl = nachfassAnzahlText.toIntOrNull() ?: 0,
         nachfassAbstandMinuten = nachfassAbstandText.toIntOrNull() ?: 15,
-        erstelltAm = erstelltAm,
+        erstelltAm = erstelltAm ?: heute,
         aktiv = aktiv,
         archiviertAm = archiviertAm,
     )
@@ -118,6 +121,7 @@ data class AktivitaetEntwurf(
                 nachfassAbstandText = aktivitaet.nachfassAbstandMinuten.toString(),
                 aktiv = aktivitaet.aktiv,
                 archiviertAm = aktivitaet.archiviertAm,
+                erstelltAm = aktivitaet.erstelltAm,
             )
             return when (val plan = aktivitaet.zeitplan) {
                 is Zeitplan.FesteZeiten -> basis.copy(

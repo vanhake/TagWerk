@@ -144,6 +144,11 @@ class FaelligkeitErledigenTest {
         val use = useCase(uhrUm(20, 30), FakeAktivitaetRepository(listOf(zweimal)), f, b)
 
         use(10)
+        // Der Tag ist erst nach der Abenddosis abgeschlossen -- vorher darf der
+        // Serienbonus noch nicht gebucht sein, sonst waere er mit der ersten statt
+        // der letzten Faelligkeit des Tages gekommen.
+        assertEquals(0, b.stand.value.count { it.art == BuchungsArt.SERIENBONUS })
+
         use(11)
 
         assertEquals(1, b.stand.value.count { it.art == BuchungsArt.SERIENBONUS })
@@ -163,6 +168,32 @@ class FaelligkeitErledigenTest {
         assertEquals(0, b.stand.value.count { it.art == BuchungsArt.TAGESBONUS })
 
         use(11)
+        assertEquals(1, b.stand.value.count { it.art == BuchungsArt.TAGESBONUS })
+    }
+
+    @Test
+    fun `ein offenes Wochenziel blockiert den Tagesbonus nicht`() = runTest {
+        val sport = tabletten.copy(
+            id = 2,
+            name = "Sport",
+            zeitplan = Zeitplan.Wochenziel(anzahl = 3),
+        )
+        val wochenziel = Faelligkeit(
+            id = 20,
+            aktivitaetId = 2,
+            periodeVon = LocalDate.of(2026, 3, 2),
+            periodeBis = LocalDate.of(2026, 3, 8),
+            geplantFuer = null,
+            sollAnzahl = 3,
+        )
+        val f = FakeFaelligkeitRepository(listOf(morgens, wochenziel))
+        val b = FakeBuchungRepository()
+        val use = useCase(
+            uhrUm(8, 10), FakeAktivitaetRepository(listOf(tabletten, sport)), f, b, tagesbonus = 25,
+        )
+
+        use(10)
+
         assertEquals(1, b.stand.value.count { it.art == BuchungsArt.TAGESBONUS })
     }
 

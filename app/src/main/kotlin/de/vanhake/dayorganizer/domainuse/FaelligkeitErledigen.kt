@@ -84,8 +84,14 @@ class FaelligkeitErledigen(
             ?.let { buchungen.serienbonusSchwellenSeit(aktivitaet.id, it.atStartOfDay()) }
             ?: emptySet()
 
+        // fuerZeitraum(heute, heute) liefert auch Wochenziele zurueck, deren Periode diesen
+        // Tag ueberlappt (periodeBis >= heute && periodeVon <= heute) -- das gilt fuer jeden
+        // Tag ihrer Woche. Ein Wochenziel gehoert aber der Woche, nicht dem Dienstag: ohne
+        // diesen Filter wuerde ein noch offenes Wochenziel den Tagesbonus sechs von sieben
+        // Tagen blockieren. Nur echte Tagesitems (periodeVon == periodeBis) zaehlen daher.
         val tagesFaelligkeiten = faelligkeiten.fuerZeitraum(heute, heute)
             .map { if (it.id == nachher.id) nachher else it }
+            .filter { it.periodeVon == it.periodeBis }
 
         val einstellungen = einstellungenLesen()
         val kontext = ErledigungsKontext(

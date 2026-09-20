@@ -139,6 +139,22 @@ class SerienRechnerTest {
     }
 
     @Test
+    fun `eine Periode mit einer erledigten und einer noch offenen Faelligkeit zaehlt noch nicht`() {
+        val morgens = tag(2, FaelligkeitStatus.ERLEDIGT).copy(id = 200)
+        val abends = tag(2, FaelligkeitStatus.OFFEN).copy(id = 201)
+        val f = listOf(
+            tag(0, FaelligkeitStatus.ERLEDIGT),
+            tag(1, FaelligkeitStatus.ERLEDIGT),
+            morgens,
+            abends,
+        )
+
+        // Tag 2 ist noch nicht abgeschlossen (die Abenddosis ist offen), zaehlt also
+        // trotz der erledigten Morgendosis noch nicht zur Serie.
+        assertEquals(2, rechner.aktuelleSerie(f, start.plusDays(2)))
+    }
+
+    @Test
     fun `eine ausgelassene Periode in der Mitte teilt die laengste Serie nicht`() {
         val f = listOf(
             tag(0, FaelligkeitStatus.ERLEDIGT),

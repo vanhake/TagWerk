@@ -10,6 +10,14 @@ import java.time.LocalDate
  */
 data class SerienStand(val laenge: Int, val startPeriode: LocalDate?)
 
+/**
+ * Eine Periode zaehlt erst, wenn sie abgeschlossen ist -- also keine ihrer
+ * Faelligkeiten mehr OFFEN ist. Wer morgens die Tablette nimmt und abends nicht,
+ * hat den Tag noch nicht geschafft und darf morgens auch noch keinen Serienbonus
+ * dafuer bekommen. Deshalb bricht ein VERPASST sofort, ein verbleibendes OFFEN
+ * haelt die Periode neutral, und erst wenn nichts mehr offen ist zaehlt ein
+ * ERLEDIGT die Periode.
+ */
 class SerienRechner {
 
     private enum class PeriodenErgebnis { ZAEHLT, NEUTRAL, BRICHT }
@@ -60,6 +68,7 @@ class SerienRechner {
 
     private fun bewerte(gruppe: List<Faelligkeit>): PeriodenErgebnis = when {
         gruppe.any { it.status == FaelligkeitStatus.VERPASST } -> PeriodenErgebnis.BRICHT
+        gruppe.any { it.status == FaelligkeitStatus.OFFEN } -> PeriodenErgebnis.NEUTRAL
         gruppe.any { it.status == FaelligkeitStatus.ERLEDIGT } -> PeriodenErgebnis.ZAEHLT
         else -> PeriodenErgebnis.NEUTRAL
     }

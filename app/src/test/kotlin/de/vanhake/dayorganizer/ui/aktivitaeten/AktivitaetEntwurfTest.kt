@@ -105,6 +105,35 @@ class AktivitaetEntwurfTest {
     }
 
     @Test
+    fun `ein Entwurf behaelt das echte Erstellungsdatum beim erneuten Speichern`() {
+        val erstelltAm = LocalDate.of(2025, 12, 1)
+        val aktivitaet = Aktivitaet(
+            id = 7,
+            name = "Tabletten",
+            farbe = 0xFF4CAF50.toInt(),
+            basisPunkte = 10,
+            zeitplan = Zeitplan.FesteZeiten(listOf(LocalTime.of(8, 0)), DayOfWeek.entries.toSet()),
+            erstelltAm = erstelltAm,
+        )
+
+        // Umbenennen simuliert das erneute Speichern eines bestehenden Entwurfs an einem
+        // spaeteren Tag -- das Anlegedatum darf dabei nicht auf "heute" zurueckspringen.
+        val rundlauf = AktivitaetEntwurf.aus(aktivitaet).copy(name = "Tabletten neu")
+            .zuAktivitaet(LocalDate.of(2026, 3, 2))
+
+        assertEquals(erstelltAm, rundlauf.erstelltAm)
+    }
+
+    @Test
+    fun `ein brandneuer Entwurf ohne eigenes Erstellungsdatum bekommt heute`() {
+        val heute = LocalDate.of(2026, 3, 2)
+
+        val aktivitaet = gueltig.zuAktivitaet(heute)
+
+        assertEquals(heute, aktivitaet.erstelltAm)
+    }
+
+    @Test
     fun `eine aktive Aktivitaet bleibt beim Rundlauf gleich`() {
         val aktivitaet = Aktivitaet(
             id = 7,
