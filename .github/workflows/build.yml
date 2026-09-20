@@ -1,0 +1,66 @@
+name: Build
+
+# Bei jedem Push auf main entsteht eine installierbare APK als Artefakt.
+# Pull Requests werden ebenfalls gebaut, damit ein Fehler auffaellt, bevor er
+# auf main landet.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Tests und APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Quellcode holen
+        uses: actions/checkout@v4
+
+      - name: JDK 17 einrichten
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # Der Runner bringt ein Android SDK mit, aber welche Versionen genau,
+      # aendert sich mit dem Image. Diese Action setzt ANDROID_HOME und
+      # akzeptiert die Lizenzen, damit der Build nicht an einer fehlenden
+      # Build-Tools-Version scheitert.
+      - name: Android SDK einrichten
+        uses: android-actions/setup-android@v3
+
+      - name: Gradle einrichten
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Tests
+        run: ./gradlew :domain:test :app:testDebugUnitTest
+
+      - name: APK bauen
+        run: ./gradlew :app:assembleDebug
+
+      # Debug-Variante, weil sie mit dem Debug-Schluessel signiert und damit
+      # sofort installierbar ist. Eine Release-APK waere unsigniert und liesse
+      # sich ohne eigenen Schluessel nicht aufs Geraet bringen.
+      - name: APK als Artefakt ablegen
+        uses: actions/upload-artifact@v4
+        with:
+          name: dayorganizer-debug-${{ github.run_number }}-${{ github.sha }}
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Testberichte bei Fehlschlag ablegen
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testberichte-${{ github.run_number }}
+          path: |
+            domain/build/reports/tests/
+            app/build/reports/tests/
+          retention-days: 14
