@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -20,13 +21,18 @@ import androidx.navigation.compose.rememberNavController
 import de.vanhake.dayorganizer.R
 import de.vanhake.dayorganizer.ui.aktivitaeten.AktivitaetBearbeitenScreen
 import de.vanhake.dayorganizer.ui.aktivitaeten.AktivitaetenScreen
+import de.vanhake.dayorganizer.ui.belohnungen.BelohnungBearbeitenScreen
+import de.vanhake.dayorganizer.ui.belohnungen.BelohnungenScreen
 import de.vanhake.dayorganizer.ui.heute.HeuteScreen
 
 object Ziele {
     const val HEUTE = "heute"
     const val AKTIVITAETEN = "aktivitaeten"
+    const val BELOHNUNGEN = "belohnungen"
     const val AKTIVITAET_BEARBEITEN = "aktivitaet/{id}"
+    const val BELOHNUNG_BEARBEITEN = "belohnung/{id}"
     fun bearbeiten(id: Long) = "aktivitaet/$id"
+    fun belohnungBearbeiten(id: Long) = "belohnung/$id"
 }
 
 @Composable
@@ -50,6 +56,12 @@ fun DayOrganizerNavigation() {
                     icon = { Icon(Icons.Default.List, contentDescription = null) },
                     label = { Text(stringResource(R.string.tab_aktivitaeten)) },
                 )
+                NavigationBarItem(
+                    selected = aktuell == Ziele.BELOHNUNGEN,
+                    onClick = { navController.navigate(Ziele.BELOHNUNGEN) },
+                    icon = { Icon(Icons.Default.Star, contentDescription = null) },
+                    label = { Text(stringResource(R.string.tab_belohnungen)) },
+                )
             }
         },
     ) { innen ->
@@ -66,6 +78,17 @@ fun DayOrganizerNavigation() {
             }
             composable(Ziele.AKTIVITAET_BEARBEITEN) { eintrag ->
                 AktivitaetBearbeitenScreen(
+                    id = eintrag.arguments?.getString("id")?.toLongOrNull() ?: 0L,
+                    fertig = { navController.popBackStack() },
+                )
+            }
+            composable(Ziele.BELOHNUNGEN) {
+                BelohnungenScreen(
+                    bearbeiten = { id -> navController.navigate(Ziele.belohnungBearbeiten(id)) },
+                )
+            }
+            composable(Ziele.BELOHNUNG_BEARBEITEN) { eintrag ->
+                BelohnungBearbeitenScreen(
                     id = eintrag.arguments?.getString("id")?.toLongOrNull() ?: 0L,
                     fertig = { navController.popBackStack() },
                 )
