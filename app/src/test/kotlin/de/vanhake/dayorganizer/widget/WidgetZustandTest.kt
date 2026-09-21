@@ -71,6 +71,32 @@ class WidgetZustandTest {
 
         assertEquals(4, zustand.eintraege.size)
         assertEquals(2, zustand.weitere)
+        // Die Anzahl allein beweist nichts: takeLast statt take oder eine verkehrte
+        // Sortierung ergaeben ebenfalls vier Eintraege und zwei weitere -- nur die
+        // falschen. Es muessen die dringendsten bleiben. Um 12:00 sind 09:00 bis
+        // 11:00 ueberfaellig, danach kommt 12:00; 13:00 und 14:00 fallen weg.
+        assertEquals(listOf(1L, 2L, 3L, 4L), zustand.eintraege.map { it.faelligkeitId })
+    }
+
+    // Zaehlziele haben keinen Sollzeitpunkt. Sie gehoeren hinter alles mit Uhrzeit,
+    // auch hinter spaete Termine, und fallen bei Platzmangel als Erste weg -- sie
+    // lassen sich ueber den ganzen Tag erledigen, eine Uhrzeit nicht.
+    @Test
+    fun `Zaehlziele stehen hinter allem mit Uhrzeit und fallen zuerst weg`() {
+        val ziel = Faelligkeit(
+            id = 50, aktivitaetId = 1, periodeVon = tag, periodeBis = tag.plusDays(6),
+            geplantFuer = null, sollAnzahl = 3,
+        )
+        val zustand = WidgetZusammenstellung.aus(
+            faelligkeiten = listOf(ziel, termin(10, 20), termin(11, 9)),
+            aktivitaeten = listOf(tabletten),
+            kontostand = 0,
+            jetzt = jetzt,
+            hoechstens = 2,
+        )
+
+        assertEquals(listOf(11L, 10L), zustand.eintraege.map { it.faelligkeitId })
+        assertEquals(1, zustand.weitere)
     }
 
     @Test

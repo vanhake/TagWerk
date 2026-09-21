@@ -11,6 +11,7 @@ import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
+import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.padding
 import androidx.glance.text.Text
@@ -45,7 +46,10 @@ class HeuteWidget : GlanceAppWidget() {
         provideContent {
             val res = LocalContext.current
 
-            Column(GlanceModifier.fillMaxWidth().padding(12.dp).background(Color(0xFFF5F5F5))) {
+            // fillMaxSize statt fillMaxWidth: sonst schwimmt die Karte mittig in der
+            // Widget-Flaeche, mit leerem Rand darueber und darunter -- so auf dem
+            // Emulator zu sehen.
+            Column(GlanceModifier.fillMaxSize().padding(12.dp).background(Color(0xFFF5F5F5))) {
                 Text(
                     res.getString(R.string.punktestand, zustand.kontostand),
                     style = TextStyle(color = ColorProvider(Color.Black)),
