@@ -11,6 +11,10 @@ import de.vanhake.dayorganizer.domain.model.BuchungsArt
 import de.vanhake.dayorganizer.domain.model.Einloesung
 import de.vanhake.dayorganizer.domain.model.Faelligkeit
 import de.vanhake.dayorganizer.domain.model.FaelligkeitStatus
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.intOrNull
 import java.time.LocalDate
 import java.time.LocalDateTime
 
@@ -29,6 +33,35 @@ data class BackupInhalt(
 object BackupUmwandlung {
 
     const val SCHEMA_VERSION = 1
+
+    private val json = Json {
+        prettyPrint = true
+        ignoreUnknownKeys = false
+    }
+
+    /** Wandelt eine [BackupDatei] in formatiertes JSON um -- fuer Export und Ablage. */
+    fun zuText(datei: BackupDatei): String = json.encodeToString(BackupDatei.serializer(), datei)
+
+    /**
+     * Liest [text] als Backup ein. Prueft zuerst -- vor dem vollstaendigen Einlesen mit
+     * `ignoreUnknownKeys = false` -- nur das Feld `schemaVersion`: Ein spaeteres Schema mit
+     * neuen oder umbenannten Feldern soll als [UnbekanntesSchema] erkannt werden, statt am
+     * strengen Parser zu scheitern und faelschlich als beschaedigt zu gelten. Fehlt das Feld
+     * oder ist es keine Zahl, ist der Text kein DayOrganizer-Backup; das vollstaendige
+     * Einlesen wirft dann eine gewoehnliche Ausnahme, die der Import als unlesbar meldet.
+     */
+    fun ausText(text: String): BackupInhalt {
+        val gefundeneVersion = schemaVersionVorabLesen(text)
+        if (gefundeneVersion != null && gefundeneVersion != SCHEMA_VERSION) {
+            throw UnbekanntesSchema(gefundeneVersion)
+        }
+        return ausDatei(json.decodeFromString(BackupDatei.serializer(), text))
+    }
+
+    private fun schemaVersionVorabLesen(text: String): Int? {
+        val wurzel = Json.parseToJsonElement(text) as? JsonObject ?: return null
+        return (wurzel["schemaVersion"] as? JsonPrimitive)?.intOrNull
+    }
 
     fun zuDatei(
         erstelltAm: LocalDateTime,
@@ -148,10 +181,19 @@ object BackupUmwandlung {
         id = id, name = name, beschreibung = beschreibung, preisPunkte = preisPunkte,
         bedingung = when (bedingungTyp) {
             "MINDESTSERIE" -> Belohnungsbedingung.MindestSerie(
-                requireNotNull(bedingungAktivitaetId), requireNotNull(bedingungPerioden),
+                requireNotNull(bedingungAktivitaetId) {
+                    "Belohnung $id: bedingungAktivitaetId fehlt fuer MINDESTSERIE"
+                },
+                requireNotNull(bedingungPerioden) {
+                    "Belohnung $id: bedingungPerioden fehlt fuer MINDESTSERIE"
+                },
             )
             "FRUEHESTENS_AB" -> Belohnungsbedingung.FruehestensAb(
-                LocalDate.parse(requireNotNull(bedingungDatum)),
+                LocalDate.parse(
+                    requireNotNull(bedingungDatum) {
+                        "Belohnung $id: bedingungDatum fehlt fuer FRUEHESTENS_AB"
+                    },
+                ),
             )
             null -> null
             else -> error("Unbekannte Belohnungsbedingung: $bedingungTyp")
