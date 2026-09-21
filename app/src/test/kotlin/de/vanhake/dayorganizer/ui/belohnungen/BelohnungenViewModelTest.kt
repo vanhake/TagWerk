@@ -5,7 +5,9 @@ import de.vanhake.dayorganizer.FakeBelohnungRepository
 import de.vanhake.dayorganizer.FakeBuchungRepository
 import de.vanhake.dayorganizer.FakeFaelligkeitRepository
 import de.vanhake.dayorganizer.FakeTransaktionen
+import de.vanhake.dayorganizer.data.repository.BuchungRepository
 import de.vanhake.dayorganizer.domain.model.Belohnung
+import de.vanhake.dayorganizer.domain.model.Belohnungsbedingung
 import de.vanhake.dayorganizer.domain.model.Buchung
 import de.vanhake.dayorganizer.domain.model.BuchungsArt
 import de.vanhake.dayorganizer.domain.rechner.BelohnungsPruefer
@@ -20,10 +22,12 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Before
 import java.time.Clock
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class BelohnungenViewModelTest {
 
@@ -39,7 +43,7 @@ class BelohnungenViewModelTest {
 
     private fun viewModel(
         belohnungen: FakeBelohnungRepository,
-        buchungen: FakeBuchungRepository,
+        buchungen: BuchungRepository,
         widgetAnstossen: suspend () -> Unit = {},
     ): BelohnungenViewModel {
         val faelligkeiten = FakeFaelligkeitRepository()
@@ -62,6 +66,12 @@ class BelohnungenViewModelTest {
             ),
         ),
     )
+
+    /** Wirft beim Lesen des Kontostands, dem ersten Zugriff innerhalb von
+     * BelohnungEinloesen.loese() -- simuliert eine Datenbankausnahme waehrend der Einloesung. */
+    private class WerfendeBuchungRepository(delegate: BuchungRepository) : BuchungRepository by delegate {
+        override suspend fun kontostand(): Int = error("Datenbank nicht erreichbar")
+    }
 
     @Test
     fun `Kacheln zeigen fehlende Punkte`() = runTest(dispatcher) {
@@ -154,5 +164,97 @@ class BelohnungenViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(1, widgetAngestossen)
+    }
+
+    // Geprueft nach advanceUntilIdle() direkt am StateFlow -- meldung wird synchron im
+    // viewModelScope gesetzt, anders als zustand (siehe Kommentar an einloesen()) nicht
+    // ueber flowOn(Dispatchers.Default), also ohne Zeitabhaengigkeit pruefbar.
+    @Test
+    fun `Einloesen ohne ausreichende Punkte zeigt die Meldung fuer zu wenig Punkte`() = runTest(dispatcher) {
+        val belohnungen = FakeBelohnungRepository(listOf(Belohnung(1, "Kinoabend", preisPunkte = 200)))
+        val buchungen = guthaben(160)
+        val vm = viewModel(belohnungen, buchungen)
+
+        vm.einloesen(1)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(EinloeseMeldung.ZU_WENIG_PUNKTE, vm.meldung.value)
+        assertEquals(40, vm.meldungFehlendePunkte.value)
+    }
+
+    @Test
+    fun `Einloesen vor Erreichen der Serie zeigt die Meldung fuer zu kurze Serie`() = runTest(dispatcher) {
+        val belohnungen = FakeBelohnungRepository(
+            listOf(
+                Belohnung(
+                    1, "Kinoabend", preisPunkte = 100,
+                    bedingung = Belohnungsbedingung.MindestSerie(aktivitaetId = 1, perioden = 3),
+                ),
+            ),
+        )
+        val buchungen = guthaben(150)
+        val vm = viewModel(belohnungen, buchungen)
+
+        vm.einloesen(1)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(EinloeseMeldung.SERIE_ZU_KURZ, vm.meldung.value)
+    }
+
+    @Test
+    fun `Einloesen vor dem Freischaltdatum zeigt die Meldung fuer zu frueh`() = runTest(dispatcher) {
+        val belohnungen = FakeBelohnungRepository(
+            listOf(
+                Belohnung(
+                    1, "Kinoabend", preisPunkte = 100,
+                    bedingung = Belohnungsbedingung.FruehestensAb(LocalDate.of(2026, 3, 10)),
+                ),
+            ),
+        )
+        val buchungen = guthaben(150)
+        val vm = viewModel(belohnungen, buchungen)
+
+        vm.einloesen(1)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(EinloeseMeldung.ZU_FRUEH, vm.meldung.value)
+    }
+
+    @Test
+    fun `Einloesen einer verschwundenen Belohnung zeigt die Meldung fuer nicht mehr vorhanden`() =
+        runTest(dispatcher) {
+            val belohnungen = FakeBelohnungRepository()
+            val buchungen = guthaben(150)
+            val vm = viewModel(belohnungen, buchungen)
+
+            // Es gibt keine Belohnung mit id 1 -- BelohnungEinloesen.loese() liefert Unbekannt.
+            vm.einloesen(1)
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals(EinloeseMeldung.NICHT_MEHR_VORHANDEN, vm.meldung.value)
+        }
+
+    @Test
+    fun `Eine Ausnahme beim Einloesen zeigt eine allgemeine Fehlermeldung`() = runTest(dispatcher) {
+        val belohnungen = FakeBelohnungRepository(listOf(Belohnung(1, "Kinoabend", preisPunkte = 200)))
+        val buchungen = WerfendeBuchungRepository(guthaben(250))
+        val vm = viewModel(belohnungen, buchungen)
+
+        vm.einloesen(1)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(EinloeseMeldung.FEHLER, vm.meldung.value)
+    }
+
+    @Test
+    fun `Ein erfolgreiches Einloesen zeigt keine Meldung`() = runTest(dispatcher) {
+        val belohnungen = FakeBelohnungRepository(listOf(Belohnung(1, "Kinoabend", preisPunkte = 200)))
+        val buchungen = guthaben(250)
+        val vm = viewModel(belohnungen, buchungen)
+
+        vm.einloesen(1)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertNull(vm.meldung.value)
     }
 }

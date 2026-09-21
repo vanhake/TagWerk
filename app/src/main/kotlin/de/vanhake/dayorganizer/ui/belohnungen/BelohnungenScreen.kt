@@ -18,11 +18,16 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -30,12 +35,36 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.vanhake.dayorganizer.R
 import de.vanhake.dayorganizer.domain.rechner.Hindernis
 
+private fun EinloeseMeldung.textId(): Int = when (this) {
+    EinloeseMeldung.ZU_WENIG_PUNKTE -> R.string.noch_punkte_noetig
+    EinloeseMeldung.SERIE_ZU_KURZ -> R.string.serie_zu_kurz
+    EinloeseMeldung.ZU_FRUEH -> R.string.noch_zu_frueh
+    EinloeseMeldung.NICHT_MEHR_VORHANDEN -> R.string.einloese_nicht_mehr_vorhanden
+    EinloeseMeldung.FEHLER -> R.string.einloese_fehlgeschlagen
+}
+
 @Composable
 fun BelohnungenScreen(
     bearbeiten: (Long) -> Unit,
     viewModel: BelohnungenViewModel = hiltViewModel(),
 ) {
     val zustand by viewModel.zustand.collectAsStateWithLifecycle()
+    val meldung by viewModel.meldung.collectAsStateWithLifecycle()
+    val kontext = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Einmalig zeigen, dann zuruecksetzen -- sonst erschiene dieselbe Meldung bei jeder
+    // Rekomposition (z. B. Bildschirmdrehung) erneut. Gleiches Muster wie EinstellungenScreen.
+    LaunchedEffect(meldung) {
+        val aktuelleMeldung = meldung ?: return@LaunchedEffect
+        val text = if (aktuelleMeldung == EinloeseMeldung.ZU_WENIG_PUNKTE) {
+            kontext.getString(aktuelleMeldung.textId(), viewModel.meldungFehlendePunkte.value)
+        } else {
+            kontext.getString(aktuelleMeldung.textId())
+        }
+        snackbarHostState.showSnackbar(text)
+        viewModel.meldungGezeigt()
+    }
 
     Scaffold(
         floatingActionButton = {
@@ -43,6 +72,7 @@ fun BelohnungenScreen(
                 Icon(Icons.Default.Add, contentDescription = stringResource(R.string.neue_belohnung))
             }
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { innen ->
         LazyColumn(
             modifier = Modifier.padding(innen).padding(16.dp),

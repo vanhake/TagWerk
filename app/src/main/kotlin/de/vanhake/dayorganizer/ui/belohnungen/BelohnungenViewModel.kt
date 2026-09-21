@@ -6,12 +6,15 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import de.vanhake.dayorganizer.data.repository.BelohnungRepository
 import de.vanhake.dayorganizer.data.repository.BuchungRepository
+import de.vanhake.dayorganizer.domain.rechner.Hindernis
 import de.vanhake.dayorganizer.domainuse.BelohnungEinloesen
+import de.vanhake.dayorganizer.domainuse.EinloeseErgebnis
 import de.vanhake.dayorganizer.widget.WidgetAktualisierung
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
@@ -45,6 +48,20 @@ class BelohnungenViewModel(
     // FaelligkeitErledigen gibt es keine serverseitige Idempotenz zu pruefen: jede Einloesung
     // darf eine neue sein, also muss die Sperre hier, auf Seiten des Aufrufs, sitzen.
     private val _laufendeEinloesungen = MutableStateFlow<Set<Long>>(emptySet())
+
+    // Eigener StateFlow statt Teil der combine-Kette unten: der Zustandsfluss kommt seit
+    // Plan 2 ueber flowOn(Dispatchers.Default) von einem echten Thread und ist in Tests
+    // nicht deterministisch nach advanceUntilIdle() zu pruefen (siehe Kommentar an
+    // einloesen()). Die Meldung wird dagegen synchron im viewModelScope gesetzt, damit ein
+    // Test sie direkt nach advanceUntilIdle() zusichern kann.
+    private val _meldung = MutableStateFlow<EinloeseMeldung?>(null)
+    val meldung: StateFlow<EinloeseMeldung?> = _meldung.asStateFlow()
+
+    // Nur bei EinloeseMeldung.ZU_WENIG_PUNKTE relevant: noch_punkte_noetig braucht die
+    // fehlenden Punkte als Platzhalter. Enum-Konstanten koennen keinen Wert pro Aufruf
+    // tragen, deshalb ein eigenes, synchron mit _meldung gesetztes StateFlow.
+    private val _meldungFehlendePunkte = MutableStateFlow(0)
+    val meldungFehlendePunkte: StateFlow<Int> = _meldungFehlendePunkte.asStateFlow()
 
     val zustand: StateFlow<BelohnungenZustand> = combine(
         belohnungen.beobachteAktive(),
@@ -85,16 +102,49 @@ class BelohnungenViewModel(
         _laufendeEinloesungen.value = _laufendeEinloesungen.value + belohnungId
         viewModelScope.launch {
             try {
-                // Abgelehnt/Unbekannt fuer eine Nutzermeldung auszuwerten ist hier bewusst
-                // nicht Teil dieses Aufrufs. Eine Datenbankausnahme darf aber nicht bis zum
-                // viewModelScope durchschlagen und die App mitreissen.
+                // Eine Datenbankausnahme darf nicht bis zum viewModelScope durchschlagen
+                // und die App mitreissen -- der Nutzer bekommt stattdessen eine allgemeine
+                // Fehlermeldung. Abgelehnt/Unbekannt sind kein Fehlschlag des Aufrufs
+                // selbst, deshalb faengt onFailure sie nicht ab, sondern meldungFuer().
                 runCatching { einloesenUseCase(belohnungId) }
-                    .onFailure { ausnahme -> Log.w(TAG, "Einloesen fehlgeschlagen", ausnahme) }
+                    .onSuccess { ergebnis -> meldungFuer(ergebnis) }
+                    .onFailure { ausnahme ->
+                        Log.w(TAG, "Einloesen fehlgeschlagen", ausnahme)
+                        _meldung.value = EinloeseMeldung.FEHLER
+                    }
                 widgetAnstossen()
             } finally {
                 _laufendeEinloesungen.value = _laufendeEinloesungen.value - belohnungId
             }
         }
+    }
+
+    /** Setzt [_meldung] fuer alles ausser einem Erfolg -- Kachel und Historie zeigen den
+     * Erfolg bereits, eine zusaetzliche Snackbar waere ueberfluessig. */
+    private fun meldungFuer(ergebnis: EinloeseErgebnis) {
+        when (ergebnis) {
+            is EinloeseErgebnis.Erfolg -> Unit
+
+            is EinloeseErgebnis.Abgelehnt -> when (val hindernis = ergebnis.einloesbarkeit.hindernis) {
+                Hindernis.ZU_WENIG_PUNKTE -> {
+                    _meldungFehlendePunkte.value = ergebnis.einloesbarkeit.fehlendePunkte
+                    _meldung.value = EinloeseMeldung.ZU_WENIG_PUNKTE
+                }
+                Hindernis.SERIE_ZU_KURZ -> _meldung.value = EinloeseMeldung.SERIE_ZU_KURZ
+                Hindernis.ZU_FRUEH -> _meldung.value = EinloeseMeldung.ZU_FRUEH
+                // null: die Belohnung ist archiviert -- fuer den Nutzer nicht von einer
+                // geloeschten/verschwundenen Belohnung zu unterscheiden.
+                null -> _meldung.value = EinloeseMeldung.NICHT_MEHR_VORHANDEN
+            }
+
+            EinloeseErgebnis.Unbekannt -> _meldung.value = EinloeseMeldung.NICHT_MEHR_VORHANDEN
+        }
+    }
+
+    /** Vom Screen aufgerufen, nachdem die Snackbar gezeigt wurde -- sonst erschiene dieselbe
+     * Meldung bei jeder Rekomposition erneut. Gleiches Muster wie EinstellungenViewModel. */
+    fun meldungGezeigt() {
+        _meldung.value = null
     }
 
     fun archivieren(belohnungId: Long) = viewModelScope.launch { belohnungen.archivieren(belohnungId) }

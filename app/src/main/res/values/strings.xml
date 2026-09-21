@@ -52,6 +52,8 @@
     <string name="noch_zu_frueh">Noch nicht freigeschaltet</string>
     <string name="einloese_historie">Eingelöst</string>
     <string name="einloesung_zeile">%1$s — %2$d Punkte</string>
+    <string name="einloese_nicht_mehr_vorhanden">Diese Belohnung gibt es nicht mehr</string>
+    <string name="einloese_fehlgeschlagen">Einlösen ist fehlgeschlagen</string>
     <string name="feld_beschreibung">Beschreibung</string>
     <string name="feld_preis">Preis in Punkten</string>
     <string name="feld_bedingung">Zusätzliche Bedingung</string>
