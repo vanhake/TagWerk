@@ -6,7 +6,10 @@ import androidx.compose.ui.unit.dp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.LocalContext
+import androidx.glance.action.actionParametersOf
+import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.layout.Column
@@ -24,9 +27,9 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 
 /**
- * Reine Anzeige (Task 3): zeigt die heute offenen Aufgaben und den Punktestand.
- * Das Abhaken aus dem Widget -- inklusive der clickable-Aktion samt
- * WidgetErledigenAktion -- kommt erst mit Task 4 dazu.
+ * Zeigt die heute offenen Aufgaben und den Punktestand. Jeder Eintrag ist per
+ * clickable (Task 4) mit WidgetErledigenAktion verknuepft: Antippen erledigt die
+ * Faelligkeit ueber denselben Use Case wie App und Benachrichtigung.
  */
 class HeuteWidget : GlanceAppWidget() {
 
@@ -59,7 +62,14 @@ class HeuteWidget : GlanceAppWidget() {
                     Row(
                         GlanceModifier
                             .fillMaxWidth()
-                            .padding(vertical = 4.dp),
+                            .padding(vertical = 4.dp)
+                            .clickable(
+                                actionRunCallback<WidgetErledigenAktion>(
+                                    actionParametersOf(
+                                        WidgetErledigenAktion.FAELLIGKEIT_ID to eintrag.faelligkeitId,
+                                    ),
+                                ),
+                            ),
                     ) {
                         Text(
                             text = listOfNotNull(eintrag.zeitText, eintrag.name).joinToString("  "),

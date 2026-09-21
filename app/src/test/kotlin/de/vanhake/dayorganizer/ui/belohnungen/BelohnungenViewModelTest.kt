@@ -40,6 +40,7 @@ class BelohnungenViewModelTest {
     private fun viewModel(
         belohnungen: FakeBelohnungRepository,
         buchungen: FakeBuchungRepository,
+        widgetAnstossen: suspend () -> Unit = {},
     ): BelohnungenViewModel {
         val faelligkeiten = FakeFaelligkeitRepository()
         return BelohnungenViewModel(
@@ -49,6 +50,7 @@ class BelohnungenViewModelTest {
                 belohnungen, buchungen, faelligkeiten,
                 BelohnungsPruefer(), SerienRechner(), FakeTransaktionen(), uhr,
             ),
+            widgetAnstossen = widgetAnstossen,
         )
     }
 
@@ -117,5 +119,18 @@ class BelohnungenViewModelTest {
         // 450 minus einmal 200. Ohne die Sperre waeren es zwei Abbuchungen und 50.
         assertEquals(250, buchungen.kontostand())
         assertEquals(listOf("Kinoabend"), belohnungen.einloesungen.value.map { it.name })
+    }
+
+    @Test
+    fun `Einloesen stoesst das Widget an, damit der Punktestand nicht veraltet`() = runTest(dispatcher) {
+        val belohnungen = FakeBelohnungRepository(listOf(Belohnung(1, "Kinoabend", preisPunkte = 200)))
+        val buchungen = guthaben(250)
+        var widgetAngestossen = 0
+        val vm = viewModel(belohnungen, buchungen, widgetAnstossen = { widgetAngestossen++ })
+
+        vm.einloesen(1)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(1, widgetAngestossen)
     }
 }

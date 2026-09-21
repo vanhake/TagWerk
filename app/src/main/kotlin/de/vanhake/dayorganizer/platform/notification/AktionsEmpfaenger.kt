@@ -8,6 +8,7 @@ import de.vanhake.dayorganizer.domainuse.ErinnerungSpaeter
 import de.vanhake.dayorganizer.domainuse.FaelligkeitAuslassen
 import de.vanhake.dayorganizer.domainuse.FaelligkeitErledigen
 import de.vanhake.dayorganizer.platform.alarm.AlarmPlaner
+import de.vanhake.dayorganizer.widget.WidgetAktualisierung
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -21,6 +22,7 @@ class AktionsEmpfaenger : BroadcastReceiver() {
     @Inject lateinit var spaeter: ErinnerungSpaeter
     @Inject lateinit var notifier: ErinnerungsNotifier
     @Inject lateinit var alarmPlaner: AlarmPlaner
+    @Inject lateinit var widgetAktualisierung: WidgetAktualisierung
 
     override fun onReceive(kontext: Context, intent: Intent) {
         val aktion = Benachrichtigungsaktionen.aus(
@@ -38,6 +40,7 @@ class AktionsEmpfaenger : BroadcastReceiver() {
                 }
                 notifier.verstecke(aktion.faelligkeitId)
                 alarmPlaner.neuPlanen()
+                widgetAktualisierung.anstossen()
             } finally {
                 fertig.finish()
             }

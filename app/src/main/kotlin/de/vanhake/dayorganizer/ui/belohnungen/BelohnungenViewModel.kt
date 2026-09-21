@@ -7,6 +7,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import de.vanhake.dayorganizer.data.repository.BelohnungRepository
 import de.vanhake.dayorganizer.data.repository.BuchungRepository
 import de.vanhake.dayorganizer.domainuse.BelohnungEinloesen
+import de.vanhake.dayorganizer.widget.WidgetAktualisierung
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -18,11 +19,25 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
-class BelohnungenViewModel @Inject constructor(
+class BelohnungenViewModel(
     private val belohnungen: BelohnungRepository,
     private val buchungen: BuchungRepository,
     private val einloesenUseCase: BelohnungEinloesen,
+    private val widgetAnstossen: suspend () -> Unit,
 ) : ViewModel() {
+
+    @Inject
+    constructor(
+        belohnungen: BelohnungRepository,
+        buchungen: BuchungRepository,
+        einloesenUseCase: BelohnungEinloesen,
+        widgetAktualisierung: WidgetAktualisierung,
+    ) : this(
+        belohnungen,
+        buchungen,
+        einloesenUseCase,
+        { widgetAktualisierung.anstossen() },
+    )
 
     // Sperre gegen einen Doppeltipp: die Transaktion im Use Case pruefte zwar Kontostand
     // und Bedingung, aber zwei fuer sich gueltige Einloesungen (z. B. 450 Punkte, Preis 200)
@@ -75,6 +90,7 @@ class BelohnungenViewModel @Inject constructor(
                 // viewModelScope durchschlagen und die App mitreissen.
                 runCatching { einloesenUseCase(belohnungId) }
                     .onFailure { ausnahme -> Log.w(TAG, "Einloesen fehlgeschlagen", ausnahme) }
+                widgetAnstossen()
             } finally {
                 _laufendeEinloesungen.value = _laufendeEinloesungen.value - belohnungId
             }

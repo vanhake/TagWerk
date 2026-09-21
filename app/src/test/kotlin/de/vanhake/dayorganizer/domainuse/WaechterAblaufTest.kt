@@ -58,6 +58,7 @@ class WaechterAblaufTest {
                 aktivitaeten, faelligkeiten, erinnerungen, ZeitplanRechner(), uhr,
             ),
             alarmNeuPlanen = { alarmNeuGeplant = true },
+            widgetAnstossen = {},
         )
 
         ablauf()
@@ -88,11 +89,33 @@ class WaechterAblaufTest {
             ),
             alarmNeuPlanen = { reihenfolge += "alarm" },
             erfolgMerken = { reihenfolge += "erfolg" },
+            widgetAnstossen = {},
         )
 
         ablauf()
 
         assertEquals(listOf("alarm", "erfolg"), reihenfolge)
+    }
+
+    @Test
+    fun `der Waechter stoesst am Ende das Widget an`() = runTest {
+        val faelligkeiten = FakeFaelligkeitRepository(listOf(gestern))
+        val aktivitaeten = FakeAktivitaetRepository(listOf(tabletten))
+        val erinnerungen = FakeErinnerungRepository()
+        var widgetAngestossen = 0
+
+        val ablauf = WaechterAblauf(
+            verpassteAbschliessen = VerpassteAbschliessen(faelligkeiten, uhr),
+            materialisieren = FaelligkeitenMaterialisieren(
+                aktivitaeten, faelligkeiten, erinnerungen, ZeitplanRechner(), uhr,
+            ),
+            alarmNeuPlanen = {},
+            widgetAnstossen = { widgetAngestossen++ },
+        )
+
+        ablauf()
+
+        assertEquals(1, widgetAngestossen)
     }
 
     @Test
@@ -126,6 +149,7 @@ class WaechterAblaufTest {
                 aktivitaeten, faelligkeiten, FakeErinnerungRepository(), ZeitplanRechner(), nachmittagsUhr,
             ),
             alarmNeuPlanen = {},
+            widgetAnstossen = {},
         )
 
         ablauf()

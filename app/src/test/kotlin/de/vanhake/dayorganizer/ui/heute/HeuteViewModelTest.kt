@@ -80,6 +80,7 @@ class HeuteViewModelTest {
         uhr: Clock = this.uhr,
         anzeige: Erinnerungsanzeige = FakeAnzeige(),
         belohnungen: FakeBelohnungRepository = FakeBelohnungRepository(),
+        widgetAnstossen: suspend () -> Unit = {},
     ): HeuteViewModel {
         val aktivitaeten = FakeAktivitaetRepository(listOf(tabletten))
         return HeuteViewModel(
@@ -96,6 +97,7 @@ class HeuteViewModelTest {
             alarmNeuPlanen = {},
             hinweiseLesen = { emptyList() },
             uhr = uhr,
+            widgetAnstossen = widgetAnstossen,
         )
     }
 
@@ -182,5 +184,37 @@ class HeuteViewModelTest {
         }
 
         assertEquals(listOf(10L), anzeige.versteckt)
+    }
+
+    @Test
+    fun `Erledigen stoesst das Widget an, damit der Startbildschirm nicht veraltet`() = runTest(dispatcher) {
+        val faelligkeiten = FakeFaelligkeitRepository(listOf(morgens))
+        var widgetAngestossen = 0
+        val vm = viewModel(faelligkeiten, FakeBuchungRepository(), widgetAnstossen = { widgetAngestossen++ })
+
+        vm.zustand.test {
+            skipItems(2)
+            vm.erledigen(10)
+            awaitItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        assertEquals(1, widgetAngestossen)
+    }
+
+    @Test
+    fun `Auslassen stoesst das Widget an, damit der Startbildschirm nicht veraltet`() = runTest(dispatcher) {
+        val faelligkeiten = FakeFaelligkeitRepository(listOf(morgens))
+        var widgetAngestossen = 0
+        val vm = viewModel(faelligkeiten, FakeBuchungRepository(), widgetAnstossen = { widgetAngestossen++ })
+
+        vm.zustand.test {
+            skipItems(2)
+            vm.auslassen(10)
+            awaitItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        assertEquals(1, widgetAngestossen)
     }
 }

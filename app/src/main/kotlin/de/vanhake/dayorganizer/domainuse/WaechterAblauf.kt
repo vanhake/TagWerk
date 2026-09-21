@@ -2,6 +2,7 @@ package de.vanhake.dayorganizer.domainuse
 
 import de.vanhake.dayorganizer.data.EinstellungenSpeicher
 import de.vanhake.dayorganizer.platform.alarm.AlarmPlaner
+import de.vanhake.dayorganizer.widget.WidgetAktualisierung
 import java.time.Clock
 import java.time.LocalDateTime
 import javax.inject.Inject
@@ -23,6 +24,7 @@ class WaechterAblauf(
     private val materialisieren: FaelligkeitenMaterialisieren,
     private val alarmNeuPlanen: suspend () -> Unit,
     private val erfolgMerken: suspend () -> Unit = {},
+    private val widgetAnstossen: suspend () -> Unit = {},
 ) {
 
     @Inject
@@ -32,11 +34,13 @@ class WaechterAblauf(
         alarmPlaner: AlarmPlaner,
         einstellungen: EinstellungenSpeicher,
         uhr: Clock,
+        widgetAktualisierung: WidgetAktualisierung,
     ) : this(
         verpassteAbschliessen,
         materialisieren,
         { alarmPlaner.neuPlanen() },
         { einstellungen.waechterErfolgMerken(LocalDateTime.now(uhr)) },
+        { widgetAktualisierung.anstossen() },
     )
 
     suspend operator fun invoke() {
@@ -44,5 +48,6 @@ class WaechterAblauf(
         materialisieren()
         alarmNeuPlanen()
         erfolgMerken()
+        widgetAnstossen()
     }
 }

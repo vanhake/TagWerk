@@ -4,6 +4,7 @@ import de.vanhake.dayorganizer.data.repository.ErinnerungRepository
 import de.vanhake.dayorganizer.data.repository.FaelligkeitRepository
 import de.vanhake.dayorganizer.domain.model.FaelligkeitStatus
 import de.vanhake.dayorganizer.platform.alarm.AlarmPlaner
+import de.vanhake.dayorganizer.widget.WidgetAktualisierung
 import java.time.Clock
 import java.time.LocalDate
 import javax.inject.Inject
@@ -28,6 +29,7 @@ class AktivitaetNeuPlanen(
     private val materialisieren: FaelligkeitenMaterialisieren,
     private val uhr: Clock,
     private val alarmNeuPlanen: suspend () -> Unit,
+    private val widgetAnstossen: suspend () -> Unit,
 ) {
 
     @Inject
@@ -37,7 +39,15 @@ class AktivitaetNeuPlanen(
         materialisieren: FaelligkeitenMaterialisieren,
         uhr: Clock,
         alarmPlaner: AlarmPlaner,
-    ) : this(faelligkeiten, erinnerungen, materialisieren, uhr, { alarmPlaner.neuPlanen() })
+        widgetAktualisierung: WidgetAktualisierung,
+    ) : this(
+        faelligkeiten,
+        erinnerungen,
+        materialisieren,
+        uhr,
+        { alarmPlaner.neuPlanen() },
+        { widgetAktualisierung.anstossen() },
+    )
 
     suspend operator fun invoke(aktivitaetId: Long) {
         val heute = LocalDate.now(uhr)
@@ -54,5 +64,6 @@ class AktivitaetNeuPlanen(
 
         materialisieren()
         alarmNeuPlanen()
+        widgetAnstossen()
     }
 }

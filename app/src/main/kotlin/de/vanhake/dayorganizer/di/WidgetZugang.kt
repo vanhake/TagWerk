@@ -15,8 +15,8 @@ import java.time.Clock
  * Glance kann keine Felder per Hilt injizieren (kein Android-Kontext mit eigenem
  * Injection-Punkt) -- deshalb holt sich das Widget seine Abhaengigkeiten ueber diesen
  * Zugangspunkt direkt aus dem SingletonComponent. erledigen(), alarmPlaner() und
- * anzeige() werden erst ab Task 4 gebraucht (Abhaken aus dem Widget), sind aber schon
- * hier verdrahtet, damit Task 4 den Zugangspunkt nicht mehr anfassen muss.
+ * anzeige() werden von WidgetErledigenAktion (Task 4) fuer das Abhaken aus dem Widget
+ * gebraucht.
  */
 @EntryPoint
 @InstallIn(SingletonComponent::class)

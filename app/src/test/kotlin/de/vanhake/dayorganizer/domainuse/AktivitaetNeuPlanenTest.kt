@@ -93,6 +93,7 @@ class AktivitaetNeuPlanenTest {
         erinnerungen: FakeErinnerungRepository,
         aktivitaeten: FakeAktivitaetRepository = FakeAktivitaetRepository(listOf(tabletten)),
         alarmNeuPlanen: suspend () -> Unit = {},
+        widgetAnstossen: suspend () -> Unit = {},
     ) = AktivitaetNeuPlanen(
         faelligkeiten = faelligkeiten,
         erinnerungen = erinnerungen,
@@ -101,6 +102,7 @@ class AktivitaetNeuPlanenTest {
         ),
         uhr = uhr,
         alarmNeuPlanen = alarmNeuPlanen,
+        widgetAnstossen = widgetAnstossen,
     )
 
     @Test
@@ -216,5 +218,17 @@ class AktivitaetNeuPlanenTest {
         use(1)
 
         assertTrue(alarmNeuGeplant)
+    }
+
+    @Test
+    fun `das Widget wird angestossen, damit archivierte Aufgaben nicht weiter erscheinen`() = runTest {
+        val faelligkeiten = FakeFaelligkeitRepository(listOf(kuenftigUnberuehrt))
+        val erinnerungen = FakeErinnerungRepository()
+        var widgetAngestossen = 0
+        val use = neuPlanen(faelligkeiten, erinnerungen, widgetAnstossen = { widgetAngestossen++ })
+
+        use(1)
+
+        assertEquals(1, widgetAngestossen)
     }
 }
