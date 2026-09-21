@@ -1,6 +1,8 @@
 package de.vanhake.dayorganizer.ui.belohnungen
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -89,6 +91,7 @@ fun BelohnungenScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Kachel(
     kachel: BelohnungKachel,
@@ -113,7 +116,15 @@ private fun Kachel(
                 },
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // FlowRow statt Row: drei Knoepfe passen bei 360 dp Breite und grosser
+            // Schrift nicht in eine Zeile. In einer Row wurde "Archivieren" in den
+            // Restplatz gequetscht, brach senkrecht um und blaehte die Karte auf die
+            // halbe Bildschirmhoehe auf -- ohne selbst sichtbar zu sein. So auf dem
+            // Emulator gesehen (wm density 480, font_scale 1.3).
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
                 Button(
                     onClick = einloesen,
                     enabled = kachel.einloesbarkeit.moeglich && !kachel.wirdEingeloest,

@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.compose.NavHost
@@ -76,7 +77,16 @@ fun DayOrganizerNavigation() {
                                 }
                             },
                             icon = { Icon(tab.icon, contentDescription = null) },
-                            label = { Text(stringResource(tab.titelId)) },
+                            // Einzeilig mit Auslassungszeichen: bei grosser Schrift passen fuenf
+                            // Beschriftungen nicht nebeneinander, und ein Umbruch mitten im Wort
+                            // ("Statisti/k") ist schlechter als ein gekuerztes "Statis...".
+                            label = {
+                                Text(
+                                    stringResource(tab.titelId),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            },
                         )
                     }
                 }
