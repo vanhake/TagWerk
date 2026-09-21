@@ -25,6 +25,7 @@ import androidx.glance.unit.ColorProvider
 import dagger.hilt.android.EntryPointAccessors
 import de.vanhake.dayorganizer.R
 import de.vanhake.dayorganizer.di.WidgetZugang
+import kotlinx.coroutines.flow.first
 import java.time.LocalDate
 import java.time.LocalDateTime
 
@@ -45,7 +46,11 @@ class HeuteWidget : GlanceAppWidget() {
         // liest provideContent unten reaktiv weiter. Ohne diesen einmaligen Vorablesevorgang
         // wuerde das erste Bild leer bzw. mit "0 Punkte" aufblitzen, bis der erste
         // Flow-Wert eintrifft.
-        val faelligkeitenAnfangswert = zugang.faelligkeiten().fuerZeitraum(heute, heute)
+        // Startwert aus derselben Abfrage, die danach beobachtet wird. fuerZeitraum
+        // waehlt dieselben Zeilen, sortiert aber anders; bei mehreren Zielen ohne
+        // Uhrzeit sprang die Reihenfolge sonst zwischen erstem Bild und erster
+        // Aktualisierung um, obwohl sich nichts geaendert hatte.
+        val faelligkeitenAnfangswert = zugang.faelligkeiten().beobachteTag(heute).first()
         val aktivitaetenAnfangswert = zugang.aktivitaeten().alleAktiven()
         val kontostandAnfangswert = zugang.buchungen().kontostand()
 
