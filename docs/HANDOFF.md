@@ -210,7 +210,7 @@ liegen ausschließlich lokal.
 neue Schema-Datei erzeugt, scheitert mit `FileNotFoundException: Missing file:
 .../N.json` in `mergeDebugAssets`, weil `app/schemas` außerhalb des
 Build-Verzeichnisses liegt. Ein zweiter, identischer Lauf geht durch. Plan 3
-hebt auf Version 4 und wird dem begegnen.
+ergänzt nur Abfragen und hebt die Version nicht an.
 
 ## So geht es weiter
 
