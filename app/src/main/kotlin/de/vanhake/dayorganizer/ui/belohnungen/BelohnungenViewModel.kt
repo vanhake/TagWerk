@@ -9,7 +9,9 @@ import de.vanhake.dayorganizer.data.repository.BuchungRepository
 import de.vanhake.dayorganizer.domain.rechner.Hindernis
 import de.vanhake.dayorganizer.domainuse.BelohnungEinloesen
 import de.vanhake.dayorganizer.domainuse.EinloeseErgebnis
+import de.vanhake.dayorganizer.ui.versuchen
 import de.vanhake.dayorganizer.widget.WidgetAktualisierung
+import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -19,7 +21,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 @HiltViewModel
 class BelohnungenViewModel(
@@ -106,7 +107,7 @@ class BelohnungenViewModel(
                 // und die App mitreissen -- der Nutzer bekommt stattdessen eine allgemeine
                 // Fehlermeldung. Abgelehnt/Unbekannt sind kein Fehlschlag des Aufrufs
                 // selbst, deshalb faengt onFailure sie nicht ab, sondern meldungFuer().
-                runCatching { einloesenUseCase(belohnungId) }
+                versuchen { einloesenUseCase(belohnungId) }
                     .onSuccess { ergebnis -> meldungFuer(ergebnis) }
                     .onFailure { ausnahme ->
                         Log.w(TAG, "Einloesen fehlgeschlagen", ausnahme)

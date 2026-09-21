@@ -25,6 +25,7 @@ import java.time.Clock
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -71,6 +72,12 @@ class BelohnungenViewModelTest {
      * BelohnungEinloesen.loese() -- simuliert eine Datenbankausnahme waehrend der Einloesung. */
     private class WerfendeBuchungRepository(delegate: BuchungRepository) : BuchungRepository by delegate {
         override suspend fun kontostand(): Int = error("Datenbank nicht erreichbar")
+    }
+
+    /** Bricht beim Lesen des Kontostands ab -- so, als verliesse der Nutzer den Tab,
+     * waehrend die Einloesung laeuft, und der viewModelScope wuerde abgebrochen. */
+    private class AbbrechendeBuchungRepository(delegate: BuchungRepository) : BuchungRepository by delegate {
+        override suspend fun kontostand(): Int = throw CancellationException("Tab verlassen")
     }
 
     @Test
@@ -256,5 +263,35 @@ class BelohnungenViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
 
         assertNull(vm.meldung.value)
+    }
+
+    // Ein Abbruch ist kein Fehler. runCatching deutete ihn in einen um und zeigte
+    // "Einloesen fehlgeschlagen", obwohl nur der Bildschirm verlassen wurde.
+    @Test
+    fun `ein Abbruch waehrend des Einloesens zeigt keine Fehlermeldung`() = runTest(dispatcher) {
+        val belohnungen = FakeBelohnungRepository(listOf(Belohnung(1, "Kinoabend", preisPunkte = 200)))
+        val buchungen = AbbrechendeBuchungRepository(guthaben(250))
+        val vm = viewModel(belohnungen, buchungen)
+
+        vm.einloesen(1)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(null, vm.meldung.value)
+    }
+
+    // Eine Belohnung, die zwischen Anzeige und Tipp archiviert wurde, liefert
+    // Abgelehnt ohne Hindernis. Das ist ein eigener Zweig in der Zuordnung, und
+    // der when ist ein Statement -- Kotlin erzwingt hier keine Vollstaendigkeit.
+    @Test
+    fun `eine inzwischen archivierte Belohnung meldet, dass es sie nicht mehr gibt`() = runTest(dispatcher) {
+        val belohnungen = FakeBelohnungRepository(
+            listOf(Belohnung(1, "Kinoabend", preisPunkte = 200, archiviert = true)),
+        )
+        val vm = viewModel(belohnungen, guthaben(250))
+
+        vm.einloesen(1)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(EinloeseMeldung.NICHT_MEHR_VORHANDEN, vm.meldung.value)
     }
 }

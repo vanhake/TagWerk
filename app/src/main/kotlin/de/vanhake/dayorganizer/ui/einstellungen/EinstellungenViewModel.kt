@@ -15,7 +15,14 @@ import de.vanhake.dayorganizer.platform.permission.BerechtigungsPruefer
 import de.vanhake.dayorganizer.platform.permission.Hinweis
 import de.vanhake.dayorganizer.platform.permission.waechterHaengt
 import de.vanhake.dayorganizer.platform.work.WaechterPlanung
+import de.vanhake.dayorganizer.ui.versuchen
 import de.vanhake.dayorganizer.widget.WidgetAktualisierung
+import java.io.InputStream
+import java.io.OutputStream
+import java.time.Clock
+import java.time.Duration
+import java.time.LocalDateTime
+import javax.inject.Inject
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -23,12 +30,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.io.InputStream
-import java.io.OutputStream
-import java.time.Clock
-import java.time.Duration
-import java.time.LocalDateTime
-import javax.inject.Inject
 
 data class EinstellungenZustand(
     val tagesbonusText: String = "",
@@ -123,7 +124,7 @@ class EinstellungenViewModel(
         // Strom, der sich gar nicht erst oeffnen laesst -- darf weder die App beenden
         // noch still als Erfolg durchgehen. Ein Backup, das man fuer geschrieben haelt
         // und das es nicht gibt, ist das Schlimmste, was diese Funktion anrichten kann.
-        _meldung.value = runCatching {
+        _meldung.value = versuchen {
             val strom = oeffnen() ?: error("Ausgabestrom konnte nicht geoeffnet werden")
             strom.use { backupDienst.exportieren(it) }
         }.fold(
@@ -135,10 +136,10 @@ class EinstellungenViewModel(
     /** Siehe [exportieren] -- dasselbe Muster fuer den Eingabestrom. */
     fun importieren(oeffnen: () -> InputStream?) = viewModelScope.launch(ioDispatcher) {
         // Der Dienst liefert jeden bekannten Fehlschlag als ImportErgebnis. Das
-        // runCatching faengt, was trotzdem durchkommt -- ein Strom, der sich nicht
+        // versuchen faengt, was trotzdem durchkommt -- ein Strom, der sich nicht
         // oeffnen laesst, oder ein Lesefehler des Dateidialogs --, damit ein Import
         // niemals die App beendet.
-        val ergebnis = runCatching {
+        val ergebnis = versuchen {
             val strom = oeffnen() ?: error("Eingabestrom konnte nicht geoeffnet werden")
             strom.use { backupDienst.importieren(it) }
         }
@@ -197,7 +198,7 @@ class EinstellungenViewModel(
         // DataStore.edit wirft bei Platten- oder Korruptionsfehlern eine IOException --
         // unbehandelt reisst sie die App mit. Gleiches Muster wie
         // AktivitaetBearbeitenViewModel.speichern(): protokollieren statt abstuerzen.
-        runCatching {
+        versuchen {
             schreiben(neu)
         }.onFailure { ausnahme ->
             Log.w(TAG, "Speichern der Einstellungen fehlgeschlagen", ausnahme)
