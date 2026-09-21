@@ -4,17 +4,23 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import de.vanhake.dayorganizer.backup.Backup
+import de.vanhake.dayorganizer.backup.BackupDienst
+import de.vanhake.dayorganizer.backup.ImportErgebnis
 import de.vanhake.dayorganizer.data.Einstellungen
 import de.vanhake.dayorganizer.data.EinstellungenSpeicher
 import de.vanhake.dayorganizer.platform.permission.BerechtigungsHinweise
 import de.vanhake.dayorganizer.platform.permission.BerechtigungsPruefer
 import de.vanhake.dayorganizer.platform.permission.Hinweis
 import de.vanhake.dayorganizer.platform.permission.waechterHaengt
+import de.vanhake.dayorganizer.platform.work.WaechterPlanung
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.io.InputStream
+import java.io.OutputStream
 import java.time.Clock
 import java.time.Duration
 import java.time.LocalDateTime
@@ -26,15 +32,32 @@ data class EinstellungenZustand(
     val hinweise: List<Hinweis> = emptyList(),
 )
 
+/** Ergebnis von Export oder Import, vom Screen einmalig als Snackbar gezeigt. */
+enum class Meldung {
+    EXPORT_FERTIG,
+    EXPORT_FEHLGESCHLAGEN,
+    IMPORT_FERTIG,
+    IMPORT_FALSCHES_SCHEMA,
+    IMPORT_UNLESBAR,
+}
+
 @HiltViewModel
 class EinstellungenViewModel(
     private val lesen: suspend () -> Einstellungen,
     private val schreiben: suspend (Einstellungen) -> Unit,
     private val hinweiseLesen: suspend () -> List<Hinweis>,
+    private val backupDienst: Backup,
+    private val nachImport: () -> Unit,
 ) : ViewModel() {
 
     @Inject
-    constructor(speicher: EinstellungenSpeicher, pruefer: BerechtigungsPruefer, uhr: Clock) : this(
+    constructor(
+        speicher: EinstellungenSpeicher,
+        pruefer: BerechtigungsPruefer,
+        uhr: Clock,
+        backupDienst: BackupDienst,
+        waechterPlanung: WaechterPlanung,
+    ) : this(
         lesen = { speicher.lesen() },
         schreiben = { speicher.schreiben(it) },
         hinweiseLesen = {
@@ -48,13 +71,54 @@ class EinstellungenViewModel(
             )
             BerechtigungsHinweise.fuer(pruefer.stand().copy(waechterHaengt = haengt))
         },
+        backupDienst = backupDienst,
+        nachImport = { waechterPlanung.sofortAusfuehren() },
     )
 
     private val _zustand = MutableStateFlow(EinstellungenZustand())
     val zustand: StateFlow<EinstellungenZustand> = _zustand.asStateFlow()
 
+    private val _meldung = MutableStateFlow<Meldung?>(null)
+    val meldung: StateFlow<Meldung?> = _meldung.asStateFlow()
+
     init {
         viewModelScope.launch { neuLaden() }
+    }
+
+    /** Vom Screen aufgerufen, nachdem die Snackbar gezeigt wurde -- sonst erschiene
+     * dieselbe Meldung bei jeder Rekomposition erneut. */
+    fun meldungGezeigt() {
+        _meldung.value = null
+    }
+
+    fun exportieren(ziel: OutputStream) = viewModelScope.launch {
+        // Ein gescheiterter Export -- volle Platte, entzogene Dateiberechtigung -- darf
+        // weder die App beenden noch still als Erfolg durchgehen. Ein Backup, das man
+        // fuer geschrieben haelt und das es nicht gibt, ist das Schlimmste, was diese
+        // Funktion anrichten kann.
+        _meldung.value = runCatching { backupDienst.exportieren(ziel) }
+            .fold(
+                onSuccess = { Meldung.EXPORT_FERTIG },
+                onFailure = { Meldung.EXPORT_FEHLGESCHLAGEN },
+            )
+    }
+
+    fun importieren(quelle: InputStream) = viewModelScope.launch {
+        // Der Dienst liefert jeden bekannten Fehlschlag als ImportErgebnis. Das
+        // runCatching faengt, was trotzdem durchkommt -- etwa ein Lesefehler des
+        // Dateidialogs --, damit ein Import niemals die App beendet.
+        _meldung.value = runCatching { backupDienst.importieren(quelle) }
+            .fold(
+                onSuccess = { ergebnis ->
+                    when (ergebnis) {
+                        is ImportErgebnis.Erfolg -> Meldung.IMPORT_FERTIG
+                        is ImportErgebnis.FalschesSchema -> Meldung.IMPORT_FALSCHES_SCHEMA
+                        is ImportErgebnis.Unlesbar -> Meldung.IMPORT_UNLESBAR
+                    }
+                },
+                onFailure = { Meldung.IMPORT_UNLESBAR },
+            )
+        nachImport()
     }
 
     fun tagesbonusAendern(text: String) {

@@ -2,6 +2,7 @@ package de.vanhake.dayorganizer.data.db
 
 import androidx.room.Dao
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
@@ -11,6 +12,15 @@ interface AktivitaetDao {
 
     @Insert
     suspend fun einfuegen(eintrag: AktivitaetEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun alleEinfuegen(eintraege: List<AktivitaetEntity>)
+
+    @Query("DELETE FROM aktivitaet")
+    suspend fun alleLoeschen()
+
+    @Query("SELECT * FROM aktivitaet ORDER BY id")
+    suspend fun alle(): List<AktivitaetEntity>
 
     /** Rueckgabe ist die Anzahl betroffener Zeilen -- 0, wenn keine Aktivitaet mit dieser id
      * existiert. RaumAktivitaetRepository.speichern wertet das aus, statt einen fehlgeschlagenen

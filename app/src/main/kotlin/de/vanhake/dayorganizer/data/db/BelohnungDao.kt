@@ -2,6 +2,7 @@ package de.vanhake.dayorganizer.data.db
 
 import androidx.room.Dao
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
@@ -10,6 +11,12 @@ import kotlinx.coroutines.flow.Flow
 interface BelohnungDao {
 
     @Insert suspend fun einfuegen(eintrag: BelohnungEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun alleEinfuegen(eintraege: List<BelohnungEntity>)
+
+    @Query("DELETE FROM belohnung")
+    suspend fun alleLoeschen()
 
     /** Rueckgabe ist die Anzahl betroffener Zeilen -- 0, wenn keine Belohnung mit dieser id
      * existiert. RaumBelohnungRepository.speichern wertet das aus, statt einen fehlgeschlagenen
@@ -29,6 +36,12 @@ interface BelohnungDao {
     suspend fun archivieren(id: Long)
 
     @Insert suspend fun einloesungEinfuegen(eintrag: EinloesungEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun alleEinloesungenEinfuegen(eintraege: List<EinloesungEntity>)
+
+    @Query("DELETE FROM einloesung")
+    suspend fun alleEinloesungenLoeschen()
 
     @Query("SELECT * FROM einloesung ORDER BY zeitpunkt DESC, id DESC")
     fun beobachteEinloesungen(): Flow<List<EinloesungEntity>>

@@ -71,4 +71,11 @@
     <string name="tab_einstellungen">Optionen</string>
     <string name="feld_tagesbonus">Tagesbonus, wenn alles erledigt ist</string>
     <string name="feld_standard_kulanz">Standard-Kulanzfenster in Minuten</string>
+    <string name="backup_exportieren">Backup speichern</string>
+    <string name="backup_importieren">Backup einlesen</string>
+    <string name="backup_export_fertig">Backup gespeichert</string>
+    <string name="backup_export_fehlgeschlagen">Backup konnte nicht gespeichert werden</string>
+    <string name="backup_import_fertig">Backup eingelesen</string>
+    <string name="backup_falsches_schema">Diese Backup-Datei stammt aus einer anderen App-Version</string>
+    <string name="backup_unlesbar">Die Datei konnte nicht gelesen werden</string>
 </resources>

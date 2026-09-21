@@ -2,6 +2,7 @@ package de.vanhake.dayorganizer.data.db
 
 import androidx.room.Dao
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 import java.time.LocalDateTime
@@ -11,6 +12,12 @@ interface BuchungDao {
 
     @Insert
     suspend fun einfuegen(eintraege: List<BuchungEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun alleEinfuegen(eintraege: List<BuchungEntity>)
+
+    @Query("DELETE FROM buchung")
+    suspend fun alleLoeschen()
 
     @Query("SELECT COALESCE(SUM(betrag), 0) FROM buchung")
     fun beobachteKontostand(): Flow<Int>

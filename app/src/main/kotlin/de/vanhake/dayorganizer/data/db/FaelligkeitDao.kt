@@ -16,6 +16,15 @@ interface FaelligkeitDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun anlegenFallsNeu(eintraege: List<FaelligkeitEntity>)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun alleEinfuegen(eintraege: List<FaelligkeitEntity>)
+
+    @Query("DELETE FROM faelligkeit")
+    suspend fun alleLoeschen()
+
+    @Query("SELECT * FROM faelligkeit ORDER BY id")
+    suspend fun alle(): List<FaelligkeitEntity>
+
     @Update
     suspend fun aktualisieren(eintrag: FaelligkeitEntity)
 
