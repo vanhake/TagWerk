@@ -2,7 +2,6 @@ package de.vanhake.dayorganizer.data.db
 
 import androidx.room.Dao
 import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
@@ -13,7 +12,9 @@ interface AktivitaetDao {
     @Insert
     suspend fun einfuegen(eintrag: AktivitaetEntity): Long
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    // ABORT (Standard) statt REPLACE: ein doppelter Schluessel in der Backup-Datei
+    // soll die Transaktion zurueckrollen lassen, nicht still verschwinden.
+    @Insert
     suspend fun alleEinfuegen(eintraege: List<AktivitaetEntity>)
 
     @Query("DELETE FROM aktivitaet")

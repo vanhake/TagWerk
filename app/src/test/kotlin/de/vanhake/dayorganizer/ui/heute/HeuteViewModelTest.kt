@@ -45,6 +45,7 @@ private class FakeAnzeige : Erinnerungsanzeige {
     override fun verstecke(faelligkeitId: Long) {
         versteckt += faelligkeitId
     }
+    override fun alleVerstecken() {}
 }
 
 class HeuteViewModelTest {

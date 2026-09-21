@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -32,6 +34,7 @@ private fun Meldung.textId(): Int = when (this) {
     Meldung.EXPORT_FERTIG -> R.string.backup_export_fertig
     Meldung.EXPORT_FEHLGESCHLAGEN -> R.string.backup_export_fehlgeschlagen
     Meldung.IMPORT_FERTIG -> R.string.backup_import_fertig
+    Meldung.IMPORT_EINSTELLUNGEN_FEHLGESCHLAGEN -> R.string.backup_import_einstellungen_fehlgeschlagen
     Meldung.IMPORT_FALSCHES_SCHEMA -> R.string.backup_falsches_schema
     Meldung.IMPORT_UNLESBAR -> R.string.backup_unlesbar
 }
@@ -58,29 +61,32 @@ fun EinstellungenScreen(viewModel: EinstellungenViewModel = hiltViewModel()) {
         viewModel.meldungGezeigt()
     }
 
+    // Oeffnen, Schreiben/Lesen und Schliessen des Stroms muessen in derselben Koroutine
+    // passieren (Review-Fund K1): der Screen reicht deshalb nur noch eine Funktion
+    // herein, die den Strom oeffnet, statt ihn hier schon zu oeffnen und per `use`
+    // wieder zu schliessen, bevor die Koroutine im ViewModel ueberhaupt geschrieben hat.
     val exportZiel = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json"),
     ) { uri ->
-        uri?.let {
-            kontext.contentResolver.openOutputStream(it)?.use { strom ->
-                viewModel.exportieren(strom)
-            }
+        uri?.let { ziel ->
+            viewModel.exportieren { kontext.contentResolver.openOutputStream(ziel) }
         }
     }
 
     val importQuelle = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
-        uri?.let {
-            kontext.contentResolver.openInputStream(it)?.use { strom ->
-                viewModel.importieren(strom)
-            }
+        uri?.let { quelle ->
+            viewModel.importieren { kontext.contentResolver.openInputStream(quelle) }
         }
     }
 
+    val backupDateiname = stringResource(R.string.backup_dateiname)
+
     Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) { innen ->
         Column(
-            modifier = Modifier.fillMaxWidth().padding(innen).padding(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(innen).padding(16.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             zustand.hinweise.forEach { hinweis ->
@@ -111,7 +117,7 @@ fun EinstellungenScreen(viewModel: EinstellungenViewModel = hiltViewModel()) {
             }
 
             Button(
-                onClick = { exportZiel.launch("dayorganizer-backup.json") },
+                onClick = { exportZiel.launch(backupDateiname) },
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(stringResource(R.string.backup_exportieren))

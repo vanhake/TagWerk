@@ -11,7 +11,12 @@ import java.time.Clock
 import java.time.LocalDateTime
 
 sealed interface ImportErgebnis {
-    data class Erfolg(val anzahlAktivitaeten: Int) : ImportErgebnis
+    /**
+     * [einstellungenUebernommen] ist false, wenn der Datenbestand erfolgreich ersetzt
+     * wurde, das Schreiben der Einstellungen danach aber gescheitert ist -- der
+     * Import darf das nicht als vollstaendigen Erfolg verschweigen (Review-Fund W1).
+     */
+    data class Erfolg(val anzahlAktivitaeten: Int, val einstellungenUebernommen: Boolean = true) : ImportErgebnis
     data class FalschesSchema(val gefunden: Int) : ImportErgebnis
     data class Unlesbar(val grund: String) : ImportErgebnis
 }
@@ -41,15 +46,21 @@ class BackupDienst(
     // geprueft wird. Eine eigene Json-Instanz an dieser Stelle waere eine zweite
     // Wahrheit darueber, wie ein Backup aussieht.
     override suspend fun exportieren(ziel: OutputStream) {
-        val datei = BackupUmwandlung.zuDatei(
-            erstelltAm = LocalDateTime.now(uhr),
-            aktivitaeten = db.aktivitaetDao().alle().map { it.zuDomaene() },
-            faelligkeiten = db.faelligkeitDao().alle().map { it.zuDomaene() },
-            buchungen = db.buchungDao().alle().map { it.zuDomaene() },
-            belohnungen = db.belohnungDao().alle().map { it.zuDomaene() },
-            einloesungen = db.belohnungDao().alleEinloesungen().map { it.zuDomaene() },
-            einstellungen = einstellungenLesen(),
-        )
+        // Die Einstellungen liegen im DataStore, nicht in der Room-Datenbank, und
+        // gehoeren deshalb nicht in dieselbe Transaktion -- nur die fuenf Tabellen
+        // muessen als in sich stimmiger Schnappschuss gelesen werden.
+        val einstellungen = einstellungenLesen()
+        val datei = db.withTransaction {
+            BackupUmwandlung.zuDatei(
+                erstelltAm = LocalDateTime.now(uhr),
+                aktivitaeten = db.aktivitaetDao().alle().map { it.zuDomaene() },
+                faelligkeiten = db.faelligkeitDao().alle().map { it.zuDomaene() },
+                buchungen = db.buchungDao().alle().map { it.zuDomaene() },
+                belohnungen = db.belohnungDao().alle().map { it.zuDomaene() },
+                einloesungen = db.belohnungDao().alleEinloesungen().map { it.zuDomaene() },
+                einstellungen = einstellungen,
+            )
+        }
         ziel.bufferedWriter().use { it.write(BackupUmwandlung.zuText(datei)) }
     }
 
@@ -91,8 +102,18 @@ class BackupDienst(
             return ImportErgebnis.Unlesbar(fehler.message ?: fehler::class.simpleName.orEmpty())
         }
 
-        einstellungenSchreiben(inhalt.einstellungen)
-        return ImportErgebnis.Erfolg(inhalt.aktivitaeten.size)
+        // Der Datenbestand ist an dieser Stelle bereits vollstaendig ersetzt und
+        // committet. Scheitert nur noch das Schreiben der Einstellungen -- etwa eine
+        // volle Platte im DataStore --, darf der Dienst das nicht ungefangen werfen
+        // (Vorgabe: nie eine Ausnahme) und der Aufrufer darf nicht "Datei unlesbar"
+        // lesen, obwohl die Daten laengst uebernommen sind (Review-Fund W1).
+        val einstellungenUebernommen = try {
+            einstellungenSchreiben(inhalt.einstellungen)
+            true
+        } catch (fehler: Exception) {
+            false
+        }
+        return ImportErgebnis.Erfolg(inhalt.aktivitaeten.size, einstellungenUebernommen)
     }
 
     companion object {

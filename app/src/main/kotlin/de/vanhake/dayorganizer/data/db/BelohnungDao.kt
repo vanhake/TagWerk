@@ -2,7 +2,6 @@ package de.vanhake.dayorganizer.data.db
 
 import androidx.room.Dao
 import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
@@ -12,7 +11,9 @@ interface BelohnungDao {
 
     @Insert suspend fun einfuegen(eintrag: BelohnungEntity): Long
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    // ABORT (Standard) statt REPLACE: ein doppelter Schluessel in der Backup-Datei
+    // soll die Transaktion zurueckrollen lassen, nicht still verschwinden.
+    @Insert
     suspend fun alleEinfuegen(eintraege: List<BelohnungEntity>)
 
     @Query("DELETE FROM belohnung")
@@ -37,7 +38,9 @@ interface BelohnungDao {
 
     @Insert suspend fun einloesungEinfuegen(eintrag: EinloesungEntity)
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    // ABORT (Standard) statt REPLACE: ein doppelter Schluessel in der Backup-Datei
+    // soll die Transaktion zurueckrollen lassen, nicht still verschwinden.
+    @Insert
     suspend fun alleEinloesungenEinfuegen(eintraege: List<EinloesungEntity>)
 
     @Query("DELETE FROM einloesung")

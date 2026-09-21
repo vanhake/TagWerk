@@ -9,11 +9,14 @@ import de.vanhake.dayorganizer.backup.BackupDienst
 import de.vanhake.dayorganizer.backup.ImportErgebnis
 import de.vanhake.dayorganizer.data.Einstellungen
 import de.vanhake.dayorganizer.data.EinstellungenSpeicher
+import de.vanhake.dayorganizer.platform.notification.Erinnerungsanzeige
 import de.vanhake.dayorganizer.platform.permission.BerechtigungsHinweise
 import de.vanhake.dayorganizer.platform.permission.BerechtigungsPruefer
 import de.vanhake.dayorganizer.platform.permission.Hinweis
 import de.vanhake.dayorganizer.platform.permission.waechterHaengt
 import de.vanhake.dayorganizer.platform.work.WaechterPlanung
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -37,6 +40,7 @@ enum class Meldung {
     EXPORT_FERTIG,
     EXPORT_FEHLGESCHLAGEN,
     IMPORT_FERTIG,
+    IMPORT_EINSTELLUNGEN_FEHLGESCHLAGEN,
     IMPORT_FALSCHES_SCHEMA,
     IMPORT_UNLESBAR,
 }
@@ -48,6 +52,7 @@ class EinstellungenViewModel(
     private val hinweiseLesen: suspend () -> List<Hinweis>,
     private val backupDienst: Backup,
     private val nachImport: () -> Unit,
+    private val ioDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
 
     @Inject
@@ -57,6 +62,7 @@ class EinstellungenViewModel(
         uhr: Clock,
         backupDienst: BackupDienst,
         waechterPlanung: WaechterPlanung,
+        erinnerungsanzeige: Erinnerungsanzeige,
     ) : this(
         lesen = { speicher.lesen() },
         schreiben = { speicher.schreiben(it) },
@@ -72,7 +78,13 @@ class EinstellungenViewModel(
             BerechtigungsHinweise.fuer(pruefer.stand().copy(waechterHaengt = haengt))
         },
         backupDienst = backupDienst,
-        nachImport = { waechterPlanung.sofortAusfuehren() },
+        nachImport = {
+            waechterPlanung.sofortAusfuehren()
+            // Alte Benachrichtigungen tragen faelligkeitIds, die nach dem Import zu
+            // ganz anderen Faelligkeiten gehoeren koennten (Review-Fund W3).
+            erinnerungsanzeige.alleVerstecken()
+        },
+        ioDispatcher = Dispatchers.IO,
     )
 
     private val _zustand = MutableStateFlow(EinstellungenZustand())
@@ -91,34 +103,60 @@ class EinstellungenViewModel(
         _meldung.value = null
     }
 
-    fun exportieren(ziel: OutputStream) = viewModelScope.launch {
-        // Ein gescheiterter Export -- volle Platte, entzogene Dateiberechtigung -- darf
-        // weder die App beenden noch still als Erfolg durchgehen. Ein Backup, das man
-        // fuer geschrieben haelt und das es nicht gibt, ist das Schlimmste, was diese
-        // Funktion anrichten kann.
-        _meldung.value = runCatching { backupDienst.exportieren(ziel) }
-            .fold(
-                onSuccess = { Meldung.EXPORT_FERTIG },
-                onFailure = { Meldung.EXPORT_FEHLGESCHLAGEN },
-            )
+    /**
+     * [oeffnen] liefert den Ausgabestrom statt ihn entgegenzunehmen: Oeffnen, Schreiben
+     * und Schliessen muessen in derselben Koroutine passieren. Der Screen reicht den
+     * Strom vorher schon fertig geoeffnet und per `use` wieder geschlossen herein --
+     * `use` schliesst dabei sofort, bevor die hier nur *gestartete* Koroutine ueberhaupt
+     * zu schreiben beginnt, und jeder Export landet als leere Datei (Review-Fund K1,
+     * per Test bewiesen). Das Oeffnen auf Dispatchers.IO nimmt zugleich Datei-I/O und
+     * JSON vom Hauptthread (Review-Fund W4).
+     */
+    fun exportieren(oeffnen: () -> OutputStream?) = viewModelScope.launch(ioDispatcher) {
+        // Ein gescheiterter Export -- volle Platte, entzogene Dateiberechtigung, ein
+        // Strom, der sich gar nicht erst oeffnen laesst -- darf weder die App beenden
+        // noch still als Erfolg durchgehen. Ein Backup, das man fuer geschrieben haelt
+        // und das es nicht gibt, ist das Schlimmste, was diese Funktion anrichten kann.
+        _meldung.value = runCatching {
+            val strom = oeffnen() ?: error("Ausgabestrom konnte nicht geoeffnet werden")
+            strom.use { backupDienst.exportieren(it) }
+        }.fold(
+            onSuccess = { Meldung.EXPORT_FERTIG },
+            onFailure = { Meldung.EXPORT_FEHLGESCHLAGEN },
+        )
     }
 
-    fun importieren(quelle: InputStream) = viewModelScope.launch {
+    /** Siehe [exportieren] -- dasselbe Muster fuer den Eingabestrom. */
+    fun importieren(oeffnen: () -> InputStream?) = viewModelScope.launch(ioDispatcher) {
         // Der Dienst liefert jeden bekannten Fehlschlag als ImportErgebnis. Das
-        // runCatching faengt, was trotzdem durchkommt -- etwa ein Lesefehler des
-        // Dateidialogs --, damit ein Import niemals die App beendet.
-        _meldung.value = runCatching { backupDienst.importieren(quelle) }
-            .fold(
-                onSuccess = { ergebnis ->
-                    when (ergebnis) {
-                        is ImportErgebnis.Erfolg -> Meldung.IMPORT_FERTIG
-                        is ImportErgebnis.FalschesSchema -> Meldung.IMPORT_FALSCHES_SCHEMA
-                        is ImportErgebnis.Unlesbar -> Meldung.IMPORT_UNLESBAR
+        // runCatching faengt, was trotzdem durchkommt -- ein Strom, der sich nicht
+        // oeffnen laesst, oder ein Lesefehler des Dateidialogs --, damit ein Import
+        // niemals die App beendet.
+        val ergebnis = runCatching {
+            val strom = oeffnen() ?: error("Eingabestrom konnte nicht geoeffnet werden")
+            strom.use { backupDienst.importieren(it) }
+        }
+        _meldung.value = ergebnis.fold(
+            onSuccess = { erfolg ->
+                when (erfolg) {
+                    is ImportErgebnis.Erfolg -> if (erfolg.einstellungenUebernommen) {
+                        Meldung.IMPORT_FERTIG
+                    } else {
+                        Meldung.IMPORT_EINSTELLUNGEN_FEHLGESCHLAGEN
                     }
-                },
-                onFailure = { Meldung.IMPORT_UNLESBAR },
-            )
-        nachImport()
+                    is ImportErgebnis.FalschesSchema -> Meldung.IMPORT_FALSCHES_SCHEMA
+                    is ImportErgebnis.Unlesbar -> Meldung.IMPORT_UNLESBAR
+                }
+            },
+            onFailure = { Meldung.IMPORT_UNLESBAR },
+        )
+        // Nur ein Import, der den Bestand tatsaechlich ersetzt hat, darf den Zustand
+        // neu laden und Waechter/Benachrichtigungen anstossen -- ein abgelehnter Import
+        // (falsches Schema, unlesbar) hat nichts veraendert (Review-Fund W3/W6).
+        if (ergebnis.getOrNull() is ImportErgebnis.Erfolg) {
+            neuLaden()
+            nachImport()
+        }
     }
 
     fun tagesbonusAendern(text: String) {

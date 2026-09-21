@@ -16,7 +16,9 @@ interface FaelligkeitDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun anlegenFallsNeu(eintraege: List<FaelligkeitEntity>)
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    // ABORT (Standard) statt REPLACE: ein doppelter Schluessel in der Backup-Datei
+    // soll die Transaktion zurueckrollen lassen, nicht still verschwinden.
+    @Insert
     suspend fun alleEinfuegen(eintraege: List<FaelligkeitEntity>)
 
     @Query("DELETE FROM faelligkeit")
