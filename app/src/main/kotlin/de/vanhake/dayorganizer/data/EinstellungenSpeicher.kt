@@ -2,6 +2,7 @@ package de.vanhake.dayorganizer.data
 
 import android.content.Context
 import androidx.datastore.core.DataStore
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
@@ -24,11 +25,30 @@ data class Einstellungen(
     val standardKulanzMinuten: Int = 60,
 )
 
+/**
+ * Ersetzt eine beschaedigte Einstellungsdatei beim ersten Zugriff durch eine leere.
+ *
+ * Das Abfangen der IOException beim Lesen (gesicherterDatenstrom unten) allein
+ * reicht nicht: es verhindert den Absturz, repariert aber die Datei nicht. edit()
+ * liest intern zuerst und scheitert dann an derselben Stelle -- auf dem Emulator
+ * blieb die Datei nach "Speichern" unveraendert kaputt. Der Nutzer koennte seine
+ * Einstellungen nie wieder aendern, ohne es zu merken, und der Waechter koennte
+ * seinen Erfolg nie mehr festhalten: nach 36 Stunden stuende dauerhaft der Banner
+ * "Selbstheilung reagiert nicht", obwohl er einwandfrei laeuft. Mit diesem
+ * Handler kostet eine kaputte Datei einmalig die Einstellungen, danach
+ * funktionieren Lesen und Schreiben wieder.
+ */
+internal val EINSTELLUNGEN_BEI_KORRUPTION =
+    ReplaceFileCorruptionHandler<Preferences> { emptyPreferences() }
+
 // Property-Delegat fuer preferencesDataStore darf pro Datei nur einmal existieren, sonst wirft
 // DataStore zur Laufzeit ("There are multiple DataStores active for the same file"). Deshalb
 // bleibt dieser Delegat die einzige Stelle, die ihn fuer "einstellungen" erzeugt -- der
 // @Inject-Konstruktor unten greift lediglich darauf zu.
-private val Context.datenSpeicher by preferencesDataStore(name = "einstellungen")
+private val Context.datenSpeicher by preferencesDataStore(
+    name = "einstellungen",
+    corruptionHandler = EINSTELLUNGEN_BEI_KORRUPTION,
+)
 
 @Singleton
 class EinstellungenSpeicher(
