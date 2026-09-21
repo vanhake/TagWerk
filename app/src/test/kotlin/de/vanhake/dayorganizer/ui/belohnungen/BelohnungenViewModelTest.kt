@@ -121,6 +121,28 @@ class BelohnungenViewModelTest {
         assertEquals(listOf("Kinoabend"), belohnungen.einloesungen.value.map { it.name })
     }
 
+    // Geprueft wird gegen das Repository, nicht gegen eine Ausgabe von vm.zustand: der
+    // Zustandsfluss laeuft seit flowOn(Dispatchers.Default) auf einem echten Thread und
+    // stuende hier zeitabhaengig -- siehe "ein Doppeltipp loest nur einmal ein" fuer
+    // dasselbe Muster.
+    @Test
+    fun `Archivieren entfernt die Kachel und behaelt die Einloese-Historie`() = runTest(dispatcher) {
+        val belohnungen = FakeBelohnungRepository(listOf(Belohnung(1, "Kinoabend", preisPunkte = 200)))
+        val buchungen = guthaben(250)
+        val vm = viewModel(belohnungen, buchungen)
+
+        // Vor dem Archivieren einmal einloesen, damit die Historie etwas enthaelt,
+        // das das Archivieren stehen lassen muss.
+        vm.einloesen(1)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        vm.archivieren(1)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(true, belohnungen.stand.value.single { it.id == 1L }.archiviert)
+        assertEquals(listOf("Kinoabend"), belohnungen.einloesungen.value.map { it.name })
+    }
+
     @Test
     fun `Einloesen stoesst das Widget an, damit der Punktestand nicht veraltet`() = runTest(dispatcher) {
         val belohnungen = FakeBelohnungRepository(listOf(Belohnung(1, "Kinoabend", preisPunkte = 200)))

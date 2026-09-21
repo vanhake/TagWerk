@@ -17,6 +17,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -62,6 +63,7 @@ fun BelohnungenScreen(
                     kontostand = zustand.kontostand,
                     einloesen = { viewModel.einloesen(kachel.id) },
                     bearbeiten = { bearbeiten(kachel.id) },
+                    archivieren = { viewModel.archivieren(kachel.id) },
                 )
             }
 
@@ -93,6 +95,7 @@ private fun Kachel(
     kontostand: Int,
     einloesen: () -> Unit,
     bearbeiten: () -> Unit,
+    archivieren: () -> Unit,
 ) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
@@ -118,6 +121,11 @@ private fun Kachel(
                     Text(stringResource(R.string.einloesen))
                 }
                 Button(onClick = bearbeiten) { Text(stringResource(R.string.bearbeiten)) }
+                // Archivieren wirkt nur auf das archiviert-Flag und greift nicht in die
+                // Punkte-Transaktion des Einloesens ein (siehe BelohnungEinloesen.loese):
+                // anders als beim Einloesen-Knopf gibt es hier keinen Doppeltipp-Schaden,
+                // der eine Sperre waehrend wirdEingeloest rechtfertigen wuerde.
+                TextButton(onClick = archivieren) { Text(stringResource(R.string.archivieren)) }
             }
             val hinweis = when (kachel.einloesbarkeit.hindernis) {
                 Hindernis.ZU_WENIG_PUNKTE -> stringResource(
