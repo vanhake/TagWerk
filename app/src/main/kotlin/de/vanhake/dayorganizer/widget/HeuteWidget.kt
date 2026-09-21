@@ -1,6 +1,8 @@
 package de.vanhake.dayorganizer.widget
 
 import android.content.Context
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.glance.GlanceId
@@ -38,16 +40,39 @@ class HeuteWidget : GlanceAppWidget() {
         val uhr = zugang.uhr()
         val heute = LocalDate.now(uhr)
 
-        val zustand = WidgetZusammenstellung.aus(
-            faelligkeiten = zugang.faelligkeiten().fuerZeitraum(heute, heute),
-            aktivitaeten = zugang.aktivitaeten().alleAktiven(),
-            kontostand = zugang.buchungen().kontostand(),
-            jetzt = LocalDateTime.now(uhr),
-            hoechstens = 5,
-        )
+        // Nur der Startwert fuer collectAsState (Review-Fund K1): Glance ruft
+        // provideGlance einmal pro Sitzung auf (~45s), waehrend eine Sitzung laeuft
+        // liest provideContent unten reaktiv weiter. Ohne diesen einmaligen Vorablesevorgang
+        // wuerde das erste Bild leer bzw. mit "0 Punkte" aufblitzen, bis der erste
+        // Flow-Wert eintrifft.
+        val faelligkeitenAnfangswert = zugang.faelligkeiten().fuerZeitraum(heute, heute)
+        val aktivitaetenAnfangswert = zugang.aktivitaeten().alleAktiven()
+        val kontostandAnfangswert = zugang.buchungen().kontostand()
 
         provideContent {
             val res = LocalContext.current
+
+            // Reaktiv statt einmalig eingefangen (Review-Fund K1): ein updateAll
+            // waehrend einer laufenden Glance-Sitzung loest nur eine Recomposition
+            // aus, keinen erneuten Aufruf von provideGlance -- ohne collectAsState
+            // wuerde das Widget bis zur naechsten Sitzung den alten Zustand zeigen.
+            // beobachteTag hat dasselbe Praedikat wie fuerZeitraum(heute, heute)
+            // (siehe FaelligkeitDao). Die Flows laufen und werden mit der Sitzung
+            // abgebrochen -- das ist gewollt.
+            val faelligkeiten by zugang.faelligkeiten().beobachteTag(heute)
+                .collectAsState(initial = faelligkeitenAnfangswert)
+            val aktivitaeten by zugang.aktivitaeten().beobachteAktive()
+                .collectAsState(initial = aktivitaetenAnfangswert)
+            val kontostand by zugang.buchungen().beobachteKontostand()
+                .collectAsState(initial = kontostandAnfangswert)
+
+            val zustand = WidgetZusammenstellung.aus(
+                faelligkeiten = faelligkeiten,
+                aktivitaeten = aktivitaeten,
+                kontostand = kontostand,
+                jetzt = LocalDateTime.now(uhr),
+                hoechstens = 5,
+            )
 
             // fillMaxSize statt fillMaxWidth: sonst schwimmt die Karte mittig in der
             // Widget-Flaeche, mit leerem Rand darueber und darunter -- so auf dem

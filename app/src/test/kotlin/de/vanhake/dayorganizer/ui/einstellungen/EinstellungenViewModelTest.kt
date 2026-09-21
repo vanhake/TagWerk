@@ -60,7 +60,7 @@ class EinstellungenViewModelTest {
         speicher: FakeSpeicher,
         hinweiseLesen: suspend () -> List<Hinweis> = { emptyList() },
         backupDienst: Backup = FakeBackup(),
-        nachImport: () -> Unit = {},
+        nachImport: suspend () -> Unit = {},
         // Ohne den Test-Dispatcher wuerde exportieren/importieren -- seit sie auf
         // Dispatchers.IO laufen (Review-Fund K1) -- ausserhalb der virtuellen Testzeit
         // ablaufen, und advanceUntilIdle()/join() koennten nicht mehr deterministisch
@@ -368,6 +368,36 @@ class EinstellungenViewModelTest {
 
         assertEquals("99", vm.zustand.value.tagesbonusText)
         assertEquals("5", vm.zustand.value.standardKulanzText)
+    }
+
+    // Review-Fund W1: Ein Widget-Eintrag kann nach dem Import auf eine ganz andere
+    // Faelligkeit zeigen (die Datei bringt ihre eigenen ids mit) -- deshalb muss ein
+    // erfolgreicher Import das Widget anstossen, genau wie es das fuer Benachrichtigungen
+    // schon per alleVerstecken() tut. nachImport traegt diesen Anstoss im Produktivcode
+    // (EinstellungenViewModel.@Inject-Konstruktor); hier wird gezaehlt statt nur ein
+    // Bool gesetzt, damit ein versehentlicher doppelter Aufruf ebenfalls auffiele.
+    @Test
+    fun `ein erfolgreicher Import stoesst das Widget genau einmal an`() = runTest(dispatcher) {
+        val backup = FakeBackup(importErgebnis = ImportErgebnis.Erfolg(3))
+        var widgetAnstossZaehler = 0
+        val vm = viewModel(FakeSpeicher(), backupDienst = backup, nachImport = { widgetAnstossZaehler++ })
+
+        vm.importieren { ByteArrayInputStream(ByteArray(0)) }.join()
+
+        assertEquals(1, widgetAnstossZaehler)
+    }
+
+    // Review-Fund W1: Ein abgelehnter Import (falsches Schema oder unlesbar) hat am
+    // Bestand nichts veraendert -- ein Widget-Anstoss waere hier fehl am Platz.
+    @Test
+    fun `ein abgelehnter Import stoesst das Widget nicht an`() = runTest(dispatcher) {
+        val backup = FakeBackup(importErgebnis = ImportErgebnis.FalschesSchema(99))
+        var widgetAnstossZaehler = 0
+        val vm = viewModel(FakeSpeicher(), backupDienst = backup, nachImport = { widgetAnstossZaehler++ })
+
+        vm.importieren { ByteArrayInputStream(ByteArray(0)) }.join()
+
+        assertEquals(0, widgetAnstossZaehler)
     }
 
     @Test

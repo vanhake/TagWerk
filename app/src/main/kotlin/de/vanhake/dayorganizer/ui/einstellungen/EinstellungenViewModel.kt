@@ -15,6 +15,7 @@ import de.vanhake.dayorganizer.platform.permission.BerechtigungsPruefer
 import de.vanhake.dayorganizer.platform.permission.Hinweis
 import de.vanhake.dayorganizer.platform.permission.waechterHaengt
 import de.vanhake.dayorganizer.platform.work.WaechterPlanung
+import de.vanhake.dayorganizer.widget.WidgetAktualisierung
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -51,7 +52,7 @@ class EinstellungenViewModel(
     private val schreiben: suspend (Einstellungen) -> Unit,
     private val hinweiseLesen: suspend () -> List<Hinweis>,
     private val backupDienst: Backup,
-    private val nachImport: () -> Unit,
+    private val nachImport: suspend () -> Unit,
     private val ioDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
 
@@ -63,6 +64,7 @@ class EinstellungenViewModel(
         backupDienst: BackupDienst,
         waechterPlanung: WaechterPlanung,
         erinnerungsanzeige: Erinnerungsanzeige,
+        widgetAktualisierung: WidgetAktualisierung,
     ) : this(
         lesen = { speicher.lesen() },
         schreiben = { speicher.schreiben(it) },
@@ -83,6 +85,10 @@ class EinstellungenViewModel(
             // Alte Benachrichtigungen tragen faelligkeitIds, die nach dem Import zu
             // ganz anderen Faelligkeiten gehoeren koennten (Review-Fund W3).
             erinnerungsanzeige.alleVerstecken()
+            // Ein Widget-Eintrag kann nach dem Import auf eine ganz andere Faelligkeit
+            // zeigen (die Datei bringt ihre eigenen ids mit) -- ohne diesen Anstoss
+            // zeichnet erst der naechste Waechter-Lauf neu (Review-Fund W1).
+            widgetAktualisierung.anstossen()
         },
         ioDispatcher = Dispatchers.IO,
     )

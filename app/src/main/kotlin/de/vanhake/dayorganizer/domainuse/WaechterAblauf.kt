@@ -24,7 +24,7 @@ class WaechterAblauf(
     private val materialisieren: FaelligkeitenMaterialisieren,
     private val alarmNeuPlanen: suspend () -> Unit,
     private val erfolgMerken: suspend () -> Unit = {},
-    private val widgetAnstossen: suspend () -> Unit = {},
+    private val widgetAnstossen: suspend () -> Unit,
 ) {
 
     @Inject
