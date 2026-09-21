@@ -518,7 +518,7 @@ git commit -m "feat(backup): versioniertes JSON-Modell fuer den Datenexport"
 **Interfaces:**
 - Consumes: `BackupUmwandlung` aus Task 1, alle Repositories
 - Produces:
-  - `BackupDienst.exportieren(ziel: OutputStream)` — schreibt formatiertes JSON
+  - `BackupDienst.exportieren(ziel: OutputStream)` — schreibt formatiertes JSON über `BackupUmwandlung.zuText`; gelesen wird über `BackupUmwandlung.ausText`, das die Schemaversion vor dem strengen Einlesen prüft (siehe Task 1)
   - `sealed interface ImportErgebnis` mit `Erfolg(anzahlAktivitaeten: Int)`, `FalschesSchema(gefunden: Int)`, `Unlesbar(grund: String)`
   - `BackupDienst.importieren(quelle: InputStream): ImportErgebnis` — ersetzt den gesamten Bestand in einer Transaktion; Wächter und Alarmplanung stößt danach das ViewModel an. **Jeder** Fehlschlag endet als `ImportErgebnis`, nie als Ausnahme: auch einer, der erst beim Schreiben in die Datenbank auffällt (ein Verweis auf eine Aktivität, die in der Datei fehlt, oder ein doppelter `schluessel`). Die Transaktion rollt dann zurück, und der alte Bestand bleibt vollständig erhalten — Design §6: „Abbruch mit klarer Meldung statt Teilimport".
   - `BackupSpeicher.alleLeeren()` in der Datenbank-Fassade
@@ -742,7 +742,6 @@ import de.vanhake.dayorganizer.data.EinstellungenSpeicher
 import de.vanhake.dayorganizer.data.db.DayOrganizerDatenbank
 import de.vanhake.dayorganizer.data.mapper.zuDomaene
 import de.vanhake.dayorganizer.data.mapper.zuEntity
-import kotlinx.serialization.json.Json
 import java.io.InputStream
 import java.io.OutputStream
 import java.time.Clock
@@ -764,8 +763,10 @@ class BackupDienst(
     private val uhr: Clock,
 ) {
 
-    private val json = Json { prettyPrint = true; ignoreUnknownKeys = false }
-
+    // Lesen und Schreiben des Textes liegen in BackupUmwandlung (zuText/ausText), nicht
+    // hier: dort ist festgelegt, dass die Schemaversion VOR dem strengen Einlesen
+    // geprueft wird. Eine eigene Json-Instanz an dieser Stelle waere eine zweite
+    // Wahrheit darueber, wie ein Backup aussieht.
     suspend fun exportieren(ziel: OutputStream) {
         val datei = BackupUmwandlung.zuDatei(
             erstelltAm = LocalDateTime.now(uhr),
@@ -776,7 +777,7 @@ class BackupDienst(
             einloesungen = db.belohnungDao().alleEinloesungen().map { it.zuDomaene() },
             einstellungen = einstellungenLesen(),
         )
-        ziel.bufferedWriter().use { it.write(json.encodeToString(BackupDatei.serializer(), datei)) }
+        ziel.bufferedWriter().use { it.write(BackupUmwandlung.zuText(datei)) }
     }
 
     /**
@@ -785,8 +786,7 @@ class BackupDienst(
      */
     suspend fun importieren(quelle: InputStream): ImportErgebnis {
         val inhalt = try {
-            val text = quelle.bufferedReader().use { it.readText() }
-            BackupUmwandlung.ausDatei(json.decodeFromString(BackupDatei.serializer(), text))
+            BackupUmwandlung.ausText(quelle.bufferedReader().use { it.readText() })
         } catch (fehler: UnbekanntesSchema) {
             return ImportErgebnis.FalschesSchema(fehler.gefunden)
         } catch (fehler: Exception) {
