@@ -4,12 +4,14 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -29,6 +31,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.vanhake.dayorganizer.R
+import de.vanhake.dayorganizer.data.ThemeModus
 import de.vanhake.dayorganizer.platform.permission.einstellungsIntent
 import de.vanhake.dayorganizer.ui.gemeinsam.WarnBanner
 import java.time.format.DateTimeFormatter
@@ -104,6 +107,19 @@ fun EinstellungenScreen(viewModel: EinstellungenViewModel = hiltViewModel()) {
                     beheben = {
                         ContextCompat.startActivity(kontext, hinweis.einstellungsIntent(kontext), null)
                     },
+                )
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = zustand.themeModus == ThemeModus.HELL,
+                    onClick = { viewModel.themeModusAendern(ThemeModus.HELL) },
+                    label = { Text(stringResource(R.string.theme_hell)) },
+                )
+                FilterChip(
+                    selected = zustand.themeModus == ThemeModus.DUNKEL,
+                    onClick = { viewModel.themeModusAendern(ThemeModus.DUNKEL) },
+                    label = { Text(stringResource(R.string.theme_dunkel)) },
                 )
             }
 

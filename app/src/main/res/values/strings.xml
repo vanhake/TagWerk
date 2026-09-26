@@ -73,6 +73,8 @@
     <string name="tab_einstellungen">Optionen</string>
     <string name="feld_tagesbonus">Tagesbonus, wenn alles erledigt ist</string>
     <string name="feld_standard_kulanz">Standard-Kulanzfenster in Minuten</string>
+    <string name="theme_hell">Hell</string>
+    <string name="theme_dunkel">Dunkel</string>
     <string name="backup_exportieren">Backup speichern</string>
     <string name="backup_importieren">Backup einlesen</string>
     <string name="backup_dateiname">dayorganizer-backup-%1$s.json</string>
