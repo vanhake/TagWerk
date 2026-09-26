@@ -25,14 +25,14 @@
 
 | Datei | Zweck |
 |---|---|
-| `domain/.../model/Aktivitaet.kt` | `icon`-Feld ergänzen |
-| `app/.../ui/aktivitaeten/AktivitaetEntwurf.kt` | `icon`-Feld im Entwurf |
-| `app/.../data/db/AktivitaetEntity.kt` | `icon`-Spalte |
+| `domain/.../model/Aktivitaet.kt` | `symbol`-Feld ergänzen |
+| `app/.../ui/aktivitaeten/AktivitaetEntwurf.kt` | `symbol`-Feld im Entwurf |
+| `app/.../data/db/AktivitaetEntity.kt` | `symbol`-Spalte |
 | `app/.../data/db/Migrationen.kt` | `MIGRATION_3_4` |
 | `app/.../data/db/DayOrganizerDatenbank.kt` | Version 3 → 4 |
 | `app/.../di/DatenModul.kt` | neue Migration registrieren |
-| `app/.../data/mapper/EntityMapper.kt` | `icon` durchreichen |
-| `app/.../backup/BackupModell.kt` | `AktivitaetDto.icon`, `EinstellungenDto.themeModus` |
+| `app/.../data/mapper/EntityMapper.kt` | `symbol` durchreichen |
+| `app/.../backup/BackupModell.kt` | `AktivitaetDto.symbol`, `EinstellungenDto.themeModus` |
 | `app/.../backup/BackupUmwandlung.kt` | `SCHEMA_VERSION = 2`, Mapping |
 | `app/.../data/EinstellungenSpeicher.kt` | `ThemeModus`, Persistenz |
 | `app/.../ui/theme/Farben.kt` (neu) | Farb-Tokens hell/dunkel |
@@ -50,8 +50,8 @@
 | `app/.../domainuse/FaelligkeitErledigenRueckgaengig.kt` (neu) | Gegenbuchung |
 | `app/.../domainuse/FaelligkeitAuslassenRueckgaengig.kt` (neu) | Status zurücksetzen |
 | `app/.../ui/gemeinsam/Hinweistoast.kt` (neu) | Toast-Datenklasse + Composable |
-| `app/.../ui/heute/HeuteZustand.kt` | `icon`, `toast`-Feld |
-| `app/.../ui/heute/HeuteZusammenstellung.kt` | `icon` übernehmen |
+| `app/.../ui/heute/HeuteZustand.kt` | `symbol`, `toast`-Feld |
+| `app/.../ui/heute/HeuteZusammenstellung.kt` | `symbol` übernehmen |
 | `app/.../ui/heute/HeuteViewModel.kt` | Toast/Undo-Zustand |
 | `app/.../ui/heute/HeuteScreen.kt` | vollständiges Redesign |
 | `app/src/main/res/values/strings.xml` | neue Strings |
@@ -66,7 +66,7 @@
 - Test: `domain/src/test/kotlin/de/vanhake/dayorganizer/domain/model/AktivitaetTest.kt` (neu, falls es keine gibt)
 
 **Interfaces:**
-- Produces: `Aktivitaet.icon: String` (Default `"self_improvement"`), `AktivitaetEntwurf.icon: String` (Default `"self_improvement"`).
+- Produces: `Aktivitaet.symbol: String` (Default `"self_improvement"`), `AktivitaetEntwurf.symbol: String` (Default `"self_improvement"`).
 
 - [ ] **Step 1: Failing test für den Default-Wert**
 
@@ -86,7 +86,7 @@ class AktivitaetTest {
             erstelltAm = LocalDate.of(2026, 1, 1),
         )
 
-        assertEquals("self_improvement", aktivitaet.icon)
+        assertEquals("self_improvement", aktivitaet.symbol)
     }
 }
 ```
@@ -94,7 +94,7 @@ class AktivitaetTest {
 - [ ] **Step 2: Test ausführen, Fehlschlag bestätigen**
 
 Run: `./gradlew :domain:test --tests "de.vanhake.dayorganizer.domain.model.AktivitaetTest"`
-Expected: FAIL -- `Aktivitaet` hat keinen Parameter `icon`.
+Expected: FAIL -- `Aktivitaet` hat keinen Parameter `symbol`.
 
 - [ ] **Step 3: Feld ergänzen**
 
@@ -102,7 +102,7 @@ In `domain/src/main/kotlin/de/vanhake/dayorganizer/domain/model/Aktivitaet.kt`, 
 
 ```kotlin
     /** Schluessel aus dem AktivitaetSymbol-Katalog (App-Modul), z. B. "self_improvement". */
-    val icon: String = "self_improvement",
+    val symbol: String = "self_improvement",
 ```
 
 - [ ] **Step 4: Test ausführen, Erfolg bestätigen**
@@ -115,19 +115,19 @@ Expected: PASS
 In `AktivitaetEntwurf.kt`: Feld nach `val farbe: Int = 0xFF4CAF50.toInt(),` einfügen:
 
 ```kotlin
-    val icon: String = "self_improvement",
+    val symbol: String = "self_improvement",
 ```
 
 In `zuAktivitaet(heute: LocalDate)`, im `Aktivitaet(...)`-Aufruf nach `farbe = farbe,` ergänzen:
 
 ```kotlin
-            icon = icon,
+            symbol = symbol,
 ```
 
 In der companion-Funktion `aus(aktivitaet: Aktivitaet)`, im `basis`-Aufbau nach `farbe = aktivitaet.farbe,` ergänzen:
 
 ```kotlin
-                icon = aktivitaet.icon,
+                symbol = aktivitaet.symbol,
 ```
 
 - [ ] **Step 6: App-Modul kompiliert**
@@ -146,7 +146,7 @@ git commit -m "feat(aktivitaet): Symbol-Feld fuer das Redesign ergaenzen"
 
 ---
 
-### Task 2: Room-Migration 3 → 4 für die `icon`-Spalte
+### Task 2: Room-Migration 3 → 4 für die `symbol`-Spalte
 
 **Files:**
 - Modify: `app/src/main/kotlin/de/vanhake/dayorganizer/data/db/AktivitaetEntity.kt`
@@ -157,8 +157,8 @@ git commit -m "feat(aktivitaet): Symbol-Feld fuer das Redesign ergaenzen"
 - Test: `app/src/test/kotlin/de/vanhake/dayorganizer/data/db/MigrationTest.kt`
 
 **Interfaces:**
-- Consumes: `Aktivitaet.icon` (Task 1).
-- Produces: `AktivitaetEntity.icon: String`, `MIGRATION_3_4`.
+- Consumes: `Aktivitaet.symbol` (Task 1).
+- Produces: `AktivitaetEntity.symbol: String`, `MIGRATION_3_4`.
 
 - [ ] **Step 1: Failing Migrationstest**
 
@@ -184,7 +184,7 @@ In `MigrationTest.kt`, nach der bestehenden `migration_1_auf_3_laeuft_durch`-Tes
             DB_NAME, 4, true, MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4,
         )
 
-        db.query("SELECT icon FROM aktivitaet WHERE id = 1").use {
+        db.query("SELECT symbol FROM aktivitaet WHERE id = 1").use {
             it.moveToFirst()
             assertEquals("self_improvement", it.getString(0))
         }
@@ -195,14 +195,14 @@ In `MigrationTest.kt`, nach der bestehenden `migration_1_auf_3_laeuft_durch`-Tes
 - [ ] **Step 2: Test ausführen, Fehlschlag bestätigen**
 
 Run: `./gradlew :app:testDebugUnitTest --tests "de.vanhake.dayorganizer.data.db.MigrationTest"`
-Expected: FAIL -- `MIGRATION_3_4` existiert nicht / Spalte `icon` fehlt in Version 3.
+Expected: FAIL -- `MIGRATION_3_4` existiert nicht / Spalte `symbol` fehlt in Version 3.
 
 - [ ] **Step 3: Entity, Migration, Datenbankversion**
 
 In `AktivitaetEntity.kt`, nach `val puenktlichkeitsBonus: Int,` ergänzen:
 
 ```kotlin
-    val icon: String = "self_improvement",
+    val symbol: String = "self_improvement",
 ```
 
 In `Migrationen.kt` am Ende ergänzen:
@@ -211,7 +211,7 @@ In `Migrationen.kt` am Ende ergänzen:
 val MIGRATION_3_4 = object : Migration(3, 4) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL(
-            "ALTER TABLE aktivitaet ADD COLUMN icon TEXT NOT NULL DEFAULT 'self_improvement'",
+            "ALTER TABLE aktivitaet ADD COLUMN symbol TEXT NOT NULL DEFAULT 'self_improvement'",
         )
     }
 }
@@ -223,8 +223,8 @@ In `DatenModul.kt`: Import `MIGRATION_3_4` ergänzen und `.addMigrations(MIGRATI
 
 - [ ] **Step 4: Mapper ergänzen**
 
-In `EntityMapper.kt`, `AktivitaetEntity.zuDomaene()`: nach `farbe = farbe,` ergänzen `icon = icon,`.
-In `Aktivitaet.zuEntity()`: nach `farbe = farbe,` ergänzen `icon = icon,`.
+In `EntityMapper.kt`, `AktivitaetEntity.zuDomaene()`: nach `farbe = farbe,` ergänzen `symbol = symbol,`.
+In `Aktivitaet.zuEntity()`: nach `farbe = farbe,` ergänzen `symbol = symbol,`.
 
 - [ ] **Step 5: Test ausführen, Erfolg bestätigen**
 
@@ -260,7 +260,7 @@ git commit -m "feat(db): Migration 3-4 fuer die Symbol-Spalte der Aktivitaet"
 - Create: `app/src/test/resources/backup/beispiel-schema-2.json`
 
 **Interfaces:**
-- Consumes: `Aktivitaet.icon` (Task 1), `Einstellungen.themeModus` (Task 4 -- diese Datei zuerst committen, dann Task 4, dann diesen Task; siehe Hinweis in Step 3).
+- Consumes: `Aktivitaet.symbol` (Task 1), `Einstellungen.themeModus` (Task 4 -- diese Datei zuerst committen, dann Task 4, dann diesen Task; siehe Hinweis in Step 3).
 - Produces: `BackupUmwandlung.SCHEMA_VERSION == 2`.
 
 **Hinweis zur Reihenfolge:** Dieser Task braucht `ThemeModus` aus Task 4. Führe Task 4 zuerst aus, dann diesen Task -- die Tabellen-Nummerierung im Plan folgt der Abhängigkeit, nicht zwingend der Ausführungsreihenfolge; wer die Tasks in der oben aufgeführten Zahlenreihenfolge abarbeitet, tauscht schlicht Task 3 und Task 4.
@@ -272,7 +272,7 @@ In `BackupUmwandlungTest.kt`, das `aktivitaet`-Fixture um ein abweichendes Symbo
 ```kotlin
     private val aktivitaet = Aktivitaet(
         id = 1, name = "Tabletten", notiz = "morgens und abends", farbe = 42, basisPunkte = 10,
-        icon = "medication",
+        symbol = "medication",
         zeitplan = Zeitplan.FesteZeiten(
             listOf(LocalTime.of(8, 0), LocalTime.of(20, 0)),
             setOf(DayOfWeek.MONDAY, DayOfWeek.TUESDAY),
@@ -297,14 +297,14 @@ Import ergänzen: `import de.vanhake.dayorganizer.data.ThemeModus`.
 - [ ] **Step 2: Test ausführen, Fehlschlag bestätigen**
 
 Run: `./gradlew :app:testDebugUnitTest --tests "de.vanhake.dayorganizer.backup.BackupUmwandlungTest"`
-Expected: FAIL -- Compile-Fehler, `Aktivitaet` kennt `icon` zwar schon (Task 1), aber `Einstellungen` kennt `themeModus` noch nicht (Task 4 muss zuerst fertig sein) bzw. `AktivitaetDto`/`EinstellungenDto` haben die Felder noch nicht.
+Expected: FAIL -- Compile-Fehler, `Aktivitaet` kennt `symbol` zwar schon (Task 1), aber `Einstellungen` kennt `themeModus` noch nicht (Task 4 muss zuerst fertig sein) bzw. `AktivitaetDto`/`EinstellungenDto` haben die Felder noch nicht.
 
 - [ ] **Step 3: DTOs erweitern**
 
 In `BackupModell.kt`, `AktivitaetDto`: nach `val farbe: Int,` ergänzen:
 
 ```kotlin
-    val icon: String,
+    val symbol: String,
 ```
 
 `EinstellungenDto`: um `themeModus` erweitern:
@@ -346,8 +346,8 @@ In `ausDatei(...)`, den `einstellungen`-Block erweitern:
             ),
 ```
 
-`Aktivitaet.zuDto()`: nach `farbe = farbe,` ergänzen `icon = icon,`.
-`AktivitaetDto.zuDomaene()`: nach `farbe = farbe,` ergänzen `icon = icon,`.
+`Aktivitaet.zuDto()`: nach `farbe = farbe,` ergänzen `symbol = symbol,`.
+`AktivitaetDto.zuDomaene()`: nach `farbe = farbe,` ergänzen `symbol = symbol,`.
 
 Import ergänzen: `import de.vanhake.dayorganizer.data.ThemeModus`.
 
@@ -1559,7 +1559,7 @@ git commit -m "feat(faelligkeit): echte Rueckgaengig-Anwendungsfaelle fuer Erled
 
 **Interfaces:**
 - Consumes: `FaelligkeitErledigen.mitProtokoll`, `FaelligkeitErledigenRueckgaengig`, `FaelligkeitAuslassen.mitProtokoll`, `FaelligkeitAuslassenRueckgaengig` (Task 8/9), `aktivitaetSymbol` (Task 7).
-- Produces: `HeuteEintrag.icon: String`, `HeuteViewModel.toast: StateFlow<Hinweistoast?>`, `HeuteViewModel.rueckgaengig()`.
+- Produces: `HeuteEintrag.symbol: String`, `HeuteViewModel.toast: StateFlow<Hinweistoast?>`, `HeuteViewModel.rueckgaengig()`.
 - Design-Entscheidung: `toast` ist ein **eigener** `StateFlow` auf dem ViewModel, nicht Teil von `HeuteZustand`/der `combine(...)`-Kette, die `zustand` speist -- exakt das bestehende Muster von `EinstellungenViewModel._meldung`/`meldung` neben `_zustand`/`zustand` in derselben Codebasis. Zwei Gründe: `combine(...)` in kotlinx.coroutines hat nur typisierte Überladungen bis fünf Flows (die bestehende `zustand`-Kette nutzt bereits alle fünf), und ein sechster, unabhängig getakteter Flow in derselben `combine` würde den DB-getriebenen Zustandswechsel und das Setzen des Toasts als zwei separate Emissionen auseinanderreißen, statt sie synchron im selben `zustand`-Update zu liefern.
 
 - [ ] **Step 1: `Hinweistoast`-Datenklasse und Composable**
@@ -1667,7 +1667,7 @@ data class HeuteEintrag(
     val faelligkeitId: Long,
     val aktivitaetName: String,
     val farbe: Int,
-    val icon: String,
+    val symbol: String,
     val zeitText: String?,
     val sollAnzahl: Int,
     val istAnzahl: Int,
@@ -1681,7 +1681,7 @@ data class HeuteEintrag(
 In `HeuteZusammenstellung.aus(...)`, im `HeuteEintrag(...)`-Aufbau nach `farbe = aktivitaet.farbe,` ergänzen:
 
 ```kotlin
-                icon = aktivitaet.icon,
+                symbol = aktivitaet.symbol,
 ```
 
 - [ ] **Step 7: `HeuteViewModel` umbauen**
@@ -2157,7 +2157,7 @@ private fun HeldenKarte(eintrag: HeuteEintrag, erledigen: () -> Unit, auslassen:
                     color = de.vanhake.dayorganizer.ui.theme.DayOrganizerFesteFarben.heroChipflaeche,
                 ) {
                     Icon(
-                        aktivitaetSymbol(eintrag.icon),
+                        aktivitaetSymbol(eintrag.symbol),
                         contentDescription = null,
                         modifier = Modifier.padding(18.dp).size(24.dp),
                         tint = androidx.compose.ui.graphics.Color.White,
@@ -2266,7 +2266,7 @@ private fun EintragZeile(eintrag: HeuteEintrag, erledigen: () -> Unit, auslassen
         ) {
             Surface(shape = DayOrganizerFormen.kachel, color = kachelFarbe, contentColor = kachelInk) {
                 Icon(
-                    aktivitaetSymbol(eintrag.icon),
+                    aktivitaetSymbol(eintrag.symbol),
                     contentDescription = null,
                     modifier = Modifier.padding(10.dp).size(24.dp),
                 )
