@@ -22,6 +22,7 @@ class UnbekanntesSchema(val gefunden: Int) :
     Exception("Backup-Schema $gefunden wird von dieser Version nicht gelesen")
 
 data class BackupInhalt(
+    val erstelltAm: LocalDateTime,
     val aktivitaeten: List<Aktivitaet>,
     val faelligkeiten: List<Faelligkeit>,
     val buchungen: List<Buchung>,
@@ -89,6 +90,9 @@ object BackupUmwandlung {
         if (datei.schemaVersion != SCHEMA_VERSION) throw UnbekanntesSchema(datei.schemaVersion)
 
         return BackupInhalt(
+            // Fuer die Importvorschau (Review-Fund W2): der Nutzer soll sehen, von wann
+            // das Backup ist, bevor er den aktuellen Bestand unwiderruflich ersetzt.
+            erstelltAm = LocalDateTime.parse(datei.erstelltAm),
             aktivitaeten = datei.aktivitaeten.map { it.zuDomaene() },
             faelligkeiten = datei.faelligkeiten.map { it.zuDomaene() },
             buchungen = datei.buchungen.map { it.zuDomaene() },

@@ -6,7 +6,9 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import de.vanhake.dayorganizer.backup.Backup
 import de.vanhake.dayorganizer.backup.BackupDienst
+import de.vanhake.dayorganizer.backup.BackupUmwandlung
 import de.vanhake.dayorganizer.backup.ImportErgebnis
+import de.vanhake.dayorganizer.backup.UnbekanntesSchema
 import de.vanhake.dayorganizer.data.Einstellungen
 import de.vanhake.dayorganizer.data.EinstellungenSpeicher
 import de.vanhake.dayorganizer.platform.notification.Erinnerungsanzeige
@@ -15,21 +17,24 @@ import de.vanhake.dayorganizer.platform.permission.BerechtigungsPruefer
 import de.vanhake.dayorganizer.platform.permission.Hinweis
 import de.vanhake.dayorganizer.platform.permission.waechterHaengt
 import de.vanhake.dayorganizer.platform.work.WaechterPlanung
-import de.vanhake.dayorganizer.ui.versuchen
+import de.vanhake.dayorganizer.util.versuchen
 import de.vanhake.dayorganizer.widget.WidgetAktualisierung
+import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.io.OutputStream
 import java.time.Clock
-import java.time.Duration
+import java.time.LocalDate
 import java.time.LocalDateTime
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class EinstellungenZustand(
     val tagesbonusText: String = "",
@@ -47,6 +52,16 @@ enum class Meldung {
     IMPORT_UNLESBAR,
 }
 
+/**
+ * Vorschau eines gelesenen, gueltigen Backups (Review-Fund W2): zeigt der Nutzer vor dem
+ * Import, von wann die Datei ist und wie viele Aktivitaeten sie enthaelt, bevor der
+ * aktuelle Bestand unwiderruflich ersetzt wird.
+ */
+data class ImportVorschau(
+    val erstelltAm: LocalDateTime,
+    val anzahlAktivitaeten: Int,
+)
+
 @HiltViewModel
 class EinstellungenViewModel(
     private val lesen: suspend () -> Einstellungen,
@@ -55,6 +70,7 @@ class EinstellungenViewModel(
     private val backupDienst: Backup,
     private val nachImport: suspend () -> Unit,
     private val ioDispatcher: CoroutineDispatcher,
+    private val heute: () -> LocalDate,
 ) : ViewModel() {
 
     @Inject
@@ -92,6 +108,9 @@ class EinstellungenViewModel(
             widgetAktualisierung.anstossen()
         },
         ioDispatcher = Dispatchers.IO,
+        // Kein now(): dasselbe injizierte Clock, das auch fuer die Hinweise benutzt wird
+        // (Review-Fund W2 -- der vorgeschlagene Export-Dateiname traegt das heutige Datum).
+        heute = { LocalDate.now(uhr) },
     )
 
     private val _zustand = MutableStateFlow(EinstellungenZustand())
@@ -99,6 +118,20 @@ class EinstellungenViewModel(
 
     private val _meldung = MutableStateFlow<Meldung?>(null)
     val meldung: StateFlow<Meldung?> = _meldung.asStateFlow()
+
+    private val _importVorschau = MutableStateFlow<ImportVorschau?>(null)
+    val importVorschau: StateFlow<ImportVorschau?> = _importVorschau.asStateFlow()
+
+    /**
+     * Der in [importVorschauAnfordern] gelesene Dateitext, bis zur Bestaetigung oder zum
+     * Abbruch (Review-Fund W2). Kein StateFlow: nur [importBestaetigen] liest ihn, der
+     * Screen braucht ihn nicht -- die Datei muss dafuer nicht ein zweites Mal geoeffnet
+     * werden.
+     */
+    private var gelesenerImportText: String? = null
+
+    /** Heutiges Datum fuer den vorgeschlagenen Export-Dateinamen (Review-Fund W2). */
+    val exportDatum: String get() = heute().toString()
 
     init {
         viewModelScope.launch { neuLaden() }
@@ -133,36 +166,86 @@ class EinstellungenViewModel(
         )
     }
 
-    /** Siehe [exportieren] -- dasselbe Muster fuer den Eingabestrom. */
-    fun importieren(oeffnen: () -> InputStream?) = viewModelScope.launch(ioDispatcher) {
-        // Der Dienst liefert jeden bekannten Fehlschlag als ImportErgebnis. Das
-        // versuchen faengt, was trotzdem durchkommt -- ein Strom, der sich nicht
-        // oeffnen laesst, oder ein Lesefehler des Dateidialogs --, damit ein Import
-        // niemals die App beendet.
+    /**
+     * Erster Schritt des zweistufigen Imports (Review-Fund W2): liest die gewaehlte Datei
+     * und prueft sie -- ueber [BackupUmwandlung.ausText], dieselbe Schemapruefung wie
+     * [BackupDienst.importieren], keine zweite Leselogik. Ist die Datei gueltig, zeigt
+     * [importVorschau] von wann sie ist und wie viele Aktivitaeten sie enthaelt; ist sie
+     * ungueltig, erscheint direkt die bestehende Fehlermeldung, ohne Rueckfrage. Der
+     * gelesene Text bleibt bis [importBestaetigen] oder [importVorschauAbbrechen] hier
+     * gehalten, damit die Datei nicht zweimal geoeffnet werden muss.
+     */
+    fun importVorschauAnfordern(oeffnen: () -> InputStream?) = viewModelScope.launch(ioDispatcher) {
         val ergebnis = versuchen {
             val strom = oeffnen() ?: error("Eingabestrom konnte nicht geoeffnet werden")
-            strom.use { backupDienst.importieren(it) }
+            val text = strom.use { it.bufferedReader().readText() }
+            text to BackupUmwandlung.ausText(text)
         }
-        _meldung.value = ergebnis.fold(
-            onSuccess = { erfolg ->
-                when (erfolg) {
-                    is ImportErgebnis.Erfolg -> if (erfolg.einstellungenUebernommen) {
-                        Meldung.IMPORT_FERTIG
-                    } else {
-                        Meldung.IMPORT_EINSTELLUNGEN_FEHLGESCHLAGEN
-                    }
-                    is ImportErgebnis.FalschesSchema -> Meldung.IMPORT_FALSCHES_SCHEMA
-                    is ImportErgebnis.Unlesbar -> Meldung.IMPORT_UNLESBAR
+        ergebnis.fold(
+            onSuccess = { (text, inhalt) ->
+                gelesenerImportText = text
+                _importVorschau.value = ImportVorschau(
+                    erstelltAm = inhalt.erstelltAm,
+                    anzahlAktivitaeten = inhalt.aktivitaeten.size,
+                )
+            },
+            onFailure = { fehler ->
+                _meldung.value = if (fehler is UnbekanntesSchema) {
+                    Meldung.IMPORT_FALSCHES_SCHEMA
+                } else {
+                    Meldung.IMPORT_UNLESBAR
                 }
             },
-            onFailure = { Meldung.IMPORT_UNLESBAR },
         )
-        // Nur ein Import, der den Bestand tatsaechlich ersetzt hat, darf den Zustand
-        // neu laden und Waechter/Benachrichtigungen anstossen -- ein abgelehnter Import
-        // (falsches Schema, unlesbar) hat nichts veraendert (Review-Fund W3/W6).
-        if (ergebnis.getOrNull() is ImportErgebnis.Erfolg) {
-            neuLaden()
-            nachImport()
+    }
+
+    /** "Abbrechen" im Vorschau-Dialog (Review-Fund W2): laesst den Bestand unveraendert. */
+    fun importVorschauAbbrechen() {
+        gelesenerImportText = null
+        _importVorschau.value = null
+    }
+
+    /**
+     * Zweiter Schritt (Review-Fund W2): importiert mit dem in [importVorschauAnfordern]
+     * gelesenen Text, ohne die Datei erneut zu oeffnen.
+     *
+     * Alles ab hier laeuft unter NonCancellable (Review-Fund W1): verlaesst der Nutzer den
+     * Einstellungen-Tab, waehrend der Import laeuft, nimmt popUpTo den Eintrag vom
+     * Navigations-Stapel und viewModelScope wird abgebrochen. Trifft dieser Abbruch NACH
+     * dem Datenbank-Commit in backupDienst.importieren() ein, muessen neuLaden() und
+     * nachImport() trotzdem zu Ende laufen -- sonst bleibt die Tabelle erinnerung leer und
+     * kein Waechter wird angestossen, bis zum naechsten planmaessigen Lauf.
+     */
+    fun importBestaetigen() = viewModelScope.launch(ioDispatcher) {
+        val text = gelesenerImportText ?: return@launch
+        gelesenerImportText = null
+        _importVorschau.value = null
+
+        withContext(NonCancellable) {
+            val ergebnis = versuchen {
+                backupDienst.importieren(ByteArrayInputStream(text.toByteArray()))
+            }
+            _meldung.value = ergebnis.fold(
+                onSuccess = { erfolg ->
+                    when (erfolg) {
+                        is ImportErgebnis.Erfolg -> if (erfolg.einstellungenUebernommen) {
+                            Meldung.IMPORT_FERTIG
+                        } else {
+                            Meldung.IMPORT_EINSTELLUNGEN_FEHLGESCHLAGEN
+                        }
+                        is ImportErgebnis.FalschesSchema -> Meldung.IMPORT_FALSCHES_SCHEMA
+                        is ImportErgebnis.Unlesbar -> Meldung.IMPORT_UNLESBAR
+                    }
+                },
+                onFailure = { Meldung.IMPORT_UNLESBAR },
+            )
+            // Nur ein Import, der den Bestand tatsaechlich ersetzt hat, darf den Zustand
+            // neu laden und Waechter/Benachrichtigungen anstossen -- ein abgelehnter Import
+            // (falsches Schema, unlesbar) hat nichts veraendert (Review-Fund W3/W6).
+            if (ergebnis.getOrNull() is ImportErgebnis.Erfolg) {
+                neuLaden()
+                nachImport()
+            }
         }
     }
 

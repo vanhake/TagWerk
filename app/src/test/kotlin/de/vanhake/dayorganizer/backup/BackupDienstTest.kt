@@ -23,7 +23,9 @@ import java.io.IOException
 import java.time.Clock
 import java.time.LocalDate
 import java.time.LocalDateTime
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 @RunWith(RobolectricTestRunner::class)
@@ -33,9 +35,9 @@ class BackupDienstTest {
     private lateinit var db: DayOrganizerDatenbank
     private lateinit var dienst: BackupDienst
 
-    // Direkt (nicht ueber BackupDienst.fuerTest) konstruiert, damit die Tests den
-    // gehaltenen Stand lesen und veraendern koennen -- fuerTest haelt ihn privat in
-    // einer Closure (Review-Fund W7: die Einstellungen muessen mitgeprueft werden).
+    // Direkt konstruiert (Review-Fund G1: der Testkonstruktor BackupDienst.fuerTest() war
+    // toter Produktivcode und wurde entfernt), damit die Tests den gehaltenen Stand lesen
+    // und veraendern koennen (Review-Fund W7: die Einstellungen muessen mitgeprueft werden).
     private var einstellungenGehalten = Einstellungen()
 
     @Before
@@ -242,6 +244,37 @@ class BackupDienstTest {
 
         assertTrue(ergebnis is ImportErgebnis.Erfolg)
         assertEquals(false, (ergebnis as ImportErgebnis.Erfolg).einstellungenUebernommen)
+        assertEquals(listOf("Tabletten"), db.aktivitaetDao().alle().map { it.name })
+    }
+
+    // Review-Fund W1: die drei catch (fehler: Exception) in importieren() wurden auf
+    // versuchen umgestellt, damit ein Abbruch nicht als gewoehnlicher Fehlschlag
+    // (Unlesbar bzw. einstellungenUebernommen = false) misszudeuten wird, sondern
+    // weiterfliegt -- hier fuer den letzten der drei Bloecke, das Schreiben der
+    // Einstellungen nach dem Commit.
+    //
+    // Mutationsnachweis: ein catch (fehler: Exception) statt versuchen faengt hier auch
+    // die CancellationException und liefert Erfolg(einstellungenUebernommen = false)
+    // statt sie weiterzuwerfen -- dieser Test faellt dann, weil assertFailsWith keine
+    // Ausnahme sieht.
+    @Test
+    fun ein_Abbruch_beim_Schreiben_der_Einstellungen_fliegt_weiter() = runTest {
+        db.aktivitaetDao().einfuegen(aktivitaet("Tabletten"))
+        val puffer = ByteArrayOutputStream()
+        dienst.exportieren(puffer)
+
+        val dienstMitAbbrechendenEinstellungen = BackupDienst(
+            db = db,
+            einstellungenLesen = { einstellungenGehalten },
+            einstellungenSchreiben = { throw CancellationException("Tab verlassen") },
+            uhr = Clock.systemDefaultZone(),
+        )
+
+        assertFailsWith<CancellationException> {
+            dienstMitAbbrechendenEinstellungen.importieren(ByteArrayInputStream(puffer.toByteArray()))
+        }
+        // Der Datenbestand ist trotz des Abbruchs beim Schreiben der Einstellungen
+        // ersetzt worden -- das ist bereits committet, bevor einstellungenSchreiben laeuft.
         assertEquals(listOf("Tabletten"), db.aktivitaetDao().alle().map { it.name })
     }
 }

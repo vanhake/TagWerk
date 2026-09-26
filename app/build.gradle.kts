@@ -91,7 +91,6 @@ dependencies {
 
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.glance.appwidget)
-    implementation(libs.glance.material3)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test)

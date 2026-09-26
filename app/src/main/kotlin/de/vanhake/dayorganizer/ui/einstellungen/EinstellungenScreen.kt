@@ -8,12 +8,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -29,6 +31,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.vanhake.dayorganizer.R
 import de.vanhake.dayorganizer.platform.permission.einstellungsIntent
 import de.vanhake.dayorganizer.ui.gemeinsam.WarnBanner
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 private fun Meldung.textId(): Int = when (this) {
     Meldung.EXPORT_FERTIG -> R.string.backup_export_fertig
@@ -43,6 +47,7 @@ private fun Meldung.textId(): Int = when (this) {
 fun EinstellungenScreen(viewModel: EinstellungenViewModel = hiltViewModel()) {
     val zustand by viewModel.zustand.collectAsStateWithLifecycle()
     val meldung by viewModel.meldung.collectAsStateWithLifecycle()
+    val importVorschau by viewModel.importVorschau.collectAsStateWithLifecycle()
     val kontext = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -73,15 +78,19 @@ fun EinstellungenScreen(viewModel: EinstellungenViewModel = hiltViewModel()) {
         }
     }
 
+    // Review-Fund G5: manche Anbieter melden .json-Dateien nicht als application/json,
+    // sondern als application/octet-stream oder text/plain -- OpenDocument blendete sie
+    // dann aus. Eine falsche Datei faengt ohnehin die Schemapruefung ab.
     val importQuelle = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
         uri?.let { quelle ->
-            viewModel.importieren { kontext.contentResolver.openInputStream(quelle) }
+            viewModel.importVorschauAnfordern { kontext.contentResolver.openInputStream(quelle) }
         }
     }
 
-    val backupDateiname = stringResource(R.string.backup_dateiname)
+    // Kein now(): exportDatum kommt aus dem im ViewModel injizierten Clock (Review-Fund W2).
+    val backupDateiname = stringResource(R.string.backup_dateiname, viewModel.exportDatum)
 
     Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) { innen ->
         Column(
@@ -124,11 +133,45 @@ fun EinstellungenScreen(viewModel: EinstellungenViewModel = hiltViewModel()) {
             }
 
             Button(
-                onClick = { importQuelle.launch(arrayOf("application/json")) },
+                onClick = {
+                    importQuelle.launch(
+                        arrayOf("application/json", "application/octet-stream", "text/plain"),
+                    )
+                },
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(stringResource(R.string.backup_importieren))
             }
         }
+    }
+
+    // Review-Fund W2: erst nach dieser Rueckfrage wird tatsaechlich importiert --
+    // "Abbrechen" laesst den Bestand unveraendert.
+    importVorschau?.let { vorschau ->
+        val muster = stringResource(R.string.backup_import_vorschau_datum_muster)
+        val formatierer = remember(muster) { DateTimeFormatter.ofPattern(muster, Locale.getDefault()) }
+        AlertDialog(
+            onDismissRequest = viewModel::importVorschauAbbrechen,
+            title = { Text(stringResource(R.string.backup_import_vorschau_titel)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.backup_import_vorschau_text,
+                        vorschau.erstelltAm.format(formatierer),
+                        vorschau.anzahlAktivitaeten,
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = viewModel::importBestaetigen) {
+                    Text(stringResource(R.string.backup_import_vorschau_bestaetigen))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::importVorschauAbbrechen) {
+                    Text(stringResource(R.string.backup_import_vorschau_abbrechen))
+                }
+            },
+        )
     }
 }

@@ -9,7 +9,7 @@ import de.vanhake.dayorganizer.data.repository.BuchungRepository
 import de.vanhake.dayorganizer.domain.rechner.Hindernis
 import de.vanhake.dayorganizer.domainuse.BelohnungEinloesen
 import de.vanhake.dayorganizer.domainuse.EinloeseErgebnis
-import de.vanhake.dayorganizer.ui.versuchen
+import de.vanhake.dayorganizer.util.versuchen
 import de.vanhake.dayorganizer.widget.WidgetAktualisierung
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers

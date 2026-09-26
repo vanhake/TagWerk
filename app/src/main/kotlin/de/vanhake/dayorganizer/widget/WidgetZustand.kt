@@ -11,6 +11,11 @@ data class WidgetEintrag(
     val name: String,
     val zeitText: String?,
     val ueberfaellig: Boolean,
+    /** Wie HeuteZusammenstellung/HeuteScreen: bei Zaehlzielen (sollAnzahl > 1) zeigt das
+     * Widget den Stand "istAnzahl/sollAnzahl" (Review-Fund G2) -- ein Tipp aendert sonst
+     * nichts sichtbar, und ein zweiter Tipp aus Unsicherheit zaehlt doppelt. */
+    val istAnzahl: Int,
+    val sollAnzahl: Int,
 )
 
 data class WidgetZustand(
@@ -61,6 +66,8 @@ object WidgetZusammenstellung {
                     name = nachId.getValue(f.aktivitaetId).name,
                     zeitText = f.geplantFuer?.format(UHRZEIT),
                     ueberfaellig = f.geplantFuer != null && f.geplantFuer!!.isBefore(jetzt),
+                    istAnzahl = f.istAnzahl,
+                    sollAnzahl = f.sollAnzahl,
                 )
             },
             weitere = (offen.size - hoechstens).coerceAtLeast(0),

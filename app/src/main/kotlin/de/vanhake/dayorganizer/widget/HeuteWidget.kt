@@ -101,8 +101,16 @@ class HeuteWidget : GlanceAppWidget() {
                                 ),
                             ),
                     ) {
+                        // Zaehlziele (sollAnzahl > 1) zeigen ihren Stand, genau wie der
+                        // Heute-Bildschirm (HeuteScreen.ziel_fortschritt) -- Review-Fund G2.
+                        val fortschritt = if (eintrag.sollAnzahl > 1) {
+                            res.getString(R.string.widget_ziel_fortschritt, eintrag.istAnzahl, eintrag.sollAnzahl)
+                        } else {
+                            null
+                        }
                         Text(
-                            text = listOfNotNull(eintrag.zeitText, eintrag.name).joinToString("  "),
+                            text = listOfNotNull(eintrag.zeitText, eintrag.name, fortschritt)
+                                .joinToString("  "),
                             style = TextStyle(
                                 color = ColorProvider(
                                     if (eintrag.ueberfaellig) Color(0xFFB00020) else Color.Black,

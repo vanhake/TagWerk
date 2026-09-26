@@ -110,4 +110,21 @@ class WidgetZustandTest {
 
         assertEquals(null, zustand.eintraege.single().zeitText)
     }
+
+    // Review-Fund G2: ein Tipp auf ein Zaehlziel aendert am Eintrag heute nichts
+    // Sichtbares, ein zweiter Tipp aus Unsicherheit zaehlt dann doppelt. Das Widget muss
+    // denselben Stand tragen wie der Heute-Bildschirm (HeuteZusammenstellung/HeuteScreen).
+    @Test
+    fun `ein Zaehlziel traegt seinen Stand`() {
+        val ziel = Faelligkeit(
+            id = 31, aktivitaetId = 1, periodeVon = tag, periodeBis = tag.plusDays(6),
+            geplantFuer = null, sollAnzahl = 3, istAnzahl = 1,
+        )
+
+        val zustand = WidgetZusammenstellung.aus(listOf(ziel), listOf(tabletten), 0, jetzt, 5)
+
+        val eintrag = zustand.eintraege.single()
+        assertEquals(1, eintrag.istAnzahl)
+        assertEquals(3, eintrag.sollAnzahl)
+    }
 }

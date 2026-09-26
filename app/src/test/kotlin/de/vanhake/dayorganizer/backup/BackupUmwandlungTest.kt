@@ -87,6 +87,24 @@ class BackupUmwandlungTest {
         assertEquals(BackupUmwandlung.SCHEMA_VERSION, datei().schemaVersion)
     }
 
+    // Review-Fund W2: die Importvorschau zeigt, von wann das Backup ist -- dafuer muss
+    // ausDatei() den Zeitpunkt aus der Datei zurueckgeben, nicht nur die Listen.
+    @Test
+    fun `erstelltAm wird beim Einlesen mitgeliefert`() {
+        val erstelltAm = LocalDateTime.of(2026, 3, 2, 21, 0)
+        val inhalt = BackupUmwandlung.ausDatei(
+            BackupUmwandlung.zuDatei(
+                erstelltAm = erstelltAm,
+                aktivitaeten = listOf(aktivitaet), faelligkeiten = listOf(faelligkeit),
+                buchungen = listOf(buchung), belohnungen = listOf(belohnung),
+                einloesungen = listOf(einloesung),
+                einstellungen = Einstellungen(tagesbonusPunkte = 25, standardKulanzMinuten = 45),
+            ),
+        )
+
+        assertEquals(erstelltAm, inhalt.erstelltAm)
+    }
+
     @Test
     fun `eine unbekannte Schemaversion wird abgelehnt`() {
         val fremd = datei().copy(schemaVersion = 99)
