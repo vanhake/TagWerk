@@ -1,6 +1,6 @@
 # Übergabe — Stand und wie es weitergeht
 
-Letzte Aktualisierung: 2026-09-20, Branch `plan-2-belohnungen`, Commit `582c47c`.
+Letzte Aktualisierung: 2026-09-26, Branch `plan-3-widget-backup`, Commit `9e0ec0f`.
 
 Dieses Dokument soll reichen, um in einer neuen Sitzung ohne Vorwissen
 weiterzuarbeiten. Die Wahrheit steht im Code und in `git log`; wo dieses
@@ -8,22 +8,24 @@ Dokument davon abweicht, hat der Code recht.
 
 ## Wo wir stehen
 
-**Plan 1 und Plan 2 sind vollständig umgesetzt.** Plan 1 ist auf `main`
-gemergt. Plan 2 liegt auf `plan-2-belohnungen`: 21 Commits, 248 Tests, alle
-grün, APK baut. Das Abschlussreview über den ganzen Branch sagt „Merge nach
-Fixes"; die Fixes sind gemacht (`4b1c1a4`, `582c47c`), der Branch ist
+**Alle drei Pläne sind vollständig umgesetzt.** Plan 1 und 2 sind auf `main`
+gemergt. Plan 3 liegt auf `plan-3-widget-backup`: 18 Commits, 317 Tests, alle
+grün, Debug **und Release** bauen. Das Abschlussreview über den ganzen Branch
+sagt „Merge nach Fixes"; die Fixes sind gemacht (`9e0ec0f`), der Branch ist
 mergebereit.
 
-Was die App heute kann: Aktivitäten mit vier Zeitplantypen anlegen, bearbeiten
-und archivieren; zuverlässig erinnern (ein rollierender Exakt-Alarm, Nachfassen,
-Nachholen verpasster Termine, Selbstheilung nach Neustart); aus der
-Benachrichtigung abhaken; Punkte sammeln samt Serien-, Pünktlichkeits- und
-Tagesbonus; Belohnungen anlegen und einlösen, mit Mindestserie oder Startdatum
+Damit ist der Funktionsumfang des Design-Dokuments erreicht. Die App kann:
+Aktivitäten mit vier Zeitplantypen anlegen, bearbeiten und archivieren;
+zuverlässig erinnern (ein rollierender Exakt-Alarm, Nachfassen, Nachholen
+verpasster Termine, Selbstheilung nach Neustart); aus der Benachrichtigung
+abhaken; Punkte sammeln samt Serien-, Pünktlichkeits- und Tagesbonus;
+Belohnungen anlegen, archivieren und einlösen, mit Mindestserie oder Startdatum
 als Bedingung; Statistik mit Heatmap, Quoten, Serien und Punkteverlauf;
-Einstellungen für Tagesbonus und Standard-Kulanzfenster.
+Einstellungen für Tagesbonus und Standard-Kulanzfenster; alles als JSON
+exportieren und wieder einlesen; und vom Startbildschirm aus abhaken.
 
-Was noch fehlt: Widget und JSON-Backup (Plan 3), dazu die unter
-„Offene Punkte" gesammelten Lücken.
+Was fehlt, steht unter „Offene Punkte" — nichts davon ist eine ganze Funktion,
+die das Design verspricht, bis auf drei kleine Lücken, die dort benannt sind.
 
 ## Umgebung
 
@@ -148,25 +150,31 @@ Berichte von Plan 1. Die Artefakte liegen jetzt getrennt unter
 
 ## Offene Punkte
 
-Das Abschlussreview hat diese Liste triagiert. Nichts davon blockiert den Merge.
+Das Abschlussreview über Plan 3 hat diese Liste triagiert. Nichts davon
+blockiert den Merge. Die Liste aus Plan 2 ist abgearbeitet: Belohnungen lassen
+sich archivieren, eine gescheiterte Einlösung meldet sich, die DataStore-Zugriffe
+sind abgesichert, und der Rollback ist erstmals nachgewiesen.
 
-### Vor oder mit Plan 3 angehen
+### Als Erstes angehen
 
 | Punkt | Warum |
 |---|---|
-| Belohnungen lassen sich nirgends archivieren | `BelohnungenViewModel.archivieren()` ist toter Code, DAO und Repository sind fertig, nur der Knopf fehlt. Design §5 nennt „Belohnungsverwaltung". Eine falsch angelegte Belohnung bleibt für immer im Shop **und** beeinflusst die Zielzeile auf Heute. |
-| Ein korrupter Datensatz reißt den Startbildschirm mit | `error("Unbekannte Belohnungsbedingung")` im Mapper läuft innerhalb von `beobachteAktive().map`. Seit der Heute-Screen denselben Flow sammelt, nimmt ein einziger kaputter Eintrag nicht mehr nur den Shop mit, sondern den Start. |
-| Eine gescheiterte Einlösung bleibt stumm | `Abgelehnt` und `Unbekannt` werden verworfen, der Zustand hat kein Fehlerfeld. Bei einer Aktion, die Punkte kostet, sollte der Nutzer erfahren, dass nichts passiert ist. |
-| Der Abbruchfall ist nirgends verifiziert | `FakeTransaktionen` kann kein Rollback abbilden, `RaumTransaktionen` hat keinen Test. Die Atomarität des Geldpfads ruht allein auf Rooms Zusage. Unter Robolectric mit echter Room-Datenbank testbar — dafür braucht es kein Gerät. |
+| Drei Stile der Fehlerbehandlung nebeneinander | `versuchen{}` (in `util`), `runCatching` mit Weiterwerfen in `WidgetAktualisierung`, und bis zuletzt `catch (Exception)` im `BackupDienst`. Aus genau dieser Uneinheitlichkeit ist der schwerste Fund des Abschlussreviews entstanden. Überall `versuchen{}` benutzen. |
+| Die Folge „verstecken, neu planen, Widget anstoßen" steht viermal von Hand da | In `HeuteViewModel` (zweimal), `AktionsEmpfaenger` und `WidgetErledigenAktion`. Dieselbe Lücke ist zweimal aufgetreten — Fix 9 in Plan 1 und die Plan-3-Korrektur. Ein gemeinsamer Nach-Schreib-Schritt schließt das. |
+| Ein korrupter Datensatz reißt den Startbildschirm mit | `error("Unbekannte Belohnungsbedingung")` im Mapper läuft innerhalb von `beobachteAktive().map`. Seit der Heute-Screen denselben Flow sammelt, nimmt ein einziger kaputter Eintrag nicht mehr nur den Shop mit, sondern den Start. Seit dem Backup ist er auch von außen erzeugbar. |
+| `EinstellungenSpeicher` liefert bei E/A-Fehlern still Vorgabewerte | Seit dem `ReplaceFileCorruptionHandler` trifft der `IOException`-Fang nur noch echte Lesefehler. Dann bucht `FaelligkeitErledigen` still den Tagesbonus 15 statt des eingestellten Werts ins Journal — falsche Zahlen statt eines lauten Fehlers. Vorschlag: nur die Beobachtung für die Oberfläche absichern, im Buchungspfad weiterwerfen. |
 | Archivierte Aktivitäten in der Statistik | Ihre Fälligkeiten färben weiter die Heatmap, aber Quote und Serie sind unsichtbar (`alleAktiven()` filtert sie). Design §3.1 begründet das Archivieren gerade damit, dass die Historie erhalten bleibt. |
-| Ungeschützte DataStore-Lesezugriffe | `HeuteViewModel.beimSichtbarwerden`, `EinstellungenViewModel.neuLaden` und `AktivitaetBearbeitenViewModel.laden(0)` lesen ohne `runCatching`. Eine `IOException` bei Korruption beendet die App — auf Heute eine Absturzschleife. Die Schreibseite ist überall geschützt, die Leseseite nie. `BelohnungenViewModel.einloesen` macht es richtig. |
 
 ### Lücken gegenüber dem Design, die kein Plan abdeckt
 
+- **`icon` gibt es im Modell nicht.** Design §3.1 und §3.7 nennen ein Icon für
+  Aktivitäten und Belohnungen. Es fehlt seit Plan 1 durchgehend — und eine
+  spätere Ergänzung braucht **Backup-Schemaversion 2**, weil die Datei das Feld
+  dann führen muss.
 - **Standardwert fürs Nachfassen.** Design §5 verlangt Standardwerte für
-  Kulanzfenster *und Nachfassen*. Die Kulanz ist in Plan 2 verdrahtet worden,
-  das Nachfassen nicht — `nachfassAnzahl` und `nachfassAbstandMinuten` stehen
-  fest in `AktivitaetEntwurf`.
+  Kulanzfenster *und Nachfassen*. Die Kulanz ist verdrahtet, das Nachfassen
+  nicht — `nachfassAnzahl` und `nachfassAbstandMinuten` stehen fest in
+  `AktivitaetEntwurf`.
 - **Detailansicht einer Aktivität** mit Serie, Quote und Historie (Design §5).
   Steht in keinem der drei Pläne.
 - **Balken** unter der Zeile „noch 40 Punkte bis Kinoabend" auf Heute
@@ -175,20 +183,34 @@ Das Abschlussreview hat diese Liste triagiert. Nichts davon blockiert den Merge.
 ### Kleinigkeiten, bewusst offen
 
 - Doppelt gepflegt: die Regel „was gehört diesem Tag" steht in
-  `FaelligkeitErledigen` und `StatistikRechner`. Plan 3 (Widget) braucht sie ein
-  drittes Mal — ein `Faelligkeit.gehoertZumTag(tag)` in `:domain` schließt das.
-- Der Heute-Ring zählt Wochenziele mit, Tagesbonus und Heatmap nicht. Zwei von
-  drei stimmen überein, der Ring ist der Ausreißer.
+  `FaelligkeitErledigen` und `StatistikRechner`; `WidgetZusammenstellung` und
+  `HeuteZusammenstellung` wählen dieselben Einträge zweimal aus. Heute
+  antworten sie gleich — aber es sind zwei Wahrheiten.
+- Direkt nach einem Import feuern die Erinnerungen für alles heute Offene
+  erneut, weil die „ausgelöst"-Zeilen nicht gesichert werden. Beim
+  Gerätewechsel ist das sogar erwünscht; es sollte nur dokumentiert sein.
+- Zwischen Mitternacht und dem nächsten 30-Minuten-Update zeigt das Widget die
+  Fälligkeiten von gestern; ein Tipp bucht dann die gestrige. Die
+  Benachrichtigungen verhalten sich genauso, der Wächter läuft erst um 03:00.
+- `VerpassteAbschliessen` schreibt ganze Zeilen per `@Update` ohne Transaktion.
+  Läuft der Wächter genau während eines Imports, könnte er alte Zeilen über
+  neue ids schreiben. Fenster: Millisekunden.
+- `WidgetErledigenAktion` ruft `updateAll()` direkt statt über
+  `WidgetAktualisierung` und hat keine Fehlerbehandlung.
+- Der Widget-Katalog zeigt nur das App-Symbol (kein `previewLayout`), und
+  Glance hat kein eigenes `errorUiLayout`.
+- `beobachteTag` hat keinen `id`-Tiebreaker; zwei Zeilen gleicher Periode ohne
+  Sollzeitpunkt haben keine zugesicherte Reihenfolge.
+- Der Heute-Ring zählt Wochenziele mit, Tagesbonus und Heatmap nicht.
 - Die Zeitraum-Chips der Statistik regieren Heatmap und Punkteverlauf, aber
   nicht Quote und Serien — für `laengsteSerie` ist das zwingend, für die Quote
   eine stille Abweichung. Eine Beschriftung genügt.
-- `BuchungRepository.fuerZeitraum` hat keinen Produktivaufrufer mehr, seit der
-  Punkteverlauf auf `alle()` umgestellt wurde. Samt DAO-Test und Fake.
+- `BuchungRepository.fuerZeitraum` hat keinen Produktivaufrufer mehr.
 - `bedingung_datum_fehlt` ist eine verwaiste Zeichenkette: bei ungültigem Datum
   sieht der Nutzer nur einen roten Rand, die vorbereitete Erklärung nie.
 - Navigation ohne `saveState`/`restoreState`: jeder Tab-Wechsel verwirft das
   ViewModel des verlassenen Tabs samt Scrollposition.
-- Beide Canvas-Flächen (Heatmap, Punkteverlauf) sind für TalkBack unsichtbar.
+- Heatmap, Punkteverlauf und das Widget sind für TalkBack unsichtbar.
 - Kein Limit auf `beobachteEinloesungen()`; die Historie wächst unbegrenzt.
 - Tagesbonus ohne Obergrenze; der Kontostand wird als `Int` summiert.
 - Ausgelöste `erinnerung`-Zeilen werden nie aufgeräumt (1–2 KB/Tag).
@@ -210,17 +232,28 @@ liegen ausschließlich lokal.
 neue Schema-Datei erzeugt, scheitert mit `FileNotFoundException: Missing file:
 .../N.json` in `mergeDebugAssets`, weil `app/schemas` außerhalb des
 Build-Verzeichnisses liegt. Ein zweiter, identischer Lauf geht durch. Plan 3
-ergänzt nur Abfragen und hebt die Version nicht an.
+ergänzte nur Abfragen und hat die Version nicht angehoben.
+
+**Das Backup trägt eine eigene Version.** `BackupUmwandlung.SCHEMA_VERSION` steht
+auf 1, und `app/src/test/resources/backup/beispiel-schema-1.json` ist der
+eingefrorene Vertrag dafür: Wer ein DTO-Feld, eine Enum-Konstante oder die
+Kodierung eines Zeitplans ändert, macht alle bestehenden Backups unlesbar — dann
+braucht es Version 2 und einen Lesepfad für Version 1, keine angepasste
+Testdatei.
 
 ## So geht es weiter
 
 ```
-1. plan-2-belohnungen mergen. Das Abschlussreview ist durch, die Fixes sind drin.
+1. plan-3-widget-backup mergen. Das Abschlussreview ist durch, die Fixes sind
+   drin, Debug und Release bauen.
 2. Auf einem echten Handy durchspielen.  ./gradlew :app:installDebug
-   Im Emulator ist die Oberfläche inzwischen einmal komplett durchgespielt und
-   vier Befunde daraus sind behoben. Was der Emulator nicht zeigen kann: ob die
-   Benachrichtigung auf einem konkreten Gerät um 8:00 ankommt und der Hersteller
-   sie nicht wegoptimiert.
-3. Aus „Vor oder mit Plan 3 angehen" entscheiden, was vorgezogen wird.
-4. Plan 3 umsetzen, wieder subagent-getrieben.
+   Im Emulator ist alles einmal durchgespielt, inklusive Backup, Widget und
+   einer absichtlich beschädigten Einstellungsdatei. Was der Emulator nicht
+   zeigen kann: ob die Erinnerung auf einem konkreten Gerät um 8:00 ankommt und
+   der Hersteller sie nicht wegoptimiert, und ob der Dateidialog bei Google
+   Drive die .json-Datei anbietet (der MIME-Filter ist dafür erweitert, aber
+   ungeprüft).
+3. Aus „Als Erstes angehen" entscheiden, was zuerst drankommt. Ein vierter Plan
+   ist nicht geschrieben; die Punkte sind klein genug, um sie einzeln
+   anzugehen.
 ```
