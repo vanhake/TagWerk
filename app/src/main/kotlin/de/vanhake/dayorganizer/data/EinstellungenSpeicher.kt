@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -20,9 +21,12 @@ import java.time.ZoneOffset
 import javax.inject.Inject
 import javax.inject.Singleton
 
+enum class ThemeModus { HELL, DUNKEL }
+
 data class Einstellungen(
     val tagesbonusPunkte: Int = 15,
     val standardKulanzMinuten: Int = 60,
+    val themeModus: ThemeModus = ThemeModus.HELL,
 )
 
 /**
@@ -58,6 +62,7 @@ class EinstellungenSpeicher(
 
     private val tagesbonus = intPreferencesKey("tagesbonus_punkte")
     private val kulanz = intPreferencesKey("standard_kulanz_minuten")
+    private val themeModus = stringPreferencesKey("theme_modus")
 
     // Betriebszustand des Waechters, keine Nutzereinstellung -- deshalb ein eigener Key statt
     // eines Feldes auf Einstellungen, das eines Tages von einem JSON-Backup serialisiert wird.
@@ -75,6 +80,8 @@ class EinstellungenSpeicher(
         Einstellungen(
             tagesbonusPunkte = it[tagesbonus] ?: 15,
             standardKulanzMinuten = it[kulanz] ?: 60,
+            themeModus = it[themeModus]?.let { name -> runCatching { ThemeModus.valueOf(name) }.getOrNull() }
+                ?: ThemeModus.HELL,
         )
     }
 
@@ -84,6 +91,7 @@ class EinstellungenSpeicher(
         datenStore.edit {
             it[tagesbonus] = einstellungen.tagesbonusPunkte
             it[kulanz] = einstellungen.standardKulanzMinuten
+            it[themeModus] = einstellungen.themeModus.name
         }
     }
 

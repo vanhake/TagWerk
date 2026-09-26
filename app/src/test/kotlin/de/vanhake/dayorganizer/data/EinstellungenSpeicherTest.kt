@@ -69,4 +69,30 @@ class EinstellungenSpeicherTest {
         assertEquals(LocalDateTime.of(2026, 3, 2, 3, 0), speicher.letzterWaechterErfolg())
         verzeichnis.deleteRecursively()
     }
+
+    private fun neuerSpeicher(): EinstellungenSpeicher {
+        val verzeichnis = Files.createTempDirectory("einstellungen-theme").toFile()
+        val datei = File(verzeichnis, "einstellungen.preferences_pb")
+        val datenStore = PreferenceDataStoreFactory.create(
+            corruptionHandler = EINSTELLUNGEN_BEI_KORRUPTION,
+            produceFile = { datei },
+        )
+        return EinstellungenSpeicher(datenStore)
+    }
+
+    @Test
+    fun `ohne gespeicherten Modus gilt hell als Standard`() = runTest {
+        val speicher = neuerSpeicher()
+
+        assertEquals(ThemeModus.HELL, speicher.lesen().themeModus)
+    }
+
+    @Test
+    fun `der Farbmodus wird gespeichert und wieder gelesen`() = runTest {
+        val speicher = neuerSpeicher()
+
+        speicher.schreiben(Einstellungen(themeModus = ThemeModus.DUNKEL))
+
+        assertEquals(ThemeModus.DUNKEL, speicher.lesen().themeModus)
+    }
 }
