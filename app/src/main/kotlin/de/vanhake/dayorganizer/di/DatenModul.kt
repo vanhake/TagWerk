@@ -8,6 +8,8 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import de.vanhake.dayorganizer.backup.BackupDienst
+import de.vanhake.dayorganizer.data.EinstellungenSpeicher
 import de.vanhake.dayorganizer.data.db.AktivitaetDao
 import de.vanhake.dayorganizer.data.db.BelohnungDao
 import de.vanhake.dayorganizer.data.db.BuchungDao
@@ -64,6 +66,21 @@ object DatenModul {
     @Provides @Singleton
     fun statistikRechner(serienRechner: SerienRechner): StatistikRechner =
         StatistikRechner(serienRechner)
+
+    // BackupDienst hat bewusst keinen @Inject-Konstruktor (siehe dort) und wird deshalb
+    // hier per @Provides verdrahtet.
+    @Provides
+    @Singleton
+    fun backupDienst(
+        db: DayOrganizerDatenbank,
+        speicher: EinstellungenSpeicher,
+        uhr: Clock,
+    ): BackupDienst = BackupDienst(
+        db = db,
+        einstellungenLesen = { speicher.lesen() },
+        einstellungenSchreiben = { speicher.schreiben(it) },
+        uhr = uhr,
+    )
 }
 
 @Module

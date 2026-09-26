@@ -16,6 +16,7 @@ import de.vanhake.dayorganizer.platform.permission.BerechtigungsHinweise
 import de.vanhake.dayorganizer.platform.permission.BerechtigungsPruefer
 import de.vanhake.dayorganizer.platform.permission.Hinweis
 import de.vanhake.dayorganizer.platform.permission.waechterHaengt
+import de.vanhake.dayorganizer.widget.WidgetAktualisierung
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -42,6 +43,7 @@ class HeuteViewModel(
     private val alarmNeuPlanen: suspend () -> Unit,
     private val hinweiseLesen: suspend () -> List<Hinweis>,
     private val uhr: Clock,
+    private val widgetAnstossen: suspend () -> Unit,
 ) : ViewModel() {
 
     @Inject
@@ -57,6 +59,7 @@ class HeuteViewModel(
         pruefer: BerechtigungsPruefer,
         einstellungen: EinstellungenSpeicher,
         uhr: Clock,
+        widgetAktualisierung: WidgetAktualisierung,
     ) : this(
         aktivitaeten, faelligkeiten, buchungen, belohnungen, erledigenUseCase, auslassenUseCase, anzeige,
         { alarmPlaner.neuPlanen() },
@@ -71,6 +74,7 @@ class HeuteViewModel(
             BerechtigungsHinweise.fuer(pruefer.stand().copy(waechterHaengt = haengt))
         },
         uhr,
+        { widgetAktualisierung.anstossen() },
     )
 
     private val hinweise = MutableStateFlow<List<Hinweis>>(emptyList())
@@ -109,12 +113,14 @@ class HeuteViewModel(
         erledigenUseCase(faelligkeitId)
         anzeige.verstecke(faelligkeitId)
         alarmNeuPlanen()
+        widgetAnstossen()
     }
 
     fun auslassen(faelligkeitId: Long) = viewModelScope.launch {
         auslassenUseCase(faelligkeitId)
         anzeige.verstecke(faelligkeitId)
         alarmNeuPlanen()
+        widgetAnstossen()
     }
 
     private companion object {

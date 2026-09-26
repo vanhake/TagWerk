@@ -32,6 +32,7 @@ class ErinnerungAusloesenTest {
         override fun verstecke(faelligkeitId: Long) {
             versteckt += faelligkeitId
         }
+        override fun alleVerstecken() {}
     }
 
     private val tabletten = Aktivitaet(

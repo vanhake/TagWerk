@@ -27,4 +27,7 @@ interface ErinnerungDao {
 
     @Query("DELETE FROM erinnerung WHERE faelligkeitId = :faelligkeitId AND ausgeloest = 0")
     suspend fun entfernenFuerFaelligkeit(faelligkeitId: Long)
+
+    @Query("DELETE FROM erinnerung")
+    suspend fun alleLoeschen()
 }

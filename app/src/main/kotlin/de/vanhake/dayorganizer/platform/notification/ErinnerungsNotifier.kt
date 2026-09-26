@@ -67,6 +67,10 @@ class ErinnerungsNotifier @Inject constructor(
         NotificationManagerCompat.from(kontext).cancel(faelligkeitId.toInt())
     }
 
+    override fun alleVerstecken() {
+        NotificationManagerCompat.from(kontext).cancelAll()
+    }
+
     private fun aktion(action: String, faelligkeitId: Long): PendingIntent {
         val intent = Intent(action).apply {
             setPackage(kontext.packageName)

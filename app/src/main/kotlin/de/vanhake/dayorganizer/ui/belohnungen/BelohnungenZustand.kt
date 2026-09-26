@@ -20,3 +20,16 @@ data class BelohnungenZustand(
     val kacheln: List<BelohnungKachel> = emptyList(),
     val einloesungen: List<Einloesung> = emptyList(),
 )
+
+/**
+ * Ergebnis eines gescheiterten Einloesens, vom Screen einmalig als Snackbar gezeigt und
+ * danach auf null zurueckgesetzt. Gleiches Muster wie Meldung in EinstellungenViewModel.
+ * Ein Erfolg braucht keine eigene Meldung -- Kachel und Historie zeigen ihn bereits.
+ */
+enum class EinloeseMeldung {
+    ZU_WENIG_PUNKTE,
+    SERIE_ZU_KURZ,
+    ZU_FRUEH,
+    NICHT_MEHR_VORHANDEN,
+    FEHLER,
+}

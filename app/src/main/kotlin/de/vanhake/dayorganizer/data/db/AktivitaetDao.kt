@@ -12,6 +12,17 @@ interface AktivitaetDao {
     @Insert
     suspend fun einfuegen(eintrag: AktivitaetEntity): Long
 
+    // ABORT (Standard) statt REPLACE: ein doppelter Schluessel in der Backup-Datei
+    // soll die Transaktion zurueckrollen lassen, nicht still verschwinden.
+    @Insert
+    suspend fun alleEinfuegen(eintraege: List<AktivitaetEntity>)
+
+    @Query("DELETE FROM aktivitaet")
+    suspend fun alleLoeschen()
+
+    @Query("SELECT * FROM aktivitaet ORDER BY id")
+    suspend fun alle(): List<AktivitaetEntity>
+
     /** Rueckgabe ist die Anzahl betroffener Zeilen -- 0, wenn keine Aktivitaet mit dieser id
      * existiert. RaumAktivitaetRepository.speichern wertet das aus, statt einen fehlgeschlagenen
      * Update-Aufruf stillschweigend als Erfolg zu melden. */

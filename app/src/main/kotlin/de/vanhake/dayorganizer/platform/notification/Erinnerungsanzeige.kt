@@ -11,4 +11,12 @@ import de.vanhake.dayorganizer.domain.model.Faelligkeit
 interface Erinnerungsanzeige {
     fun zeige(faelligkeit: Faelligkeit, aktivitaet: Aktivitaet)
     fun verstecke(faelligkeitId: Long)
+
+    /**
+     * Nach einem Backup-Import koennte dieselbe faelligkeitId jetzt zu einer
+     * ganz anderen Faelligkeit gehoeren -- eine alte Benachrichtigung mit
+     * "Erledigt" haekte dann das Falsche ab. Deshalb verschwinden nach einem
+     * erfolgreichen Import alle Benachrichtigungen der App auf einmal.
+     */
+    fun alleVerstecken()
 }

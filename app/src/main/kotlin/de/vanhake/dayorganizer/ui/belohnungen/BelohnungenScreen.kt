@@ -1,6 +1,8 @@
 package de.vanhake.dayorganizer.ui.belohnungen
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,10 +18,16 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -27,12 +35,36 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.vanhake.dayorganizer.R
 import de.vanhake.dayorganizer.domain.rechner.Hindernis
 
+private fun EinloeseMeldung.textId(): Int = when (this) {
+    EinloeseMeldung.ZU_WENIG_PUNKTE -> R.string.noch_punkte_noetig
+    EinloeseMeldung.SERIE_ZU_KURZ -> R.string.serie_zu_kurz
+    EinloeseMeldung.ZU_FRUEH -> R.string.noch_zu_frueh
+    EinloeseMeldung.NICHT_MEHR_VORHANDEN -> R.string.einloese_nicht_mehr_vorhanden
+    EinloeseMeldung.FEHLER -> R.string.einloese_fehlgeschlagen
+}
+
 @Composable
 fun BelohnungenScreen(
     bearbeiten: (Long) -> Unit,
     viewModel: BelohnungenViewModel = hiltViewModel(),
 ) {
     val zustand by viewModel.zustand.collectAsStateWithLifecycle()
+    val meldung by viewModel.meldung.collectAsStateWithLifecycle()
+    val kontext = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Einmalig zeigen, dann zuruecksetzen -- sonst erschiene dieselbe Meldung bei jeder
+    // Rekomposition (z. B. Bildschirmdrehung) erneut. Gleiches Muster wie EinstellungenScreen.
+    LaunchedEffect(meldung) {
+        val aktuelleMeldung = meldung ?: return@LaunchedEffect
+        val text = if (aktuelleMeldung == EinloeseMeldung.ZU_WENIG_PUNKTE) {
+            kontext.getString(aktuelleMeldung.textId(), viewModel.meldungFehlendePunkte.value)
+        } else {
+            kontext.getString(aktuelleMeldung.textId())
+        }
+        snackbarHostState.showSnackbar(text)
+        viewModel.meldungGezeigt()
+    }
 
     Scaffold(
         floatingActionButton = {
@@ -40,6 +72,7 @@ fun BelohnungenScreen(
                 Icon(Icons.Default.Add, contentDescription = stringResource(R.string.neue_belohnung))
             }
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { innen ->
         LazyColumn(
             modifier = Modifier.padding(innen).padding(16.dp),
@@ -62,6 +95,7 @@ fun BelohnungenScreen(
                     kontostand = zustand.kontostand,
                     einloesen = { viewModel.einloesen(kachel.id) },
                     bearbeiten = { bearbeiten(kachel.id) },
+                    archivieren = { viewModel.archivieren(kachel.id) },
                 )
             }
 
@@ -87,12 +121,14 @@ fun BelohnungenScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Kachel(
     kachel: BelohnungKachel,
     kontostand: Int,
     einloesen: () -> Unit,
     bearbeiten: () -> Unit,
+    archivieren: () -> Unit,
 ) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
@@ -110,7 +146,15 @@ private fun Kachel(
                 },
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // FlowRow statt Row: drei Knoepfe passen bei 360 dp Breite und grosser
+            // Schrift nicht in eine Zeile. In einer Row wurde "Archivieren" in den
+            // Restplatz gequetscht, brach senkrecht um und blaehte die Karte auf die
+            // halbe Bildschirmhoehe auf -- ohne selbst sichtbar zu sein. So auf dem
+            // Emulator gesehen (wm density 480, font_scale 1.3).
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
                 Button(
                     onClick = einloesen,
                     enabled = kachel.einloesbarkeit.moeglich && !kachel.wirdEingeloest,
@@ -118,6 +162,11 @@ private fun Kachel(
                     Text(stringResource(R.string.einloesen))
                 }
                 Button(onClick = bearbeiten) { Text(stringResource(R.string.bearbeiten)) }
+                // Archivieren wirkt nur auf das archiviert-Flag und greift nicht in die
+                // Punkte-Transaktion des Einloesens ein (siehe BelohnungEinloesen.loese):
+                // anders als beim Einloesen-Knopf gibt es hier keinen Doppeltipp-Schaden,
+                // der eine Sperre waehrend wirdEingeloest rechtfertigen wuerde.
+                TextButton(onClick = archivieren) { Text(stringResource(R.string.archivieren)) }
             }
             val hinweis = when (kachel.einloesbarkeit.hindernis) {
                 Hindernis.ZU_WENIG_PUNKTE -> stringResource(

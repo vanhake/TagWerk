@@ -12,7 +12,8 @@
 
 ## Global Constraints
 
-- Alle Constraints aus Plan 1 und 2 gelten weiter, insbesondere: kein Gerät, kein Emulator, Datenbanktests unter Robolectric im `test`-Quellverzeichnis.
+- Alle Constraints aus Plan 1 und 2 gelten weiter, insbesondere: Datenbanktests unter Robolectric im `test`-Quellverzeichnis, keine Compose-UI-Tests.
+- Ein Emulator ist vorhanden (AVD `LernApp_Pixel`, siehe `docs/HANDOFF.md`). Oberflächen und Widget werden dort vom Controller durchgespielt; Implementierer brauchen ihn nicht.
 - Das Backup trägt eine `schemaVersion`. Der Import lehnt eine unbekannte Version rundheraus ab, statt einen Teilimport zu versuchen — eine halb importierte Datenbank wäre schlimmer als gar kein Import.
 - Der Import ersetzt den gesamten Bestand, er mischt nicht. Mischen würde bei Punktbuchungen zu Doppelzählungen führen.
 - Das Widget schreibt ausschließlich über bestehende Use Cases. Direkter DAO-Zugriff aus dem Widget ist ein Designfehler.
@@ -517,9 +518,9 @@ git commit -m "feat(backup): versioniertes JSON-Modell fuer den Datenexport"
 **Interfaces:**
 - Consumes: `BackupUmwandlung` aus Task 1, alle Repositories
 - Produces:
-  - `BackupDienst.exportieren(ziel: OutputStream)` — schreibt formatiertes JSON
+  - `BackupDienst.exportieren(ziel: OutputStream)` — schreibt formatiertes JSON über `BackupUmwandlung.zuText`; gelesen wird über `BackupUmwandlung.ausText`, das die Schemaversion vor dem strengen Einlesen prüft (siehe Task 1)
   - `sealed interface ImportErgebnis` mit `Erfolg(anzahlAktivitaeten: Int)`, `FalschesSchema(gefunden: Int)`, `Unlesbar(grund: String)`
-  - `BackupDienst.importieren(quelle: InputStream): ImportErgebnis` — ersetzt den gesamten Bestand in einer Transaktion und stößt danach Wächter und Alarmplanung an
+  - `BackupDienst.importieren(quelle: InputStream): ImportErgebnis` — ersetzt den gesamten Bestand in einer Transaktion; Wächter und Alarmplanung stößt danach das ViewModel an. **Jeder** Fehlschlag endet als `ImportErgebnis`, nie als Ausnahme: auch einer, der erst beim Schreiben in die Datenbank auffällt (ein Verweis auf eine Aktivität, die in der Datei fehlt, oder ein doppelter `schluessel`). Die Transaktion rollt dann zurück, und der alte Bestand bleibt vollständig erhalten — Design §6: „Abbruch mit klarer Meldung statt Teilimport".
   - `BackupSpeicher.alleLeeren()` in der Datenbank-Fassade
 
 - [ ] **Step 1: DAOs und Repositories um Sammeloperationen erweitern**
@@ -699,6 +700,29 @@ class BackupDienstTest {
         assertTrue(ergebnis is ImportErgebnis.Unlesbar)
         assertEquals(1, db.aktivitaetDao().alle().size)
     }
+
+    // Die Datei ist gueltiges JSON mit bekannter Version, passt aber nicht in die
+    // Datenbank: die Faelligkeit verweist auf eine Aktivitaet, die es nicht gibt. Das
+    // faellt erst beim Einfuegen auf, NACHDEM der alte Bestand in derselben
+    // Transaktion schon geloescht wurde. Dass "Tabletten" danach noch da ist, ist der
+    // erste Nachweis im Projekt, dass der Rollback wirklich greift -- bisher ruhte
+    // die ganze Zusage "keine halb importierte Datenbank" allein auf Rooms Wort.
+    @Test
+    fun ein_Verweis_ins_Leere_wird_abgelehnt_und_der_Bestand_bleibt() = runTest {
+        db.aktivitaetDao().einfuegen(aktivitaet("Tabletten"))
+        val verwaist = """{"schemaVersion":1,"erstelltAm":"2026-03-02T21:00",""" +
+            """"aktivitaeten":[],"faelligkeiten":[{"id":1,"aktivitaetId":999,""" +
+            """"periodeVon":"2026-03-02","periodeBis":"2026-03-02",""" +
+            """"geplantFuer":"2026-03-02T08:00","sollAnzahl":1,"istAnzahl":0,""" +
+            """"status":"OFFEN","erledigtAm":null,"warPuenktlich":false}],""" +
+            """"buchungen":[],"belohnungen":[],"einloesungen":[],""" +
+            """"einstellungen":{"tagesbonusPunkte":15,"standardKulanzMinuten":60}}"""
+
+        val ergebnis = dienst.importieren(ByteArrayInputStream(verwaist.toByteArray()))
+
+        assertTrue(ergebnis is ImportErgebnis.Unlesbar)
+        assertEquals(listOf("Tabletten"), db.aktivitaetDao().alle().map { it.name })
+    }
 }
 ```
 
@@ -718,12 +742,10 @@ import de.vanhake.dayorganizer.data.EinstellungenSpeicher
 import de.vanhake.dayorganizer.data.db.DayOrganizerDatenbank
 import de.vanhake.dayorganizer.data.mapper.zuDomaene
 import de.vanhake.dayorganizer.data.mapper.zuEntity
-import kotlinx.serialization.json.Json
 import java.io.InputStream
 import java.io.OutputStream
 import java.time.Clock
 import java.time.LocalDateTime
-import javax.inject.Inject
 
 sealed interface ImportErgebnis {
     data class Erfolg(val anzahlAktivitaeten: Int) : ImportErgebnis
@@ -731,15 +753,20 @@ sealed interface ImportErgebnis {
     data class Unlesbar(val grund: String) : ImportErgebnis
 }
 
-class BackupDienst @Inject constructor(
+// Bewusst ohne @Inject: der Konstruktor nimmt Funktionen, die Hilt nicht aufloesen
+// kann, und DatenModul stellt den Dienst per @Provides bereit. Beides zugleich waere
+// fuer Dagger eine doppelte Bindung.
+class BackupDienst(
     private val db: DayOrganizerDatenbank,
     private val einstellungenLesen: suspend () -> Einstellungen,
     private val einstellungenSchreiben: suspend (Einstellungen) -> Unit,
     private val uhr: Clock,
 ) {
 
-    private val json = Json { prettyPrint = true; ignoreUnknownKeys = false }
-
+    // Lesen und Schreiben des Textes liegen in BackupUmwandlung (zuText/ausText), nicht
+    // hier: dort ist festgelegt, dass die Schemaversion VOR dem strengen Einlesen
+    // geprueft wird. Eine eigene Json-Instanz an dieser Stelle waere eine zweite
+    // Wahrheit darueber, wie ein Backup aussieht.
     suspend fun exportieren(ziel: OutputStream) {
         val datei = BackupUmwandlung.zuDatei(
             erstelltAm = LocalDateTime.now(uhr),
@@ -750,7 +777,7 @@ class BackupDienst @Inject constructor(
             einloesungen = db.belohnungDao().alleEinloesungen().map { it.zuDomaene() },
             einstellungen = einstellungenLesen(),
         )
-        ziel.bufferedWriter().use { it.write(json.encodeToString(BackupDatei.serializer(), datei)) }
+        ziel.bufferedWriter().use { it.write(BackupUmwandlung.zuText(datei)) }
     }
 
     /**
@@ -759,28 +786,36 @@ class BackupDienst @Inject constructor(
      */
     suspend fun importieren(quelle: InputStream): ImportErgebnis {
         val inhalt = try {
-            val text = quelle.bufferedReader().use { it.readText() }
-            BackupUmwandlung.ausDatei(json.decodeFromString(BackupDatei.serializer(), text))
+            BackupUmwandlung.ausText(quelle.bufferedReader().use { it.readText() })
         } catch (fehler: UnbekanntesSchema) {
             return ImportErgebnis.FalschesSchema(fehler.gefunden)
         } catch (fehler: Exception) {
             return ImportErgebnis.Unlesbar(fehler.message ?: fehler::class.simpleName.orEmpty())
         }
 
-        db.withTransaction {
-            // Reihenfolge wegen der Fremdschluessel: Kinder vor Eltern loeschen.
-            db.erinnerungDao().alleLoeschen()
-            db.faelligkeitDao().alleLoeschen()
-            db.aktivitaetDao().alleLoeschen()
-            db.buchungDao().alleLoeschen()
-            db.belohnungDao().alleEinloesungenLoeschen()
-            db.belohnungDao().alleLoeschen()
+        // Eine Datei kann sich lesen lassen und trotzdem nicht in die Datenbank passen:
+        // eine Faelligkeit, die auf eine fehlende Aktivitaet verweist, oder ein doppelter
+        // schluessel. Das faellt erst beim Einfuegen auf -- innerhalb der Transaktion,
+        // die dann zurueckrollt und den alten Bestand stehen laesst. Ohne diesen Fang
+        // flog die Ausnahme ungefangen bis ins ViewModel und beendete die App.
+        try {
+            db.withTransaction {
+                // Reihenfolge wegen der Fremdschluessel: Kinder vor Eltern loeschen.
+                db.erinnerungDao().alleLoeschen()
+                db.faelligkeitDao().alleLoeschen()
+                db.aktivitaetDao().alleLoeschen()
+                db.buchungDao().alleLoeschen()
+                db.belohnungDao().alleEinloesungenLoeschen()
+                db.belohnungDao().alleLoeschen()
 
-            db.aktivitaetDao().alleEinfuegen(inhalt.aktivitaeten.map { it.zuEntity() })
-            db.faelligkeitDao().alleEinfuegen(inhalt.faelligkeiten.map { it.zuEntity() })
-            db.buchungDao().alleEinfuegen(inhalt.buchungen.map { it.zuEntity() })
-            db.belohnungDao().alleEinfuegen(inhalt.belohnungen.map { it.zuEntity() })
-            db.belohnungDao().alleEinloesungenEinfuegen(inhalt.einloesungen.map { it.zuEntity() })
+                db.aktivitaetDao().alleEinfuegen(inhalt.aktivitaeten.map { it.zuEntity() })
+                db.faelligkeitDao().alleEinfuegen(inhalt.faelligkeiten.map { it.zuEntity() })
+                db.buchungDao().alleEinfuegen(inhalt.buchungen.map { it.zuEntity() })
+                db.belohnungDao().alleEinfuegen(inhalt.belohnungen.map { it.zuEntity() })
+                db.belohnungDao().alleEinloesungenEinfuegen(inhalt.einloesungen.map { it.zuEntity() })
+            }
+        } catch (fehler: Exception) {
+            return ImportErgebnis.Unlesbar(fehler.message ?: fehler::class.simpleName.orEmpty())
         }
 
         einstellungenSchreiben(inhalt.einstellungen)
@@ -822,7 +857,7 @@ Für die Hilt-Bereitstellung in `DatenModul.kt`:
 - [ ] **Step 5: Test laufen lassen und grünen Lauf bestätigen**
 
 Run: `./gradlew :app:testDebugUnitTest --tests "*BackupDienstTest*"`
-Expected: `BUILD SUCCESSFUL`, 4 Tests bestanden.
+Expected: `BUILD SUCCESSFUL`, 5 Tests bestanden.
 
 - [ ] **Step 6: Oberfläche anbinden**
 
@@ -891,21 +926,37 @@ Danach ergänzen:
 
 ```kotlin
     fun exportieren(ziel: java.io.OutputStream) = viewModelScope.launch {
-        backupDienst.exportieren(ziel)
-        _meldung.value = Meldung.EXPORT_FERTIG
+        // Ein gescheiterter Export -- volle Platte, entzogene Dateiberechtigung -- darf
+        // weder die App beenden noch still als Erfolg durchgehen. Ein Backup, das man
+        // fuer geschrieben haelt und das es nicht gibt, ist das Schlimmste, was diese
+        // Funktion anrichten kann.
+        _meldung.value = runCatching { backupDienst.exportieren(ziel) }
+            .fold(
+                onSuccess = { Meldung.EXPORT_FERTIG },
+                onFailure = { Meldung.EXPORT_FEHLGESCHLAGEN },
+            )
     }
 
     fun importieren(quelle: java.io.InputStream) = viewModelScope.launch {
-        _meldung.value = when (val ergebnis = backupDienst.importieren(quelle)) {
-            is ImportErgebnis.Erfolg -> Meldung.IMPORT_FERTIG
-            is ImportErgebnis.FalschesSchema -> Meldung.IMPORT_FALSCHES_SCHEMA
-            is ImportErgebnis.Unlesbar -> Meldung.IMPORT_UNLESBAR
-        }
+        // Der Dienst liefert jeden bekannten Fehlschlag als ImportErgebnis. Das
+        // runCatching faengt, was trotzdem durchkommt -- etwa ein Lesefehler des
+        // Dateidialogs --, damit ein Import niemals die App beendet.
+        _meldung.value = runCatching { backupDienst.importieren(quelle) }
+            .fold(
+                onSuccess = { ergebnis ->
+                    when (ergebnis) {
+                        is ImportErgebnis.Erfolg -> Meldung.IMPORT_FERTIG
+                        is ImportErgebnis.FalschesSchema -> Meldung.IMPORT_FALSCHES_SCHEMA
+                        is ImportErgebnis.Unlesbar -> Meldung.IMPORT_UNLESBAR
+                    }
+                },
+                onFailure = { Meldung.IMPORT_UNLESBAR },
+            )
         nachImport()
     }
 ```
 
-mit `enum class Meldung { EXPORT_FERTIG, IMPORT_FERTIG, IMPORT_FALSCHES_SCHEMA, IMPORT_UNLESBAR }` und einem `MutableStateFlow<Meldung?>`, das der Screen als Snackbar zeigt und danach auf `null` zurücksetzt.
+mit `enum class Meldung { EXPORT_FERTIG, EXPORT_FEHLGESCHLAGEN, IMPORT_FERTIG, IMPORT_FALSCHES_SCHEMA, IMPORT_UNLESBAR }` (für `EXPORT_FEHLGESCHLAGEN` eine eigene Zeichenkette in `strings.xml`) und einem `MutableStateFlow<Meldung?>`, das der Screen als Snackbar zeigt und danach auf `null` zurücksetzt.
 
 In `EinstellungenScreen` zwei Knöpfe mit den Systemdialogen:
 
@@ -1257,6 +1308,7 @@ import de.vanhake.dayorganizer.data.repository.BuchungRepository
 import de.vanhake.dayorganizer.data.repository.FaelligkeitRepository
 import de.vanhake.dayorganizer.domainuse.FaelligkeitErledigen
 import de.vanhake.dayorganizer.platform.alarm.AlarmPlaner
+import de.vanhake.dayorganizer.platform.notification.Erinnerungsanzeige
 import java.time.Clock
 
 @EntryPoint
@@ -1267,6 +1319,7 @@ interface WidgetZugang {
     fun buchungen(): BuchungRepository
     fun erledigen(): FaelligkeitErledigen
     fun alarmPlaner(): AlarmPlaner
+    fun anzeige(): Erinnerungsanzeige
     fun uhr(): Clock
 }
 ```
@@ -1360,6 +1413,10 @@ class WidgetErledigenAktion : ActionCallback {
         val zugang = EntryPointAccessors.fromApplication(context, WidgetZugang::class.java)
 
         zugang.erledigen().invoke(faelligkeitId)
+        // Wie in HeuteViewModel.erledigen: ohne verstecke() bliebe die Erinnerung in
+        // der Statusleiste stehen, obwohl die Aufgabe erledigt ist. Genau diese Luecke
+        // hat das Plan-1-Review fuer die App schon einmal geschlossen (Fix 9).
+        zugang.anzeige().verstecke(faelligkeitId)
         zugang.alarmPlaner().neuPlanen()
         HeuteWidget().updateAll(context)
     }
@@ -1408,6 +1465,13 @@ In `HeuteViewModel` den Parameter `private val widgetAnstossen: suspend () -> Un
 
 In `WaechterAblauf` analog einen Parameter `private val widgetAnstossen: suspend () -> Unit` ergänzen und am Ende von `invoke()` aufrufen; im Test `widgetAnstossen = {}`.
 
+Zwei Schreibpfade kannte dieser Plan bei seiner Entstehung noch nicht, weil Plan 2 sie erst gebaut hat. Beide ändern, was das Widget zeigt:
+
+- **Einlösen einer Belohnung** senkt den Punktestand. `BelohnungenViewModel` bekommt `private val widgetAnstossen: suspend () -> Unit` (im Hilt-Konstruktor `{ widgetAktualisierung.anstossen() }`) und ruft ihn in `einloesen` nach dem Use Case auf — innerhalb des bestehenden `try`, vor dem `finally`, das die Sperre löst. Die Tests bekommen `widgetAnstossen = {}`.
+- **Ändern oder Archivieren einer Aktivität** entfernt deren künftige Fälligkeiten. Beides läuft über `AktivitaetNeuPlanen`; dort neben `alarmNeuPlanen` einen Parameter `widgetAnstossen: suspend () -> Unit` ergänzen, im `@Inject`-Konstruktor auf `widgetAktualisierung.anstossen()` zeigen lassen und am Ende von `invoke` aufrufen. Die Tests bekommen `widgetAnstossen = {}`.
+
+Ohne diese beiden zeigte das Widget nach dem Einlösen einen veralteten Punktestand und nach dem Archivieren Aufgaben, die es nicht mehr gibt.
+
 - [ ] **Step 3: Build und alle Tests laufen lassen**
 
 Run: `./gradlew clean :domain:test :app:testDebugUnitTest :app:assembleDebug`
@@ -1428,6 +1492,51 @@ git commit -m "feat(widget): Abhaken vom Startbildschirm und Aktualisierung alle
 ```
 
 ---
+
+### Task 5: Belohnungen archivieren
+
+Vorgezogen aus den offenen Punkten der Übergabe. Eine falsch angelegte Belohnung lässt sich heute nur bearbeiten, nie loswerden: sie bleibt im Shop und bestimmt die Zielzeile auf *Heute*. Design §5 nennt „Belohnungsverwaltung" ausdrücklich.
+
+**Files:**
+- Modify: `app/src/main/kotlin/de/vanhake/dayorganizer/ui/belohnungen/BelohnungenScreen.kt`
+- Modify: `app/src/main/res/values/strings.xml`, falls eine Zeichenkette fehlt
+- Test: `app/src/test/kotlin/de/vanhake/dayorganizer/ui/belohnungen/BelohnungenViewModelTest.kt`
+
+**Was schon da ist:** `BelohnungenViewModel.archivieren(id)`, `BelohnungRepository.archivieren(id)`, der DAO und ein `DaoTest`. `beobachteAktive()` filtert archivierte Belohnungen aus, die Zielzeile auf *Heute* ebenso. `BelohnungEntwurf` trägt `archiviert` beim Bearbeiten korrekt durch. Es fehlt ausschließlich der Knopf.
+
+**Anforderungen:**
+- Jede Kachel bekommt einen Knopf „Archivieren" neben „Einlösen" und „Bearbeiten". Aufbau und Zeichenkette wie in `AktivitaetenScreen`, der dafür bereits `R.string.archivieren` benutzt — ebenfalls ohne Rückfrage, damit sich beide Listen gleich verhalten.
+- Test im ViewModel: nach `archivieren(id)` verschwindet die Kachel aus dem Zustand, und die Einlöse-Historie dieser Belohnung bleibt unverändert erhalten.
+
+### Task 6: DataStore-Lesezugriffe absichern
+
+Vorgezogen aus den offenen Punkten der Übergabe, und mit diesem Plan dringlicher: das Backup schreibt die Einstellungsdatei erstmals mit Werten von außen.
+
+**Files:**
+- Modify: `app/src/main/kotlin/de/vanhake/dayorganizer/data/EinstellungenSpeicher.kt`
+- Test: neuer Test unter `app/src/test/kotlin/de/vanhake/dayorganizer/data/`
+
+**Befund:** `DataStore.data` wirft bei einer beschädigten Datei eine `IOException`. `EinstellungenSpeicher` liest an zwei Stellen direkt aus `kontext.datenSpeicher.data` — in `beobachten()` und in `letzterWaechterErfolg()`. Darüber laufen alle Lesezugriffe der App: `HeuteViewModel`, `EinstellungenViewModel`, `AktivitaetBearbeitenViewModel`, `FaelligkeitErledigen`, `WaechterAblauf`. Eine korrupte Datei ergibt auf *Heute* eine Absturzschleife ohne Weg in die App hinein.
+
+**Anforderungen:**
+- An **einer** Stelle absichern statt an jedem Aufrufer: beide Lesezugriffe gehen über denselben Datenstrom, der eine `IOException` abfängt und stattdessen leere Einstellungen liefert — das dokumentierte DataStore-Muster `catch { if (it is IOException) emit(emptyPreferences()) else throw it }`. Andere Ausnahmen werden weitergeworfen, nicht verschluckt.
+- Leere Einstellungen bedeuten die Vorgabewerte (Tagesbonus 15, Kulanz 60) und `letzterWaechterErfolg() == null`. Mit dem Wächter-Fix aus dem Emulatorlauf misst die Frische dann ab dem Installationszeitpunkt — kein falscher Alarm.
+- Test: eine `EinstellungenSpeicher`-Instanz, deren Datenstrom eine `IOException` wirft, liefert die Vorgabewerte statt zu werfen; eine andere Ausnahme wird weitergereicht. Wenn sich der Speicher dafür nicht ohne Umbau testen lässt, den Datenstrom als Konstruktorparameter hereinreichen — Zwei-Konstruktoren-Muster, genau ein `@Inject`.
+
+### Task 7: Meldung bei gescheiterter Einlösung
+
+Vorgezogen aus den offenen Punkten der Übergabe. `EinloeseErgebnis.Abgelehnt` und `.Unbekannt` werden heute stumm verworfen, und eine Ausnahme landet nur im Log. Bei einer Aktion, die Punkte kostet, muss der Nutzer erfahren, dass nichts passiert ist.
+
+**Files:**
+- Modify: `app/src/main/kotlin/de/vanhake/dayorganizer/ui/belohnungen/BelohnungenZustand.kt`, `BelohnungenViewModel.kt`, `BelohnungenScreen.kt`
+- Modify: `app/src/main/res/values/strings.xml`
+- Test: `app/src/test/kotlin/de/vanhake/dayorganizer/ui/belohnungen/BelohnungenViewModelTest.kt`
+
+**Anforderungen:**
+- Dasselbe Muster wie die Import- und Exportmeldungen aus Task 2: eine `enum class EinloeseMeldung`, ein `MutableStateFlow<EinloeseMeldung?>`, im Screen als Snackbar gezeigt und danach auf `null` zurückgesetzt. Beide Screens sollen sich gleich anfühlen.
+- Drei Fälle: bei `Abgelehnt` eine Meldung, die das `Hindernis` benennt — die Zeichenketten `noch_punkte_noetig`, `serie_zu_kurz` und `noch_zu_frueh` gibt es schon für die Kacheln; bei `Unbekannt` eine eigene Meldung, dass es die Belohnung nicht mehr gibt; bei einer Ausnahme eine allgemeine Fehlermeldung. Ein Erfolg braucht keine Meldung — die Kachel und die Historie zeigen ihn.
+- Die Doppeltipp-Sperre aus Plan 2 bleibt unverändert: gesperrt vor dem `launch`, gelöst im `finally`.
+- Tests: je ein Fall für `Abgelehnt`, `Unbekannt` und eine Ausnahme, jeweils mit der erwarteten Meldung. Die Tests prüfen gegen den Zustand **nach** `advanceUntilIdle()` — der Zustandsfluss kommt seit Plan 2 über `flowOn(Dispatchers.Default)` von einem echten Thread. Die Meldung sollte deshalb **nicht** Teil der `combine`-Kette sein, sondern ein eigener `StateFlow`, der synchron im `viewModelScope` gesetzt wird; sonst sind die Tests zeitabhängig.
 
 ## Abschluss
 

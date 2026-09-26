@@ -52,6 +52,8 @@
     <string name="noch_zu_frueh">Noch nicht freigeschaltet</string>
     <string name="einloese_historie">Eingelöst</string>
     <string name="einloesung_zeile">%1$s — %2$d Punkte</string>
+    <string name="einloese_nicht_mehr_vorhanden">Diese Belohnung gibt es nicht mehr</string>
+    <string name="einloese_fehlgeschlagen">Einlösen ist fehlgeschlagen</string>
     <string name="feld_beschreibung">Beschreibung</string>
     <string name="feld_preis">Preis in Punkten</string>
     <string name="feld_bedingung">Zusätzliche Bedingung</string>
@@ -71,4 +73,20 @@
     <string name="tab_einstellungen">Optionen</string>
     <string name="feld_tagesbonus">Tagesbonus, wenn alles erledigt ist</string>
     <string name="feld_standard_kulanz">Standard-Kulanzfenster in Minuten</string>
+    <string name="backup_exportieren">Backup speichern</string>
+    <string name="backup_importieren">Backup einlesen</string>
+    <string name="backup_dateiname">dayorganizer-backup-%1$s.json</string>
+    <string name="backup_export_fertig">Backup gespeichert</string>
+    <string name="backup_export_fehlgeschlagen">Backup konnte nicht gespeichert werden</string>
+    <string name="backup_import_fertig">Backup eingelesen</string>
+    <string name="backup_import_einstellungen_fehlgeschlagen">Daten wurden übernommen, die Einstellungen konnten aber nicht gespeichert werden</string>
+    <string name="backup_falsches_schema">Diese Backup-Datei stammt aus einer anderen App-Version</string>
+    <string name="backup_unlesbar">Die Datei konnte nicht gelesen werden</string>
+    <string name="backup_import_vorschau_titel">Backup importieren?</string>
+    <string name="backup_import_vorschau_datum_muster">dd.MM.yyyy HH:mm</string>
+    <string name="backup_import_vorschau_text">Dieses Backup ist vom %1$s und enthält %2$d Aktivitäten. Der aktuelle Bestand wird dabei vollständig ersetzt.</string>
+    <string name="backup_import_vorschau_bestaetigen">Importieren</string>
+    <string name="backup_import_vorschau_abbrechen">Abbrechen</string>
+    <string name="widget_weitere">+ %1$d weitere</string>
+    <string name="widget_ziel_fortschritt">%1$d/%2$d</string>
 </resources>

@@ -11,6 +11,14 @@ interface BelohnungDao {
 
     @Insert suspend fun einfuegen(eintrag: BelohnungEntity): Long
 
+    // ABORT (Standard) statt REPLACE: ein doppelter Schluessel in der Backup-Datei
+    // soll die Transaktion zurueckrollen lassen, nicht still verschwinden.
+    @Insert
+    suspend fun alleEinfuegen(eintraege: List<BelohnungEntity>)
+
+    @Query("DELETE FROM belohnung")
+    suspend fun alleLoeschen()
+
     /** Rueckgabe ist die Anzahl betroffener Zeilen -- 0, wenn keine Belohnung mit dieser id
      * existiert. RaumBelohnungRepository.speichern wertet das aus, statt einen fehlgeschlagenen
      * Update-Aufruf stillschweigend als Erfolg zu melden. */
@@ -29,6 +37,14 @@ interface BelohnungDao {
     suspend fun archivieren(id: Long)
 
     @Insert suspend fun einloesungEinfuegen(eintrag: EinloesungEntity)
+
+    // ABORT (Standard) statt REPLACE: ein doppelter Schluessel in der Backup-Datei
+    // soll die Transaktion zurueckrollen lassen, nicht still verschwinden.
+    @Insert
+    suspend fun alleEinloesungenEinfuegen(eintraege: List<EinloesungEntity>)
+
+    @Query("DELETE FROM einloesung")
+    suspend fun alleEinloesungenLoeschen()
 
     @Query("SELECT * FROM einloesung ORDER BY zeitpunkt DESC, id DESC")
     fun beobachteEinloesungen(): Flow<List<EinloesungEntity>>

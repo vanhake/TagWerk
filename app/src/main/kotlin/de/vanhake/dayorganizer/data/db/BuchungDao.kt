@@ -12,6 +12,14 @@ interface BuchungDao {
     @Insert
     suspend fun einfuegen(eintraege: List<BuchungEntity>)
 
+    // ABORT (Standard) statt REPLACE: eine doppelte Buchungs-id in der Backup-Datei
+    // soll die Transaktion zurueckrollen lassen, nicht still verschwinden.
+    @Insert
+    suspend fun alleEinfuegen(eintraege: List<BuchungEntity>)
+
+    @Query("DELETE FROM buchung")
+    suspend fun alleLoeschen()
+
     @Query("SELECT COALESCE(SUM(betrag), 0) FROM buchung")
     fun beobachteKontostand(): Flow<Int>
 
