@@ -159,6 +159,25 @@ class EinstellungenViewModelTest {
         assertEquals(ThemeModus.DUNKEL, vm.zustand.value.themeModus)
     }
 
+    // Review-Fund (Kritisch): speichern() baute die neue Einstellungen bisher per
+    // Einstellungen(...) mit nur den beiden Zahlenfeldern statt per bisher.copy(...) --
+    // dadurch fiel themeModus stets auf den Klassendefault HELL zurueck, auch wenn zuvor
+    // per themeModusAendern() DUNKEL geschrieben wurde. Dieser Test haette den alten Bug
+    // gefangen: mit Einstellungen(...) waere neu.themeModus == HELL gewesen, unabhaengig
+    // vom zuvor gesetzten DUNKEL, und die Assertion unten waere fehlgeschlagen.
+    @Test
+    fun `speichern setzt den zuvor per themeModusAendern gesetzten Farbmodus nicht zurueck`() = runTest(dispatcher) {
+        val speicher = FakeSpeicher()
+        val vm = viewModel(speicher)
+
+        vm.themeModusAendern(ThemeModus.DUNKEL)
+        advanceUntilIdle()
+        vm.speichern().join()
+
+        assertEquals(ThemeModus.DUNKEL, speicher.stand.value.themeModus)
+        assertEquals(ThemeModus.DUNKEL, vm.zustand.value.themeModus)
+    }
+
     @Test
     fun `Speichern uebernimmt gueltige Werte bei beiden Feldern`() = runTest(dispatcher) {
         val speicher = FakeSpeicher()

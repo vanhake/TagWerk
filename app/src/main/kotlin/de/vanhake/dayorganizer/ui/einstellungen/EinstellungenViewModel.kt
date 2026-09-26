@@ -286,7 +286,7 @@ class EinstellungenViewModel(
      */
     fun speichern(): Job = viewModelScope.launch {
         val bisher = lesen()
-        val neu = Einstellungen(
+        val neu = bisher.copy(
             tagesbonusPunkte = _zustand.value.tagesbonusText.toIntOrNull()
                 ?.takeIf { it >= 0 } ?: bisher.tagesbonusPunkte,
             standardKulanzMinuten = _zustand.value.standardKulanzText.toIntOrNull()
