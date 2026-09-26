@@ -24,6 +24,7 @@ data class AktivitaetDto(
     val name: String,
     val notiz: String,
     val farbe: Int,
+    val symbol: String,
     val basisPunkte: Int,
     val kulanzMinuten: Int,
     val puenktlichkeitsBonus: Int,
@@ -97,4 +98,5 @@ data class EinloesungDto(
 data class EinstellungenDto(
     val tagesbonusPunkte: Int,
     val standardKulanzMinuten: Int,
+    val themeModus: String,
 )
