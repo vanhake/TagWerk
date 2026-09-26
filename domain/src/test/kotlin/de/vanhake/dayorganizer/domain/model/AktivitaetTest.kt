@@ -13,6 +13,6 @@ class AktivitaetTest {
             erstelltAm = LocalDate.of(2026, 1, 1),
         )
 
-        assertEquals("self_improvement", aktivitaet.icon)
+        assertEquals("self_improvement", aktivitaet.symbol)
     }
 }

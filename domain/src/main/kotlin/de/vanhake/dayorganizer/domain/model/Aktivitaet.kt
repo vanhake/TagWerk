@@ -15,7 +15,7 @@ data class Aktivitaet(
     val kulanzMinuten: Int = 60,
     val puenktlichkeitsBonus: Int = 0,
     /** Schluessel aus dem AktivitaetSymbol-Katalog (App-Modul), z. B. "self_improvement". */
-    val icon: String = "self_improvement",
+    val symbol: String = "self_improvement",
     val serienSchwellen: List<SerienSchwelle> = emptyList(),
     val nachfassAnzahl: Int = 2,
     val nachfassAbstandMinuten: Int = 15,
