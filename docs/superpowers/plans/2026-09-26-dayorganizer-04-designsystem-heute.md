@@ -1547,6 +1547,242 @@ git commit -m "feat(faelligkeit): echte Rueckgaengig-Anwendungsfaelle fuer Erled
 
 ---
 
+### Task 9b: Netto-Bonusabfragen (KORREKTUR wird bei Tagesbonus/Serienbonus gegengerechnet)
+
+**Warum dieser Task nachtraeglich eingefuegt wurde:** Das Abschlussreview von Task 9 fand eine echte Luecke, die im urspruenglichen Plan fehlte: `BuchungDao.serienbonusSchwellenSeit`/`anzahlTagesboni` zaehlen ausschliesslich Zeilen mit `art = 'SERIENBONUS'`/`'TAGESBONUS'`. Eine per Rueckgaengig eingefuegte `KORREKTUR`-Zeile faellt bei diesen Abfragen nie heraus. Konkreter Fehlerpfad: letzte Aktivitaet des Tages erledigen (Tagesbonus wird gebucht) -> Rueckgaengig antippen (Faelligkeit wieder OFFEN, Gegenbuchung `-Tagesbonus`) -> dieselbe Aktivitaet erneut erledigen -> `tagesbonusGebuchtAm(heute)` sieht immer noch die alte `TAGESBONUS`-Zeile, `verdientTagesbonus` bleibt `false`, der Bonus wird nie nachgebucht. Dieselbe Luecke betrifft `SERIENBONUS`-Schwellen. Da Task 10 genau diese Rueckgaengig-Funktion an die Oberflaeche anschliesst, wurde MIT DEM MENSCHEN ENTSCHIEDEN, die Luecke vor Task 10 zu schliessen, nicht danach.
+
+**Files:**
+- Modify: `app/src/main/kotlin/de/vanhake/dayorganizer/data/db/BuchungDao.kt`
+- Modify: `app/src/main/kotlin/de/vanhake/dayorganizer/data/repository/RaumRepositories.kt`
+- Modify: `app/src/test/kotlin/de/vanhake/dayorganizer/Fakes.kt`
+- Test: `app/src/test/kotlin/de/vanhake/dayorganizer/data/db/DaoTest.kt` (neue Tests fuer die beiden Abfragen -- es gibt hier noch keinen einzigen DAO-Test fuer sie, sie liefen bisher nur ueber `FakeBuchungRepository` in `FaelligkeitErledigenTest`)
+- Test: `app/src/test/kotlin/de/vanhake/dayorganizer/domainuse/FaelligkeitErledigenTest.kt` (ein Test, der Rueckgaengig-dann-erneut-Erledigen End-zu-Ende durch den echten Anwendungsfall beweist)
+
+**Interfaces:**
+- Consumes: `BuchungsArt.KORREKTUR`, `FaelligkeitErledigenRueckgaengig` (Task 9).
+- Produces: unveraenderte oeffentliche Signaturen `BuchungRepository.serienbonusSchwellenSeit(aktivitaetId, seit): Set<Int>` und `BuchungRepository.tagesbonusGebuchtAm(tag): Boolean` -- nur ihre interne SQL/Fake-Logik aendert sich.
+
+**Kernidee:** Sowohl die urspruengliche Bonusbuchung als auch ihre `KORREKTUR`-Gegenbuchung tragen dieselbe `aktivitaetId`/`faelligkeitId`/`schwelle`-Form (die Gegenbuchung entsteht per `original.copy(...)`, siehe Task 9). Ein Tagesbonus hat als einzige Buchungsart `aktivitaetId = null UND faelligkeitId = null` (siehe `PunkteRechner.buchungen`: `Buchung(art = TAGESBONUS, betrag = ..., zeitpunkt = ...)`, keine ids gesetzt) -- das grenzt seine Zeilen (und deren Korrekturen) eindeutig von allen anderen Buchungsarten ab, die immer beide ids setzen. Ein Serienbonus ist die einzige Art mit gesetztem `schwelle`. Statt Zeilen zu zaehlen, wird deshalb ihr Betrag je (aktivitaetId, schwelle) bzw. je Tag aufsummiert: eine vollstaendig zurueckgenommene Buchung ergibt Netto null, eine nicht zurueckgenommene bleibt positiv.
+
+- [ ] **Step 1: Failing DAO-Test fuer den Tagesbonus-Fall**
+
+In `DaoTest.kt` ergaenzen (nach dem bestehenden `kontostand_ist_die_Summe_der_Buchungen`-Test):
+
+```kotlin
+    @Test
+    fun `ein per Korrektur zurueckgenommener Tagesbonus gilt nicht mehr als gebucht`() = runTest {
+        val heute = LocalDate.of(2026, 3, 2)
+        db.buchungDao().einfuegen(
+            listOf(
+                BuchungEntity(
+                    art = "TAGESBONUS", betrag = 25,
+                    zeitpunkt = heute.atTime(20, 30),
+                    aktivitaetId = null, faelligkeitId = null, belohnungId = null,
+                    schwelle = null, notiz = "",
+                ),
+                BuchungEntity(
+                    art = "KORREKTUR", betrag = -25,
+                    zeitpunkt = heute.atTime(20, 35),
+                    aktivitaetId = null, faelligkeitId = null, belohnungId = null,
+                    schwelle = null, notiz = "Rueckgaengig: TAGESBONUS",
+                ),
+            ),
+        )
+
+        val netto = db.buchungDao().nettoTagesbonusPunkte(heute.atStartOfDay(), heute.plusDays(1).atStartOfDay())
+
+        assertEquals(0, netto)
+    }
+
+    @Test
+    fun `ein nicht zurueckgenommener Tagesbonus zaehlt weiterhin`() = runTest {
+        val heute = LocalDate.of(2026, 3, 2)
+        db.buchungDao().einfuegen(
+            listOf(
+                BuchungEntity(
+                    art = "TAGESBONUS", betrag = 25,
+                    zeitpunkt = heute.atTime(20, 30),
+                    aktivitaetId = null, faelligkeitId = null, belohnungId = null,
+                    schwelle = null, notiz = "",
+                ),
+            ),
+        )
+
+        val netto = db.buchungDao().nettoTagesbonusPunkte(heute.atStartOfDay(), heute.plusDays(1).atStartOfDay())
+
+        assertEquals(25, netto)
+    }
+```
+
+`BuchungEntity`'s exakte Feldreihenfolge/-namen vor dem Abtippen in der Datei selbst nachsehen (`app/src/main/kotlin/de/vanhake/dayorganizer/data/db/BuchungEntity.kt`) -- die obigen Aufrufe nutzen benannte Argumente, daher ist die Reihenfolge unkritisch, aber Feldnamen muessen exakt stimmen.
+
+- [ ] **Step 2: Test ausführen, Fehlschlag bestätigen**
+
+Run: `./gradlew :app:testDebugUnitTest --tests "de.vanhake.dayorganizer.data.db.DaoTest"`
+Expected: FAIL -- `nettoTagesbonusPunkte` existiert nicht auf `BuchungDao`.
+
+- [ ] **Step 3: `BuchungDao.kt` ändern**
+
+`anzahlTagesboni` ersetzen durch:
+
+```kotlin
+    // Netto statt Anzahl: eine per FaelligkeitErledigenRueckgaengig gebuchte KORREKTUR-Zeile
+    // (negierter Betrag, dieselbe aktivitaetId=null/faelligkeitId=null-Form wie der Tagesbonus
+    // selbst -- keine andere Buchungsart setzt beide ids auf null) muss den Tagesbonus wieder
+    // freigeben, sonst bucht ein erneutes Abschliessen am selben Tag ihn nie wieder.
+    @Query(
+        "SELECT COALESCE(SUM(betrag), 0) FROM buchung WHERE (art = 'TAGESBONUS' OR art = 'KORREKTUR') " +
+            "AND aktivitaetId IS NULL AND faelligkeitId IS NULL " +
+            "AND zeitpunkt >= :tagesBeginn AND zeitpunkt < :tagesEnde",
+    )
+    suspend fun nettoTagesbonusPunkte(tagesBeginn: LocalDateTime, tagesEnde: LocalDateTime): Int
+```
+
+`serienbonusSchwellenSeit` ersetzen durch:
+
+```kotlin
+    // Netto je Schwelle statt reiner Zeilenliste: eine KORREKTUR-Zeile traegt dieselbe
+    // aktivitaetId/schwelle wie der Serienbonus, den sie zuruecknimmt (per copy() in
+    // FaelligkeitErledigenRueckgaengig). GROUP BY/HAVING liefert nur Schwellen, deren
+    // Buchungen in Summe noch positiv sind -- eine vollstaendig zurueckgenommene faellt heraus.
+    @Query(
+        "SELECT schwelle FROM buchung WHERE (art = 'SERIENBONUS' OR art = 'KORREKTUR') " +
+            "AND aktivitaetId = :aktivitaetId AND schwelle IS NOT NULL AND zeitpunkt >= :seit " +
+            "GROUP BY schwelle HAVING SUM(betrag) > 0",
+    )
+    suspend fun serienbonusSchwellenSeit(aktivitaetId: Long, seit: LocalDateTime): List<Int>
+```
+
+- [ ] **Step 4: `RaumRepositories.kt` anpassen**
+
+```kotlin
+    override suspend fun tagesbonusGebuchtAm(tag: LocalDate): Boolean =
+        dao.nettoTagesbonusPunkte(tag.atStartOfDay(), tag.plusDays(1).atStartOfDay()) > 0
+```
+
+(`serienbonusSchwellenSeit`s Aufruf bleibt unveraendert -- nur die Query dahinter hat sich geaendert.)
+
+- [ ] **Step 5: Test ausführen, Erfolg bestätigen**
+
+Run: `./gradlew :app:testDebugUnitTest --tests "de.vanhake.dayorganizer.data.db.DaoTest"`
+Expected: PASS, beide neuen Tests plus alle Bestandstests der Klasse.
+
+- [ ] **Step 6: Failing DAO-Test fuer den Serienbonus-Fall**
+
+In `DaoTest.kt` ergaenzen:
+
+```kotlin
+    @Test
+    fun `eine per Korrektur zurueckgenommene Serienbonus-Schwelle gilt nicht mehr als gebucht`() = runTest {
+        val seit = LocalDateTime.of(2026, 2, 20, 0, 0)
+        db.buchungDao().einfuegen(
+            listOf(
+                BuchungEntity(
+                    art = "SERIENBONUS", betrag = 10, aktivitaetId = 1, schwelle = 7,
+                    zeitpunkt = LocalDateTime.of(2026, 3, 2, 8, 10), faelligkeitId = 10,
+                    belohnungId = null, notiz = "",
+                ),
+                BuchungEntity(
+                    art = "KORREKTUR", betrag = -10, aktivitaetId = 1, schwelle = 7,
+                    zeitpunkt = LocalDateTime.of(2026, 3, 2, 8, 15), faelligkeitId = 10,
+                    belohnungId = null, notiz = "Rueckgaengig: SERIENBONUS",
+                ),
+            ),
+        )
+
+        val schwellen = db.buchungDao().serienbonusSchwellenSeit(1, seit)
+
+        assertEquals(emptyList<Int>(), schwellen)
+    }
+```
+
+- [ ] **Step 7: Test ausführen, Fehlschlag bestätigen, dann Erfolg**
+
+Run: `./gradlew :app:testDebugUnitTest --tests "de.vanhake.dayorganizer.data.db.DaoTest"`
+Expected: da `BuchungDao.kt` bereits in Step 3 geaendert wurde, sollte dieser Test schon PASS liefern -- ist das der Fall, ergaenzt er die Testabdeckung fuer eine Aenderung, die vorher nur ueber den Tagesbonus-Test lief. Schlaegt er unerwartet fehl, liegt ein Fehler im SQL von Step 3 vor (die GROUP-BY/HAVING-Query zurueckgenommener Serienboni), der vor dem Fortfahren behoben werden muss.
+
+- [ ] **Step 8: `Fakes.kt` -- dieselbe Semantik im Test-Double**
+
+```kotlin
+    override suspend fun serienbonusSchwellenSeit(aktivitaetId: Long, seit: LocalDateTime): Set<Int> =
+        stand.value
+            .filter {
+                (it.art == BuchungsArt.SERIENBONUS || it.art == BuchungsArt.KORREKTUR) &&
+                    it.aktivitaetId == aktivitaetId &&
+                    it.schwelle != null &&
+                    !it.zeitpunkt.isBefore(seit)
+            }
+            .groupBy { it.schwelle }
+            .filterValues { zeilen -> zeilen.sumOf { it.betrag } > 0 }
+            .keys
+            .filterNotNull()
+            .toSet()
+
+    override suspend fun tagesbonusGebuchtAm(tag: LocalDate): Boolean =
+        stand.value
+            .filter {
+                (it.art == BuchungsArt.TAGESBONUS || it.art == BuchungsArt.KORREKTUR) &&
+                    it.aktivitaetId == null && it.faelligkeitId == null &&
+                    it.zeitpunkt.toLocalDate() == tag
+            }
+            .sumOf { it.betrag } > 0
+```
+
+Ersetze damit die beiden gleichnamigen Methoden in `FakeBuchungRepository`.
+
+- [ ] **Step 9: Failing Anwendungsfall-Test -- Rueckgaengig gibt den Tagesbonus wirklich frei**
+
+In `FaelligkeitErledigenTest.kt` ergaenzen (nutzt die in Task 8/9 bereits vorhandenen `mitProtokoll`/`FaelligkeitErledigenRueckgaengig`):
+
+```kotlin
+    @Test
+    fun `nach Rueckgaengig wird derselbe Tagesbonus bei erneutem Erledigen wieder gebucht`() = runTest {
+        val f = FakeFaelligkeitRepository(listOf(morgens))
+        val b = FakeBuchungRepository()
+        val transaktionen = FakeTransaktionen()
+        val use = useCase(
+            uhrUm(20, 0), FakeAktivitaetRepository(listOf(tabletten)), f, b,
+            tagesbonus = 25, transaktionen = transaktionen,
+        )
+        val rueckgaengig = FaelligkeitErledigenRueckgaengig(f, b, transaktionen, uhrUm(20, 5))
+
+        val erstesProtokoll = use.mitProtokoll(10) as ErledigungsProtokoll.Gebucht
+        assertEquals(1, b.stand.value.count { it.art == BuchungsArt.TAGESBONUS })
+
+        rueckgaengig(erstesProtokoll)
+        assertEquals(FaelligkeitStatus.OFFEN, f.stand.value.single().status)
+
+        val zweitesProtokoll = use.mitProtokoll(10)
+        assertEquals(true, zweitesProtokoll is ErledigungsProtokoll.Gebucht)
+        assertEquals(2, b.stand.value.count { it.art == BuchungsArt.TAGESBONUS })
+    }
+```
+
+(Fixture `morgens`/`tabletten`/`useCase(...)` sind dieselben Hilfsfunktionen wie in den bestehenden Tests dieser Datei -- `morgens` hat `sollAnzahl = 1`, `tabletten` hat `puenktlichkeitsBonus = 5`; da nur eine einzige Faelligkeit an diesem Tag existiert, ist sie zugleich die letzte, der Tagesbonus wird also beim ersten `mitProtokoll(10)` sofort mitgebucht.)
+
+- [ ] **Step 10: Test ausführen, Fehlschlag bestätigen (vor Step 3/4) bzw. Erfolg (danach)**
+
+Run: `./gradlew :app:testDebugUnitTest --tests "de.vanhake.dayorganizer.domainuse.FaelligkeitErledigenTest"`
+Expected: PASS -- Fakes.kt wurde in Step 8 bereits angepasst, dieser Test dokumentiert also das Ende-zu-Ende-Verhalten, das die vorherigen Schritte einzeln schon repariert haben.
+
+- [ ] **Step 11: Gesamten Testlauf prüfen**
+
+Run: `./gradlew :domain:test :app:testDebugUnitTest`
+Expected: BUILD SUCCESSFUL, alle bestehenden und neuen Tests gruen.
+
+- [ ] **Step 12: Commit**
+
+```bash
+git add app/src/main/kotlin/de/vanhake/dayorganizer/data/db/BuchungDao.kt \
+        app/src/main/kotlin/de/vanhake/dayorganizer/data/repository/RaumRepositories.kt \
+        app/src/test/kotlin/de/vanhake/dayorganizer/Fakes.kt \
+        app/src/test/kotlin/de/vanhake/dayorganizer/data/db/DaoTest.kt \
+        app/src/test/kotlin/de/vanhake/dayorganizer/domainuse/FaelligkeitErledigenTest.kt
+git commit -m "fix(buchung): Tagesbonus/Serienbonus nach Rueckgaengig wieder buchbar machen"
+```
+
+---
+
 ### Task 10: Hinweistoast und HeuteViewModel-Verdrahtung
 
 **Files:**
