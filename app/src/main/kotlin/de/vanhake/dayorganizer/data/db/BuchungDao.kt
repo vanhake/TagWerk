@@ -39,11 +39,15 @@ interface BuchungDao {
 
     // Netto statt Anzahl: eine per FaelligkeitErledigenRueckgaengig gebuchte KORREKTUR-Zeile
     // (negierter Betrag, dieselbe aktivitaetId=null/faelligkeitId=null-Form wie der Tagesbonus
-    // selbst -- keine andere Buchungsart setzt beide ids auf null) muss den Tagesbonus wieder
-    // freigeben, sonst bucht ein erneutes Abschliessen am selben Tag ihn nie wieder.
+    // selbst) muss den Tagesbonus wieder freigeben, sonst bucht ein erneutes Abschliessen am
+    // selben Tag ihn nie wieder. AND belohnungId IS NULL grenzt zusaetzlich EINLOESUNG-Zeilen
+    // aus (aktivitaetId/faelligkeitId ebenfalls null, nur belohnungId gesetzt) -- ein echter
+    // Tagesbonus setzt nie eine belohnungId. Ohne diese Bedingung wuerde eine kuenftige
+    // KORREKTUR, die eine EINLOESUNG zuruecknimmt (positiver Betrag, belohnungId der
+    // Einloesung), dieselbe null/null-Form annehmen und hier faelschlich mitgezaehlt.
     @Query(
         "SELECT COALESCE(SUM(betrag), 0) FROM buchung WHERE (art = 'TAGESBONUS' OR art = 'KORREKTUR') " +
-            "AND aktivitaetId IS NULL AND faelligkeitId IS NULL " +
+            "AND aktivitaetId IS NULL AND faelligkeitId IS NULL AND belohnungId IS NULL " +
             "AND zeitpunkt >= :tagesBeginn AND zeitpunkt < :tagesEnde",
     )
     suspend fun nettoTagesbonusPunkte(tagesBeginn: LocalDateTime, tagesEnde: LocalDateTime): Int

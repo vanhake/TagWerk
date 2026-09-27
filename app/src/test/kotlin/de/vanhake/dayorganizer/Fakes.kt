@@ -164,7 +164,7 @@ class FakeBuchungRepository(start: List<Buchung> = emptyList()) : BuchungReposit
         stand.value
             .filter {
                 (it.art == BuchungsArt.TAGESBONUS || it.art == BuchungsArt.KORREKTUR) &&
-                    it.aktivitaetId == null && it.faelligkeitId == null &&
+                    it.aktivitaetId == null && it.faelligkeitId == null && it.belohnungId == null &&
                     it.zeitpunkt.toLocalDate() == tag
             }
             .sumOf { it.betrag } > 0

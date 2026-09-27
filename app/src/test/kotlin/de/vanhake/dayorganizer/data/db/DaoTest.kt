@@ -139,6 +139,36 @@ class DaoTest {
     }
 
     @Test
+    fun `eine Einloesung und eine hypothetische Korrektur einer Einloesung zaehlen nicht als Tagesbonus`() = runTest {
+        val heute = LocalDate.of(2026, 3, 2)
+        db.buchungDao().einfuegen(
+            listOf(
+                // Eine EINLOESUNG hat wie der Tagesbonus aktivitaetId=null/faelligkeitId=null,
+                // setzt aber belohnungId -- darf trotz gleicher Form nicht mitgezaehlt werden.
+                BuchungEntity(
+                    art = "EINLOESUNG", betrag = -50,
+                    zeitpunkt = heute.atTime(9, 0),
+                    aktivitaetId = null, faelligkeitId = null, belohnungId = 1,
+                    schwelle = null, notiz = "",
+                ),
+                // Es gibt noch kein "Einloesung rueckgaengig machen", aber eine kuenftige
+                // KORREKTUR mit dieser Form (positiver Betrag, belohnungId gesetzt) darf den
+                // Tagesbonus nicht wiederbeleben -- genau das soll belohnungId IS NULL verhindern.
+                BuchungEntity(
+                    art = "KORREKTUR", betrag = 50,
+                    zeitpunkt = heute.atTime(9, 5),
+                    aktivitaetId = null, faelligkeitId = null, belohnungId = 1,
+                    schwelle = null, notiz = "Rueckgaengig: EINLOESUNG",
+                ),
+            ),
+        )
+
+        val netto = db.buchungDao().nettoTagesbonusPunkte(heute.atStartOfDay(), heute.plusDays(1).atStartOfDay())
+
+        assertEquals(0, netto)
+    }
+
+    @Test
     fun `ein nicht zurueckgenommener Tagesbonus zaehlt weiterhin`() = runTest {
         val heute = LocalDate.of(2026, 3, 2)
         db.buchungDao().einfuegen(
