@@ -1,13 +1,13 @@
 package de.vanhake.dayorganizer.ui.theme
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.CleaningServices
-import androidx.compose.material.icons.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.LocalPharmacy
 import androidx.compose.material.icons.filled.Medication
-import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.SelfImprovement
@@ -38,8 +38,8 @@ fun aktivitaetSymbol(schluessel: String): ImageVector = when (schluessel) {
     "medication" -> Icons.Filled.LocalPharmacy
     "water_drop" -> Icons.Filled.WaterDrop
     "fitness_center" -> Icons.Filled.FitnessCenter
-    "menu_book" -> Icons.Filled.MenuBook
-    "directions_walk" -> Icons.Filled.DirectionsWalk
+    "menu_book" -> Icons.AutoMirrored.Filled.MenuBook
+    "directions_walk" -> Icons.AutoMirrored.Filled.DirectionsWalk
     "bedtime" -> Icons.Filled.Bedtime
     "restaurant" -> Icons.Filled.Restaurant
     "spa" -> Icons.Filled.Spa
