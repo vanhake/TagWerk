@@ -1,5 +1,6 @@
 package de.vanhake.dayorganizer.ui.heute
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,9 +19,11 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.Surface
@@ -67,7 +70,7 @@ fun HeuteScreen(viewModel: HeuteViewModel = hiltViewModel()) {
     Box(Modifier.fillMaxSize().background(DayOrganizerTheme.farben.bg)) {
         LazyColumn(
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(bottom = 96.dp),
+            contentPadding = PaddingValues(top = 16.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             items(zustand.hinweise, key = { it.name }) { hinweis ->
@@ -91,7 +94,7 @@ fun HeuteScreen(viewModel: HeuteViewModel = hiltViewModel()) {
                         auslassen = { viewModel.auslassen(heldenEintrag.faelligkeitId) },
                     )
                 }
-            } else if (zustand.gesamtHeute > 0) {
+            } else if (zustand.erledigtHeute == zustand.gesamtHeute && zustand.gesamtHeute > 0) {
                 item { AllesErledigtKarte() }
             }
 
@@ -186,14 +189,15 @@ private fun Kopf(zustand: HeuteZustand) {
 
 @Composable
 private fun HeldenKarte(eintrag: HeuteEintrag, erledigen: () -> Unit, auslassen: () -> Unit) {
+    val heldenFarbe = if (eintrag.ueberfaellig) {
+        DayOrganizerFesteFarben.heroUeberfaelligSolid
+    } else {
+        DayOrganizerTheme.farben.hero
+    }
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         shape = DayOrganizerFormen.heldenKarte,
-        color = if (eintrag.ueberfaellig) {
-            DayOrganizerFesteFarben.heroUeberfaelligSolid
-        } else {
-            DayOrganizerTheme.farben.hero
-        },
+        color = heldenFarbe,
         contentColor = Color.White,
     ) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
@@ -218,11 +222,24 @@ private fun HeldenKarte(eintrag: HeuteEintrag, erledigen: () -> Unit, auslassen:
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(onClick = erledigen, modifier = Modifier.weight(1f)) {
-                    Icon(Icons.Filled.Check, contentDescription = null)
-                    Text(stringResource(R.string.aktion_erledigt))
+                Button(
+                    onClick = erledigen,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = heldenFarbe),
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Filled.Check, contentDescription = null)
+                        Text(stringResource(R.string.aktion_erledigt))
+                    }
                 }
-                OutlinedIconButton(onClick = auslassen) {
+                OutlinedIconButton(
+                    onClick = auslassen,
+                    border = BorderStroke(1.5.dp, DayOrganizerFesteFarben.heroGeisterlinie),
+                    colors = IconButtonDefaults.outlinedIconButtonColors(contentColor = Color.White),
+                ) {
                     Icon(Icons.Filled.SkipNext, contentDescription = stringResource(R.string.aktion_ausgelassen))
                 }
             }
@@ -239,7 +256,7 @@ private fun AllesErledigtKarte() {
         contentColor = DayOrganizerTheme.farben.ink,
     ) {
         Row(Modifier.padding(22.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Alles erledigt", fontWeight = FontWeight.ExtraBold)
+            Text(stringResource(R.string.heute_alles_erledigt), fontWeight = FontWeight.ExtraBold)
         }
     }
 }
