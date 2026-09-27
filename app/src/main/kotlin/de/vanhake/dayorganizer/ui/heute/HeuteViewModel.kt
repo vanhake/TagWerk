@@ -134,9 +134,16 @@ class HeuteViewModel(
     // (der Weg ueber die Benachrichtigungsaktionen) versteckt sie schon, dieser Pfad muss
     // dasselbe tun (Finding 3 der Branch-Review).
     fun erledigen(faelligkeitId: Long) = viewModelScope.launch {
-        when (val protokoll = erledigenUseCase.mitProtokoll(faelligkeitId)) {
+        val protokoll = erledigenUseCase.mitProtokoll(faelligkeitId)
+        // anzeige.verstecke() muss bei JEDEM Ausgang laufen, nicht nur bei Gebucht: NichtOffen
+        // deckt ERLEDIGT/AUSGELASSEN/VERPASST ab (siehe FaelligkeitErledigen), und in jedem
+        // dieser Faelle kann noch eine Systembenachrichtigung fuer diese Faelligkeit stehen
+        // (veraltete Liste, Doppel-Tap, oder der Watchdog war schneller). alarmNeuPlanen(),
+        // widgetAnstossen() und der Toast bleiben dagegen auf den echten Erfolgsfall
+        // beschraenkt, weil sich an Alarm/Widget/Punktestand sonst nichts geaendert hat.
+        anzeige.verstecke(faelligkeitId)
+        when (protokoll) {
             is ErledigungsProtokoll.Gebucht -> {
-                anzeige.verstecke(faelligkeitId)
                 alarmNeuPlanen()
                 widgetAnstossen()
                 val gesamt = protokoll.buchungen.sumOf { it.betrag }
@@ -153,8 +160,11 @@ class HeuteViewModel(
     }
 
     fun auslassen(faelligkeitId: Long) = viewModelScope.launch {
-        val vorher = auslassenUseCase.mitProtokoll(faelligkeitId) ?: return@launch
+        val vorher = auslassenUseCase.mitProtokoll(faelligkeitId)
+        // Siehe Kommentar in erledigen(): verstecke() muss auch laufen, wenn mitProtokoll()
+        // null liefert (Faelligkeit unbekannt oder schon nicht mehr OFFEN).
         anzeige.verstecke(faelligkeitId)
+        vorher ?: return@launch
         alarmNeuPlanen()
         widgetAnstossen()
         val name = aktivitaeten.nachId(vorher.aktivitaetId)?.name.orEmpty()
