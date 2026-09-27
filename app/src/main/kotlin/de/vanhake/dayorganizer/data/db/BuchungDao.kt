@@ -26,17 +26,27 @@ interface BuchungDao {
     @Query("SELECT COALESCE(SUM(betrag), 0) FROM buchung")
     suspend fun kontostandJetzt(): Int
 
+    // Netto je Schwelle statt reiner Zeilenliste: eine KORREKTUR-Zeile traegt dieselbe
+    // aktivitaetId/schwelle wie der Serienbonus, den sie zuruecknimmt (per copy() in
+    // FaelligkeitErledigenRueckgaengig). GROUP BY/HAVING liefert nur Schwellen, deren
+    // Buchungen in Summe noch positiv sind -- eine vollstaendig zurueckgenommene faellt heraus.
     @Query(
-        "SELECT schwelle FROM buchung WHERE art = 'SERIENBONUS' AND aktivitaetId = :aktivitaetId " +
-            "AND zeitpunkt >= :seit AND schwelle IS NOT NULL",
+        "SELECT schwelle FROM buchung WHERE (art = 'SERIENBONUS' OR art = 'KORREKTUR') " +
+            "AND aktivitaetId = :aktivitaetId AND schwelle IS NOT NULL AND zeitpunkt >= :seit " +
+            "GROUP BY schwelle HAVING SUM(betrag) > 0",
     )
     suspend fun serienbonusSchwellenSeit(aktivitaetId: Long, seit: LocalDateTime): List<Int>
 
+    // Netto statt Anzahl: eine per FaelligkeitErledigenRueckgaengig gebuchte KORREKTUR-Zeile
+    // (negierter Betrag, dieselbe aktivitaetId=null/faelligkeitId=null-Form wie der Tagesbonus
+    // selbst -- keine andere Buchungsart setzt beide ids auf null) muss den Tagesbonus wieder
+    // freigeben, sonst bucht ein erneutes Abschliessen am selben Tag ihn nie wieder.
     @Query(
-        "SELECT COUNT(*) FROM buchung WHERE art = 'TAGESBONUS' " +
+        "SELECT COALESCE(SUM(betrag), 0) FROM buchung WHERE (art = 'TAGESBONUS' OR art = 'KORREKTUR') " +
+            "AND aktivitaetId IS NULL AND faelligkeitId IS NULL " +
             "AND zeitpunkt >= :tagesBeginn AND zeitpunkt < :tagesEnde",
     )
-    suspend fun anzahlTagesboni(tagesBeginn: LocalDateTime, tagesEnde: LocalDateTime): Int
+    suspend fun nettoTagesbonusPunkte(tagesBeginn: LocalDateTime, tagesEnde: LocalDateTime): Int
 
     @Query("SELECT * FROM buchung ORDER BY zeitpunkt DESC LIMIT :anzahl")
     suspend fun letzte(anzahl: Int): List<BuchungEntity>

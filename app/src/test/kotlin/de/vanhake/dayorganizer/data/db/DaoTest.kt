@@ -114,6 +114,73 @@ class DaoTest {
     }
 
     @Test
+    fun `ein per Korrektur zurueckgenommener Tagesbonus gilt nicht mehr als gebucht`() = runTest {
+        val heute = LocalDate.of(2026, 3, 2)
+        db.buchungDao().einfuegen(
+            listOf(
+                BuchungEntity(
+                    art = "TAGESBONUS", betrag = 25,
+                    zeitpunkt = heute.atTime(20, 30),
+                    aktivitaetId = null, faelligkeitId = null, belohnungId = null,
+                    schwelle = null, notiz = "",
+                ),
+                BuchungEntity(
+                    art = "KORREKTUR", betrag = -25,
+                    zeitpunkt = heute.atTime(20, 35),
+                    aktivitaetId = null, faelligkeitId = null, belohnungId = null,
+                    schwelle = null, notiz = "Rueckgaengig: TAGESBONUS",
+                ),
+            ),
+        )
+
+        val netto = db.buchungDao().nettoTagesbonusPunkte(heute.atStartOfDay(), heute.plusDays(1).atStartOfDay())
+
+        assertEquals(0, netto)
+    }
+
+    @Test
+    fun `ein nicht zurueckgenommener Tagesbonus zaehlt weiterhin`() = runTest {
+        val heute = LocalDate.of(2026, 3, 2)
+        db.buchungDao().einfuegen(
+            listOf(
+                BuchungEntity(
+                    art = "TAGESBONUS", betrag = 25,
+                    zeitpunkt = heute.atTime(20, 30),
+                    aktivitaetId = null, faelligkeitId = null, belohnungId = null,
+                    schwelle = null, notiz = "",
+                ),
+            ),
+        )
+
+        val netto = db.buchungDao().nettoTagesbonusPunkte(heute.atStartOfDay(), heute.plusDays(1).atStartOfDay())
+
+        assertEquals(25, netto)
+    }
+
+    @Test
+    fun `eine per Korrektur zurueckgenommene Serienbonus-Schwelle gilt nicht mehr als gebucht`() = runTest {
+        val seit = LocalDateTime.of(2026, 2, 20, 0, 0)
+        db.buchungDao().einfuegen(
+            listOf(
+                BuchungEntity(
+                    art = "SERIENBONUS", betrag = 10, aktivitaetId = 1, schwelle = 7,
+                    zeitpunkt = LocalDateTime.of(2026, 3, 2, 8, 10), faelligkeitId = 10,
+                    belohnungId = null, notiz = "",
+                ),
+                BuchungEntity(
+                    art = "KORREKTUR", betrag = -10, aktivitaetId = 1, schwelle = 7,
+                    zeitpunkt = LocalDateTime.of(2026, 3, 2, 8, 15), faelligkeitId = 10,
+                    belohnungId = null, notiz = "Rueckgaengig: SERIENBONUS",
+                ),
+            ),
+        )
+
+        val schwellen = db.buchungDao().serienbonusSchwellenSeit(1, seit)
+
+        assertEquals(emptyList<Int>(), schwellen)
+    }
+
+    @Test
     fun offene_Faelligkeiten_bis_Zeitpunkt_werden_gefunden() = runTest {
         val id = db.aktivitaetDao().einfuegen(aktivitaet())
         fun eintrag(stunde: Int, status: String) = FaelligkeitEntity(

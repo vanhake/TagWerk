@@ -149,17 +149,25 @@ class FakeBuchungRepository(start: List<Buchung> = emptyList()) : BuchungReposit
     override suspend fun serienbonusSchwellenSeit(aktivitaetId: Long, seit: LocalDateTime): Set<Int> =
         stand.value
             .filter {
-                it.art == BuchungsArt.SERIENBONUS &&
+                (it.art == BuchungsArt.SERIENBONUS || it.art == BuchungsArt.KORREKTUR) &&
                     it.aktivitaetId == aktivitaetId &&
+                    it.schwelle != null &&
                     !it.zeitpunkt.isBefore(seit)
             }
-            .mapNotNull { it.schwelle }
+            .groupBy { it.schwelle }
+            .filterValues { zeilen -> zeilen.sumOf { it.betrag } > 0 }
+            .keys
+            .filterNotNull()
             .toSet()
 
     override suspend fun tagesbonusGebuchtAm(tag: LocalDate): Boolean =
-        stand.value.any {
-            it.art == BuchungsArt.TAGESBONUS && it.zeitpunkt.toLocalDate() == tag
-        }
+        stand.value
+            .filter {
+                (it.art == BuchungsArt.TAGESBONUS || it.art == BuchungsArt.KORREKTUR) &&
+                    it.aktivitaetId == null && it.faelligkeitId == null &&
+                    it.zeitpunkt.toLocalDate() == tag
+            }
+            .sumOf { it.betrag } > 0
 
     /** Spiegelt "WHERE zeitpunkt >= :von AND zeitpunkt < :bis ORDER BY zeitpunkt": [bis] ist
      * als Tagesgrenze exklusiv, hier als Datum daher inklusiv -- der ganze Tag [bis] zaehlt noch. */

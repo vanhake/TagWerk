@@ -333,6 +333,28 @@ class FaelligkeitErledigenTest {
     }
 
     @Test
+    fun `nach Rueckgaengig wird derselbe Tagesbonus bei erneutem Erledigen wieder gebucht`() = runTest {
+        val f = FakeFaelligkeitRepository(listOf(morgens))
+        val b = FakeBuchungRepository()
+        val transaktionen = FakeTransaktionen()
+        val use = useCase(
+            uhrUm(20, 0), FakeAktivitaetRepository(listOf(tabletten)), f, b,
+            tagesbonus = 25, transaktionen = transaktionen,
+        )
+        val rueckgaengig = FaelligkeitErledigenRueckgaengig(f, b, transaktionen, uhrUm(20, 5))
+
+        val erstesProtokoll = use.mitProtokoll(10) as ErledigungsProtokoll.Gebucht
+        assertEquals(1, b.stand.value.count { it.art == BuchungsArt.TAGESBONUS })
+
+        rueckgaengig(erstesProtokoll)
+        assertEquals(FaelligkeitStatus.OFFEN, f.stand.value.single().status)
+
+        val zweitesProtokoll = use.mitProtokoll(10)
+        assertEquals(true, zweitesProtokoll is ErledigungsProtokoll.Gebucht)
+        assertEquals(2, b.stand.value.count { it.art == BuchungsArt.TAGESBONUS })
+    }
+
+    @Test
     fun `VerpassteAbschliessen markiert nur abgelaufene offene Faelligkeiten`() = runTest {
         val gestern = morgens.copy(
             id = 9,
