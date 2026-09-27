@@ -15,6 +15,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import de.vanhake.dayorganizer.R
 import de.vanhake.dayorganizer.platform.permission.Hinweis
+import de.vanhake.dayorganizer.ui.theme.DayOrganizerFormen
+import de.vanhake.dayorganizer.ui.theme.DayOrganizerTheme
 
 @Composable
 fun WarnBanner(hinweis: Hinweis, beheben: () -> Unit, modifier: Modifier = Modifier) {
@@ -31,9 +33,10 @@ fun WarnBanner(hinweis: Hinweis, beheben: () -> Unit, modifier: Modifier = Modif
 
     Card(
         modifier = modifier.fillMaxWidth(),
+        shape = DayOrganizerFormen.zeile,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer,
-            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+            containerColor = DayOrganizerTheme.farben.goldSoft,
+            contentColor = DayOrganizerTheme.farben.ink,
         ),
     ) {
         Column(Modifier.padding(16.dp)) {
