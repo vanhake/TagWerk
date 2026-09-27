@@ -20,9 +20,7 @@ class AktivitaetSymbolTest {
 
     @Test
     fun `jeder Katalogeintrag liefert ein Symbol`() {
-        AKTIVITAET_SYMBOLE.forEach { schluessel ->
-            assertEquals(aktivitaetSymbol(schluessel), aktivitaetSymbol(schluessel))
-        }
         assertEquals(12, AKTIVITAET_SYMBOLE.size)
+        assertEquals(12, AKTIVITAET_SYMBOLE.map(::aktivitaetSymbol).toSet().size)
     }
 }

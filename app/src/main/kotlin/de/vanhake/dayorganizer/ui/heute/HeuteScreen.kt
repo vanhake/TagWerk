@@ -169,13 +169,9 @@ private fun LazyListScope.abschnitt(
 private fun Kopf(zustand: HeuteZustand) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.End,
         verticalAlignment = Alignment.Bottom,
     ) {
-        Text(
-            stringResource(R.string.tagesfortschritt, zustand.erledigtHeute, zustand.gesamtHeute),
-            style = MaterialTheme.typography.titleMedium,
-        )
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Icon(Icons.Filled.Star, contentDescription = null, tint = DayOrganizerTheme.farben.goldInk)
             Text(
