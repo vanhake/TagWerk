@@ -19,6 +19,7 @@
     <string name="warnung_beheben">Einstellung öffnen</string>
     <string name="punktestand">%1$d Punkte</string>
     <string name="tagesfortschritt">Heute %1$d von %2$d erledigt</string>
+    <string name="heute_alles_erledigt">Alles erledigt</string>
     <string name="noch_bis_belohnung">Noch %1$d Punkte bis %2$s</string>
     <string name="belohnung_bereit">Punkte für %1$s reichen bereits</string>
     <string name="ziel_fortschritt">%1$d von %2$d</string>
@@ -73,6 +74,8 @@
     <string name="tab_einstellungen">Optionen</string>
     <string name="feld_tagesbonus">Tagesbonus, wenn alles erledigt ist</string>
     <string name="feld_standard_kulanz">Standard-Kulanzfenster in Minuten</string>
+    <string name="theme_hell">Hell</string>
+    <string name="theme_dunkel">Dunkel</string>
     <string name="backup_exportieren">Backup speichern</string>
     <string name="backup_importieren">Backup einlesen</string>
     <string name="backup_dateiname">dayorganizer-backup-%1$s.json</string>
@@ -89,4 +92,5 @@
     <string name="backup_import_vorschau_abbrechen">Abbrechen</string>
     <string name="widget_weitere">+ %1$d weitere</string>
     <string name="widget_ziel_fortschritt">%1$d/%2$d</string>
+    <string name="toast_rueckgaengig">Rückgängig</string>
 </resources>

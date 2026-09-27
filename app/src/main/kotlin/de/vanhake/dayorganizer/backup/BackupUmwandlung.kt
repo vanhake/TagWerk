@@ -1,6 +1,7 @@
 package de.vanhake.dayorganizer.backup
 
 import de.vanhake.dayorganizer.data.Einstellungen
+import de.vanhake.dayorganizer.data.ThemeModus
 import de.vanhake.dayorganizer.data.mapper.ZeitplanFelder
 import de.vanhake.dayorganizer.data.mapper.ZeitplanKodierung
 import de.vanhake.dayorganizer.domain.model.Aktivitaet
@@ -33,7 +34,7 @@ data class BackupInhalt(
 
 object BackupUmwandlung {
 
-    const val SCHEMA_VERSION = 1
+    const val SCHEMA_VERSION = 2
 
     private val json = Json {
         prettyPrint = true
@@ -83,6 +84,7 @@ object BackupUmwandlung {
         einstellungen = EinstellungenDto(
             tagesbonusPunkte = einstellungen.tagesbonusPunkte,
             standardKulanzMinuten = einstellungen.standardKulanzMinuten,
+            themeModus = einstellungen.themeModus.name,
         ),
     )
 
@@ -101,6 +103,11 @@ object BackupUmwandlung {
             einstellungen = Einstellungen(
                 tagesbonusPunkte = datei.einstellungen.tagesbonusPunkte,
                 standardKulanzMinuten = datei.einstellungen.standardKulanzMinuten,
+                // Ein unbekannter Modus-Text (kuenftige Version, beschaedigte Datei) faellt auf
+                // HELL zurueck, statt den ganzen Import an einem kosmetischen Feld scheitern zu
+                // lassen -- anders als bei Belohnungsbedingungen ist das hier kein Vertragsbruch.
+                themeModus = runCatching { ThemeModus.valueOf(datei.einstellungen.themeModus) }
+                    .getOrDefault(ThemeModus.HELL),
             ),
         )
     }
@@ -108,7 +115,8 @@ object BackupUmwandlung {
     private fun Aktivitaet.zuDto(): AktivitaetDto {
         val felder = ZeitplanKodierung.kodiere(zeitplan)
         return AktivitaetDto(
-            id = id, name = name, notiz = notiz, farbe = farbe, basisPunkte = basisPunkte,
+            id = id, name = name, notiz = notiz, farbe = farbe, symbol = symbol,
+            basisPunkte = basisPunkte,
             kulanzMinuten = kulanzMinuten, puenktlichkeitsBonus = puenktlichkeitsBonus,
             serienSchwellen = ZeitplanKodierung.kodiereSchwellen(serienSchwellen),
             nachfassAnzahl = nachfassAnzahl, nachfassAbstandMinuten = nachfassAbstandMinuten,
@@ -123,7 +131,8 @@ object BackupUmwandlung {
     }
 
     private fun AktivitaetDto.zuDomaene() = Aktivitaet(
-        id = id, name = name, notiz = notiz, farbe = farbe, basisPunkte = basisPunkte,
+        id = id, name = name, notiz = notiz, farbe = farbe, symbol = symbol,
+        basisPunkte = basisPunkte,
         zeitplan = ZeitplanKodierung.dekodiere(
             ZeitplanFelder(
                 typ = zeitplanTyp, zeiten = zeitplanZeiten, wochentage = zeitplanWochentage,

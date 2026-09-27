@@ -9,11 +9,14 @@ import de.vanhake.dayorganizer.FakeTransaktionen
 import de.vanhake.dayorganizer.data.Einstellungen
 import de.vanhake.dayorganizer.domain.model.Aktivitaet
 import de.vanhake.dayorganizer.domain.model.Faelligkeit
+import de.vanhake.dayorganizer.domain.model.FaelligkeitStatus
 import de.vanhake.dayorganizer.domain.model.Zeitplan
 import de.vanhake.dayorganizer.domain.rechner.PunkteRechner
 import de.vanhake.dayorganizer.domain.rechner.SerienRechner
 import de.vanhake.dayorganizer.domainuse.FaelligkeitAuslassen
+import de.vanhake.dayorganizer.domainuse.FaelligkeitAuslassenRueckgaengig
 import de.vanhake.dayorganizer.domainuse.FaelligkeitErledigen
+import de.vanhake.dayorganizer.domainuse.FaelligkeitErledigenRueckgaengig
 import de.vanhake.dayorganizer.platform.notification.Erinnerungsanzeige
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -73,6 +76,16 @@ class HeuteViewModelTest {
         periodeVon = LocalDate.of(2026, 3, 2), periodeBis = LocalDate.of(2026, 3, 2),
         geplantFuer = LocalDateTime.of(2026, 3, 2, 8, 0), sollAnzahl = 1,
     )
+    private val sport = Aktivitaet(
+        id = 2, name = "Sport", farbe = 2, basisPunkte = 20, puenktlichkeitsBonus = 0,
+        zeitplan = Zeitplan.FesteZeiten(listOf(LocalTime.of(18, 0)), DayOfWeek.entries.toSet()),
+        erstelltAm = LocalDate.of(2026, 1, 1),
+    )
+    private val abends = Faelligkeit(
+        id = 11, aktivitaetId = 2,
+        periodeVon = LocalDate.of(2026, 3, 2), periodeBis = LocalDate.of(2026, 3, 2),
+        geplantFuer = LocalDateTime.of(2026, 3, 2, 18, 0), sollAnzahl = 1,
+    )
 
     private fun viewModel(
         faelligkeiten: FakeFaelligkeitRepository,
@@ -82,17 +95,21 @@ class HeuteViewModelTest {
         belohnungen: FakeBelohnungRepository = FakeBelohnungRepository(),
         widgetAnstossen: suspend () -> Unit = {},
     ): HeuteViewModel {
-        val aktivitaeten = FakeAktivitaetRepository(listOf(tabletten))
+        val aktivitaeten = FakeAktivitaetRepository(listOf(tabletten, sport))
+        val transaktionen = FakeTransaktionen()
+        val erledigenUseCase = FaelligkeitErledigen(
+            aktivitaeten, faelligkeiten, buchungen, PunkteRechner(), SerienRechner(),
+            transaktionen, { Einstellungen(tagesbonusPunkte = 0) }, uhr,
+        )
         return HeuteViewModel(
             aktivitaeten = aktivitaeten,
             faelligkeiten = faelligkeiten,
             buchungen = buchungen,
             belohnungen = belohnungen,
-            erledigenUseCase = FaelligkeitErledigen(
-                aktivitaeten, faelligkeiten, buchungen, PunkteRechner(), SerienRechner(),
-                FakeTransaktionen(), { Einstellungen(tagesbonusPunkte = 0) }, uhr,
-            ),
+            erledigenUseCase = erledigenUseCase,
             auslassenUseCase = FaelligkeitAuslassen(faelligkeiten, uhr),
+            erledigenRueckgaengig = FaelligkeitErledigenRueckgaengig(faelligkeiten, buchungen, transaktionen, uhr),
+            auslassenRueckgaengig = FaelligkeitAuslassenRueckgaengig(faelligkeiten),
             anzeige = anzeige,
             alarmNeuPlanen = {},
             hinweiseLesen = { emptyList() },
@@ -217,4 +234,129 @@ class HeuteViewModelTest {
 
         assertEquals(1, widgetAngestossen)
     }
+
+    @Test
+    fun `Erledigen zeigt einen Toast mit Rueckgaengig-Option`() = runTest(dispatcher) {
+        val vm = viewModel(FakeFaelligkeitRepository(listOf(morgens)), FakeBuchungRepository())
+
+        vm.erledigen(10)
+        // Bewusst runCurrent() statt advanceUntilIdle(): Letzteres wuerde auch den erst in
+        // 3.8s faelligen Auto-Dismiss-Job der Toast-Anzeige mitausfuehren (virtuelle Zeit
+        // kennt keine Wartezeit) und den Toast damit vor der Zusicherung schon wieder loeschen.
+        dispatcher.scheduler.runCurrent()
+
+        assertEquals(true, vm.toast.value?.kannRueckgaengig)
+    }
+
+    @Test
+    fun `Rueckgaengig macht die Erledigung und ihre Buchungen wieder rueckgaengig`() = runTest(dispatcher) {
+        val faelligkeiten = FakeFaelligkeitRepository(listOf(morgens))
+        val buchungen = FakeBuchungRepository()
+        val vm = viewModel(faelligkeiten, buchungen)
+
+        vm.erledigen(10)
+        dispatcher.scheduler.runCurrent()
+        vm.rueckgaengig()
+        dispatcher.scheduler.runCurrent()
+
+        assertEquals(null, vm.toast.value)
+        assertEquals(0, buchungen.stand.value.sumOf { it.betrag })
+        assertEquals(FaelligkeitStatus.OFFEN, faelligkeiten.stand.value.single().status)
+    }
+
+    @Test
+    fun `der Toast verschwindet von selbst, wenn niemand Rueckgaengig antippt`() = runTest(dispatcher) {
+        val vm = viewModel(FakeFaelligkeitRepository(listOf(morgens)), FakeBuchungRepository())
+
+        vm.erledigen(10)
+        dispatcher.scheduler.runCurrent()
+        assertEquals(true, vm.toast.value != null)
+
+        dispatcher.scheduler.advanceTimeBy(3_900)
+        dispatcher.scheduler.runCurrent()
+
+        assertEquals(null, vm.toast.value)
+    }
+
+    @Test
+    fun `eine neue Aktion ersetzt einen noch ausstehenden Toast statt ihn zu stapeln`() = runTest(dispatcher) {
+        val faelligkeiten = FakeFaelligkeitRepository(listOf(morgens, abends))
+        val vm = viewModel(faelligkeiten, FakeBuchungRepository())
+
+        vm.erledigen(10)
+        dispatcher.scheduler.runCurrent()
+        assertEquals("+10 Punkte · Tabletten", vm.toast.value?.text)
+
+        // Zweite Aktion, deutlich vor Ablauf des ersten 3.8s-Fensters.
+        dispatcher.scheduler.advanceTimeBy(2_000)
+        vm.erledigen(11)
+        dispatcher.scheduler.runCurrent()
+
+        // Der Toast zeigt jetzt die ZWEITE Aktion -- ueberschrieben statt gestapelt.
+        assertEquals("+20 Punkte · Sport", vm.toast.value?.text)
+
+        // Ab Start der ersten Aktion sind jetzt 3_900ms vergangen -- ihr eigenes 3.8s-Fenster
+        // ist damit ueberschritten. Waere ihr Auto-Dismiss-Job nicht wirklich storniert
+        // worden (toastJob?.cancel() in zeigeToast()), wuerde er hier den laengst durch die
+        // zweite Aktion ersetzten Toast vorzeitig loeschen.
+        dispatcher.scheduler.advanceTimeBy(1_900)
+        dispatcher.scheduler.runCurrent()
+        assertEquals("+20 Punkte · Sport", vm.toast.value?.text)
+
+        // Jetzt ist auch das eigene 3.8s-Fenster der zweiten Aktion ueberschritten
+        // (2_000ms seit ihrem Start) -- erst jetzt darf ihr Auto-Dismiss greifen.
+        dispatcher.scheduler.advanceTimeBy(2_000)
+        dispatcher.scheduler.runCurrent()
+        assertEquals(null, vm.toast.value)
+    }
+
+    @Test
+    fun `Auslassen und Rueckgaengig setzt die Faelligkeit zurueck auf OFFEN`() = runTest(dispatcher) {
+        val faelligkeiten = FakeFaelligkeitRepository(listOf(morgens))
+        val vm = viewModel(faelligkeiten, FakeBuchungRepository())
+
+        vm.auslassen(10)
+        dispatcher.scheduler.runCurrent()
+        assertEquals(FaelligkeitStatus.AUSGELASSEN, faelligkeiten.stand.value.single().status)
+
+        vm.rueckgaengig()
+        dispatcher.scheduler.runCurrent()
+
+        assertEquals(null, vm.toast.value)
+        assertEquals(FaelligkeitStatus.OFFEN, faelligkeiten.stand.value.single().status)
+    }
+
+    @Test
+    fun `Rueckgaengig ohne ausstehende Aktion ist ein sicheres No-op`() = runTest(dispatcher) {
+        val faelligkeiten = FakeFaelligkeitRepository(listOf(morgens))
+        val buchungen = FakeBuchungRepository()
+        val vm = viewModel(faelligkeiten, buchungen)
+
+        vm.rueckgaengig()
+        dispatcher.scheduler.runCurrent()
+
+        assertEquals(null, vm.toast.value)
+        assertEquals(0, buchungen.stand.value.sumOf { it.betrag })
+        assertEquals(FaelligkeitStatus.OFFEN, faelligkeiten.stand.value.single().status)
+    }
+
+    @Test
+    fun `verstecke laeuft auch, wenn nichts mehr gebucht wird, damit die Benachrichtigung nicht stehen bleibt`() =
+        runTest(dispatcher) {
+            val faelligkeiten = FakeFaelligkeitRepository(listOf(morgens))
+            val anzeige = FakeAnzeige()
+            val vm = viewModel(faelligkeiten, FakeBuchungRepository(), anzeige = anzeige)
+
+            vm.erledigen(10)
+            dispatcher.scheduler.runCurrent()
+            assertEquals(listOf(10L), anzeige.versteckt)
+
+            // Die Faelligkeit ist jetzt ERLEDIGT (NichtOffen) -- ein zweiter Aufruf bucht
+            // nichts mehr, muss aber trotzdem verstecke() aufrufen (stale Liste, Doppel-Tap
+            // oder der Watchdog war schneller -- Finding 3 der Branch-Review).
+            vm.erledigen(10)
+            dispatcher.scheduler.runCurrent()
+
+            assertEquals(listOf(10L, 10L), anzeige.versteckt)
+        }
 }

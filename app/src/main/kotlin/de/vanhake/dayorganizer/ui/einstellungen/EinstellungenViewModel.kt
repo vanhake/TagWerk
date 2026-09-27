@@ -11,6 +11,7 @@ import de.vanhake.dayorganizer.backup.ImportErgebnis
 import de.vanhake.dayorganizer.backup.UnbekanntesSchema
 import de.vanhake.dayorganizer.data.Einstellungen
 import de.vanhake.dayorganizer.data.EinstellungenSpeicher
+import de.vanhake.dayorganizer.data.ThemeModus
 import de.vanhake.dayorganizer.platform.notification.Erinnerungsanzeige
 import de.vanhake.dayorganizer.platform.permission.BerechtigungsHinweise
 import de.vanhake.dayorganizer.platform.permission.BerechtigungsPruefer
@@ -39,6 +40,7 @@ import kotlinx.coroutines.withContext
 data class EinstellungenZustand(
     val tagesbonusText: String = "",
     val standardKulanzText: String = "",
+    val themeModus: ThemeModus = ThemeModus.HELL,
     val hinweise: List<Hinweis> = emptyList(),
 )
 
@@ -257,6 +259,18 @@ class EinstellungenViewModel(
         _zustand.value = _zustand.value.copy(standardKulanzText = text)
     }
 
+    /** Wirkt sofort, anders als tagesbonusAendern/kulanzAendern: ein Farbmodus ist ein
+     * Umschalter, kein Formularfeld, das erst ueber "Speichern" uebernommen wird. */
+    fun themeModusAendern(neu: ThemeModus) = viewModelScope.launch {
+        val bisher = lesen()
+        versuchen {
+            schreiben(bisher.copy(themeModus = neu))
+        }.onFailure { ausnahme ->
+            Log.w(TAG, "Speichern des Farbmodus fehlgeschlagen", ausnahme)
+        }
+        neuLaden()
+    }
+
     /**
      * Wird bei jedem Sichtbarwerden des Screens aufgerufen, nicht nur einmal:
      * der Nutzer kommt aus den Systemeinstellungen zurueck, und dann muss der
@@ -272,7 +286,7 @@ class EinstellungenViewModel(
      */
     fun speichern(): Job = viewModelScope.launch {
         val bisher = lesen()
-        val neu = Einstellungen(
+        val neu = bisher.copy(
             tagesbonusPunkte = _zustand.value.tagesbonusText.toIntOrNull()
                 ?.takeIf { it >= 0 } ?: bisher.tagesbonusPunkte,
             standardKulanzMinuten = _zustand.value.standardKulanzText.toIntOrNull()
@@ -294,6 +308,7 @@ class EinstellungenViewModel(
         _zustand.value = EinstellungenZustand(
             tagesbonusText = aktuell.tagesbonusPunkte.toString(),
             standardKulanzText = aktuell.standardKulanzMinuten.toString(),
+            themeModus = aktuell.themeModus,
             hinweise = hinweiseLesen(),
         )
     }

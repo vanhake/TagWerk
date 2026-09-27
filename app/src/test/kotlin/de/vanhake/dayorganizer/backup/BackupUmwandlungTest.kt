@@ -1,6 +1,7 @@
 package de.vanhake.dayorganizer.backup
 
 import de.vanhake.dayorganizer.data.Einstellungen
+import de.vanhake.dayorganizer.data.ThemeModus
 import de.vanhake.dayorganizer.domain.model.Aktivitaet
 import de.vanhake.dayorganizer.domain.model.Belohnung
 import de.vanhake.dayorganizer.domain.model.Belohnungsbedingung
@@ -25,6 +26,7 @@ class BackupUmwandlungTest {
 
     private val aktivitaet = Aktivitaet(
         id = 1, name = "Tabletten", notiz = "morgens und abends", farbe = 42, basisPunkte = 10,
+        symbol = "medication",
         zeitplan = Zeitplan.FesteZeiten(
             listOf(LocalTime.of(8, 0), LocalTime.of(20, 0)),
             setOf(DayOfWeek.MONDAY, DayOfWeek.TUESDAY),
@@ -66,7 +68,7 @@ class BackupUmwandlungTest {
         buchungen = listOf(buchung),
         belohnungen = listOf(belohnung),
         einloesungen = listOf(einloesung),
-        einstellungen = Einstellungen(tagesbonusPunkte = 25, standardKulanzMinuten = 45),
+        einstellungen = Einstellungen(tagesbonusPunkte = 25, standardKulanzMinuten = 45, themeModus = ThemeModus.DUNKEL),
     )
 
     @Test
@@ -192,7 +194,9 @@ class BackupUmwandlungTest {
         zeitpunkt = LocalDateTime.of(2026, 6, 5, 10, 0),
     )
 
-    private val abweichendeEinstellungen = Einstellungen(tagesbonusPunkte = 99, standardKulanzMinuten = 120)
+    private val abweichendeEinstellungen = Einstellungen(
+        tagesbonusPunkte = 99, standardKulanzMinuten = 120, themeModus = ThemeModus.HELL,
+    )
 
     @Test
     fun `jedes Feld weicht vom Standardwert ab und uebersteht den Rundlauf`() {
@@ -248,12 +252,13 @@ class BackupUmwandlungTest {
     }
 
     @Test
-    fun `eine Version-2-Datei mit unbekanntem Zusatzfeld gilt als neuere Version, nicht als beschaedigt`() {
-        val text = backupText(schemaVersion = "2", mitUnbekanntemZusatzfeld = true)
+    fun `eine Datei mit hoeherer Schemaversion und unbekanntem Zusatzfeld gilt als neuere Version, nicht als beschaedigt`() {
+        val hoehereVersion = BackupUmwandlung.SCHEMA_VERSION + 1
+        val text = backupText(schemaVersion = hoehereVersion.toString(), mitUnbekanntemZusatzfeld = true)
 
         val fehler = assertFailsWith<UnbekanntesSchema> { BackupUmwandlung.ausText(text) }
 
-        assertEquals(2, fehler.gefunden)
+        assertEquals(hoehereVersion, fehler.gefunden)
     }
 
     @Test
@@ -306,32 +311,55 @@ class BackupUmwandlungTest {
         .bufferedReader()
         .readText()
 
-    private fun beispielInhaltSchema1() = BackupUmwandlung.zuDatei(
+    @Test
+    fun `ein Schema-1-Backup wird nach dem Sprung auf Schema 2 abgelehnt, nicht stillschweigend falsch gelesen`() {
+        val fehler = assertFailsWith<UnbekanntesSchema> { BackupUmwandlung.ausText(beispielDateiSchema1) }
+
+        assertEquals(1, fehler.gefunden)
+    }
+
+    // --- Fund 3 (Schema 2): feste Beispieldatei als Vertrag fuer Schema 2 ------------------
+    //
+    // Aendert sich diese Datei (umbenanntes DTO-Feld, andere Enum-Konstante, andere
+    // ZeitplanKodierung-Texte, ...), werden bestehende Backups von Anwendern unlesbar.
+    // Das ist dann keine Testanpassung, sondern eine neue Schemaversion.
+
+    private fun beispielInhaltSchema2() = BackupUmwandlung.zuDatei(
         erstelltAm = LocalDateTime.of(2026, 3, 2, 21, 0),
         aktivitaeten = listOf(aktivitaet),
         faelligkeiten = listOf(faelligkeit),
         buchungen = listOf(buchung),
         belohnungen = listOf(belohnung),
         einloesungen = listOf(einloesung),
-        einstellungen = Einstellungen(tagesbonusPunkte = 25, standardKulanzMinuten = 45),
+        einstellungen = Einstellungen(
+            tagesbonusPunkte = 25, standardKulanzMinuten = 45, themeModus = ThemeModus.DUNKEL,
+        ),
     )
 
+    private val beispielDateiSchema2 = javaClass.classLoader
+        ?.getResourceAsStream("backup/beispiel-schema-2.json")!!
+        .bufferedReader()
+        .readText()
+
     @Test
-    fun `die eingefrorene Beispieldatei fuer Schema 1 wird zu den erwarteten Domaenenobjekten gelesen`() {
-        val inhalt = BackupUmwandlung.ausText(beispielDateiSchema1)
+    fun `die eingefrorene Beispieldatei fuer Schema 2 wird zu den erwarteten Domaenenobjekten gelesen`() {
+        val inhalt = BackupUmwandlung.ausText(beispielDateiSchema2)
 
         assertEquals(listOf(aktivitaet), inhalt.aktivitaeten)
         assertEquals(listOf(faelligkeit), inhalt.faelligkeiten)
         assertEquals(listOf(buchung), inhalt.buchungen)
         assertEquals(listOf(belohnung), inhalt.belohnungen)
         assertEquals(listOf(einloesung), inhalt.einloesungen)
-        assertEquals(Einstellungen(tagesbonusPunkte = 25, standardKulanzMinuten = 45), inhalt.einstellungen)
+        assertEquals(
+            Einstellungen(tagesbonusPunkte = 25, standardKulanzMinuten = 45, themeModus = ThemeModus.DUNKEL),
+            inhalt.einstellungen,
+        )
     }
 
     @Test
-    fun `dieselben Domaenenobjekte erzeugen wieder genau die eingefrorene Beispieldatei`() {
-        val text = BackupUmwandlung.zuText(beispielInhaltSchema1())
+    fun `dieselben Domaenenobjekte erzeugen wieder genau die eingefrorene Beispieldatei fuer Schema 2`() {
+        val text = BackupUmwandlung.zuText(beispielInhaltSchema2())
 
-        assertEquals(beispielDateiSchema1.trim(), text.trim())
+        assertEquals(beispielDateiSchema2.trim(), text.trim())
     }
 }

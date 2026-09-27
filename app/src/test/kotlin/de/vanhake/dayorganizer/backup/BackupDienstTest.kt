@@ -187,13 +187,15 @@ class BackupDienstTest {
     @Test
     fun ein_Verweis_ins_Leere_wird_abgelehnt_und_der_Bestand_bleibt() = runTest {
         db.aktivitaetDao().einfuegen(aktivitaet("Tabletten"))
-        val verwaist = """{"schemaVersion":1,"erstelltAm":"2026-03-02T21:00",""" +
+        val verwaist = """{"schemaVersion":${BackupUmwandlung.SCHEMA_VERSION},""" +
+            """"erstelltAm":"2026-03-02T21:00",""" +
             """"aktivitaeten":[],"faelligkeiten":[{"id":1,"aktivitaetId":999,""" +
             """"periodeVon":"2026-03-02","periodeBis":"2026-03-02",""" +
             """"geplantFuer":"2026-03-02T08:00","sollAnzahl":1,"istAnzahl":0,""" +
             """"status":"OFFEN","erledigtAm":null,"warPuenktlich":false}],""" +
             """"buchungen":[],"belohnungen":[],"einloesungen":[],""" +
-            """"einstellungen":{"tagesbonusPunkte":15,"standardKulanzMinuten":60}}"""
+            """"einstellungen":{"tagesbonusPunkte":15,"standardKulanzMinuten":60,""" +
+            """"themeModus":"HELL"}}"""
 
         val ergebnis = dienst.importieren(ByteArrayInputStream(verwaist.toByteArray()))
 
@@ -208,14 +210,16 @@ class BackupDienstTest {
     @Test
     fun zwei_Buchungen_mit_gleicher_id_werden_abgelehnt_und_der_Bestand_bleibt() = runTest {
         db.aktivitaetDao().einfuegen(aktivitaet("Tabletten"))
-        val doppelt = """{"schemaVersion":1,"erstelltAm":"2026-03-02T21:00",""" +
+        val doppelt = """{"schemaVersion":${BackupUmwandlung.SCHEMA_VERSION},""" +
+            """"erstelltAm":"2026-03-02T21:00",""" +
             """"aktivitaeten":[],"faelligkeiten":[],""" +
             """"buchungen":[{"id":1,"art":"TAGESBONUS","betrag":5,"zeitpunkt":"2026-03-02T08:00",""" +
             """"aktivitaetId":null,"faelligkeitId":null,"belohnungId":null,"schwelle":null,"notiz":""},""" +
             """{"id":1,"art":"TAGESBONUS","betrag":7,"zeitpunkt":"2026-03-02T09:00",""" +
             """"aktivitaetId":null,"faelligkeitId":null,"belohnungId":null,"schwelle":null,"notiz":""}],""" +
             """"belohnungen":[],"einloesungen":[],""" +
-            """"einstellungen":{"tagesbonusPunkte":15,"standardKulanzMinuten":60}}"""
+            """"einstellungen":{"tagesbonusPunkte":15,"standardKulanzMinuten":60,""" +
+            """"themeModus":"HELL"}}"""
 
         val ergebnis = dienst.importieren(ByteArrayInputStream(doppelt.toByteArray()))
 

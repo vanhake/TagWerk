@@ -29,6 +29,7 @@ data class AktivitaetEntwurf(
     val name: String = "",
     val notiz: String = "",
     val farbe: Int = 0xFF4CAF50.toInt(),
+    val symbol: String = "self_improvement",
     val basisPunkteText: String = "10",
     val typ: ZeitplanTyp = ZeitplanTyp.FESTE_ZEITEN,
     val zeitenText: String = "",
@@ -111,6 +112,7 @@ data class AktivitaetEntwurf(
             name = name.trim(),
             notiz = notiz.trim(),
             farbe = farbe,
+            symbol = symbol,
             basisPunkte = basisPunkte,
             zeitplan = when (typ) {
                 ZeitplanTyp.FESTE_ZEITEN -> Zeitplan.FesteZeiten(zeiten, wochentage)
@@ -138,6 +140,7 @@ data class AktivitaetEntwurf(
                 name = aktivitaet.name,
                 notiz = aktivitaet.notiz,
                 farbe = aktivitaet.farbe,
+                symbol = aktivitaet.symbol,
                 basisPunkteText = aktivitaet.basisPunkte.toString(),
                 kulanzMinutenText = aktivitaet.kulanzMinuten.toString(),
                 puenktlichkeitsBonusText = aktivitaet.puenktlichkeitsBonus.toString(),

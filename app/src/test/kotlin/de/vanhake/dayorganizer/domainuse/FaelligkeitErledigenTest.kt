@@ -222,6 +222,41 @@ class FaelligkeitErledigenTest {
     }
 
     @Test
+    fun `mitProtokoll liefert die vorherige Faelligkeit und alle gebuchten Zeilen`() = runTest {
+        val f = FakeFaelligkeitRepository(listOf(morgens))
+        val b = FakeBuchungRepository()
+        val use = useCase(uhrUm(8, 10), FakeAktivitaetRepository(listOf(tabletten)), f, b)
+
+        val protokoll = use.mitProtokoll(10) as ErledigungsProtokoll.Gebucht
+
+        assertEquals(morgens, protokoll.faelligkeitVorher)
+        assertEquals(15, protokoll.buchungen.sumOf { it.betrag })
+        assertEquals(setOf(BuchungsArt.ERLEDIGUNG, BuchungsArt.PUENKTLICHKEITSBONUS), protokoll.buchungen.map { it.art }.toSet())
+    }
+
+    @Test
+    fun `mitProtokoll meldet NichtOffen ohne zu buchen`() = runTest {
+        val f = FakeFaelligkeitRepository(listOf(morgens))
+        val b = FakeBuchungRepository()
+        val use = useCase(uhrUm(8, 10), FakeAktivitaetRepository(listOf(tabletten)), f, b)
+        use(10)
+
+        val protokoll = use.mitProtokoll(10)
+
+        assertEquals(ErledigungsProtokoll.NichtOffen, protokoll)
+    }
+
+    @Test
+    fun `invoke verhaelt sich nach der Protokoll-Erweiterung unveraendert`() = runTest {
+        val f = FakeFaelligkeitRepository(listOf(morgens))
+        val b = FakeBuchungRepository()
+        val use = useCase(uhrUm(8, 10), FakeAktivitaetRepository(listOf(tabletten)), f, b)
+
+        assertEquals(ErledigungsErgebnis.GEBUCHT, use(10))
+        assertEquals(ErledigungsErgebnis.NICHT_OFFEN, use(10))
+    }
+
+    @Test
     fun `Auslassen bucht nichts und markiert die Faelligkeit`() = runTest {
         val f = FakeFaelligkeitRepository(listOf(morgens))
         val b = FakeBuchungRepository()
@@ -231,6 +266,26 @@ class FaelligkeitErledigenTest {
 
         assertEquals(FaelligkeitStatus.AUSGELASSEN, f.stand.value.single().status)
         assertEquals(0, b.stand.value.size)
+    }
+
+    @Test
+    fun `Auslassen mitProtokoll liefert die vorherige Faelligkeit`() = runTest {
+        val f = FakeFaelligkeitRepository(listOf(morgens))
+        val use = FaelligkeitAuslassen(f, uhrUm(9, 0))
+
+        val vorher = use.mitProtokoll(10)
+
+        assertEquals(morgens, vorher)
+        assertEquals(FaelligkeitStatus.AUSGELASSEN, f.stand.value.single().status)
+    }
+
+    @Test
+    fun `Auslassen mitProtokoll liefert null wenn nicht offen`() = runTest {
+        val f = FakeFaelligkeitRepository(listOf(morgens))
+        val use = FaelligkeitAuslassen(f, uhrUm(9, 0))
+        use(10)
+
+        assertEquals(null, use.mitProtokoll(10))
     }
 
     @Test
@@ -275,6 +330,28 @@ class FaelligkeitErledigenTest {
         // Der Spion wirft bereits waehrend des Aufrufs, falls nachId() ausserhalb der
         // Transaktion gelesen wurde -- diese Zusicherung bestaetigt nur den Rahmen.
         assertEquals(1, transaktionen.aufrufe)
+    }
+
+    @Test
+    fun `nach Rueckgaengig wird derselbe Tagesbonus bei erneutem Erledigen wieder gebucht`() = runTest {
+        val f = FakeFaelligkeitRepository(listOf(morgens))
+        val b = FakeBuchungRepository()
+        val transaktionen = FakeTransaktionen()
+        val use = useCase(
+            uhrUm(20, 0), FakeAktivitaetRepository(listOf(tabletten)), f, b,
+            tagesbonus = 25, transaktionen = transaktionen,
+        )
+        val rueckgaengig = FaelligkeitErledigenRueckgaengig(f, b, transaktionen, uhrUm(20, 5))
+
+        val erstesProtokoll = use.mitProtokoll(10) as ErledigungsProtokoll.Gebucht
+        assertEquals(1, b.stand.value.count { it.art == BuchungsArt.TAGESBONUS })
+
+        rueckgaengig(erstesProtokoll)
+        assertEquals(FaelligkeitStatus.OFFEN, f.stand.value.single().status)
+
+        val zweitesProtokoll = use.mitProtokoll(10)
+        assertEquals(true, zweitesProtokoll is ErledigungsProtokoll.Gebucht)
+        assertEquals(2, b.stand.value.count { it.art == BuchungsArt.TAGESBONUS })
     }
 
     @Test

@@ -1,0 +1,84 @@
+{
+    "schemaVersion": 2,
+    "erstelltAm": "2026-03-02T21:00",
+    "aktivitaeten": [
+        {
+            "id": 1,
+            "name": "Tabletten",
+            "notiz": "morgens und abends",
+            "farbe": 42,
+            "symbol": "medication",
+            "basisPunkte": 10,
+            "kulanzMinuten": 45,
+            "puenktlichkeitsBonus": 5,
+            "serienSchwellen": "7:10",
+            "nachfassAnzahl": 2,
+            "nachfassAbstandMinuten": 15,
+            "aktiv": true,
+            "erstelltAm": "2026-01-01",
+            "archiviertAm": null,
+            "zeitplanTyp": "FESTE_ZEITEN",
+            "zeitplanZeiten": "08:00,20:00",
+            "zeitplanWochentage": "MONDAY,TUESDAY",
+            "zeitplanIntervallStunden": null,
+            "zeitplanFensterVon": null,
+            "zeitplanFensterBis": null,
+            "zeitplanZielAnzahl": null,
+            "zeitplanAnstoss": ""
+        }
+    ],
+    "faelligkeiten": [
+        {
+            "id": 10,
+            "aktivitaetId": 1,
+            "periodeVon": "2026-03-02",
+            "periodeBis": "2026-03-02",
+            "geplantFuer": "2026-03-02T08:00",
+            "sollAnzahl": 1,
+            "istAnzahl": 1,
+            "status": "ERLEDIGT",
+            "erledigtAm": "2026-03-02T08:12",
+            "warPuenktlich": true
+        }
+    ],
+    "buchungen": [
+        {
+            "id": 5,
+            "art": "SERIENBONUS",
+            "betrag": 10,
+            "zeitpunkt": "2026-03-02T08:12",
+            "aktivitaetId": 1,
+            "faelligkeitId": 10,
+            "belohnungId": null,
+            "schwelle": 7,
+            "notiz": ""
+        }
+    ],
+    "belohnungen": [
+        {
+            "id": 3,
+            "name": "Kinoabend",
+            "beschreibung": "mit Popcorn",
+            "preisPunkte": 200,
+            "bedingungTyp": "MINDESTSERIE",
+            "bedingungAktivitaetId": 1,
+            "bedingungPerioden": 14,
+            "bedingungDatum": null,
+            "archiviert": false
+        }
+    ],
+    "einloesungen": [
+        {
+            "id": 2,
+            "belohnungId": 3,
+            "name": "Kinoabend",
+            "preisPunkte": 200,
+            "zeitpunkt": "2026-03-02T19:00"
+        }
+    ],
+    "einstellungen": {
+        "tagesbonusPunkte": 25,
+        "standardKulanzMinuten": 45,
+        "themeModus": "DUNKEL"
+    }
+}

@@ -13,6 +13,7 @@ data class AktivitaetEntity(
     val basisPunkte: Int,
     val kulanzMinuten: Int,
     val puenktlichkeitsBonus: Int,
+    val symbol: String = "self_improvement",
     /** Kodiert als "7:10,30:50". */
     val serienSchwellen: String,
     val nachfassAnzahl: Int,

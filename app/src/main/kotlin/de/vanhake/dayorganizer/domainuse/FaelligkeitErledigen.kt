@@ -6,6 +6,7 @@ import de.vanhake.dayorganizer.data.repository.AktivitaetRepository
 import de.vanhake.dayorganizer.data.repository.BuchungRepository
 import de.vanhake.dayorganizer.data.repository.FaelligkeitRepository
 import de.vanhake.dayorganizer.data.repository.Transaktionen
+import de.vanhake.dayorganizer.domain.model.Buchung
 import de.vanhake.dayorganizer.domain.model.Faelligkeit
 import de.vanhake.dayorganizer.domain.model.FaelligkeitStatus
 import de.vanhake.dayorganizer.domain.rechner.ErledigungsKontext
@@ -23,6 +24,18 @@ import javax.inject.Inject
  * darf nachtraeglich durch einen zweiten Aufruf gebucht werden.
  */
 enum class ErledigungsErgebnis { GEBUCHT, NICHT_OFFEN, UNBEKANNT }
+
+/**
+ * Reichhaltigeres Ergebnis fuer Aufrufer, die eine Erledigung spaeter rueckgaengig
+ * machen koennen muessen (siehe FaelligkeitErledigenRueckgaengig) -- ErledigungsErgebnis
+ * bleibt fuer die bestehenden Aufrufer (Benachrichtigung, Widget) unveraendert, die den
+ * Rueckgabewert ohnehin verwerfen.
+ */
+sealed interface ErledigungsProtokoll {
+    data class Gebucht(val faelligkeitVorher: Faelligkeit, val buchungen: List<Buchung>) : ErledigungsProtokoll
+    data object NichtOffen : ErledigungsProtokoll
+    data object Unbekannt : ErledigungsProtokoll
+}
 
 /**
  * Der primaere Konstruktor nimmt die Einstellungen als Funktion entgegen, damit
@@ -58,13 +71,20 @@ class FaelligkeitErledigen(
     // Lesen, Pruefen, Schreiben und Buchen liegen zusammen in der Transaktion.
     // Nur so trennt die Statuspruefung zwei gleichzeitige Aufrufer.
     suspend operator fun invoke(faelligkeitId: Long): ErledigungsErgebnis =
+        when (val protokoll = mitProtokoll(faelligkeitId)) {
+            is ErledigungsProtokoll.Gebucht -> ErledigungsErgebnis.GEBUCHT
+            ErledigungsProtokoll.NichtOffen -> ErledigungsErgebnis.NICHT_OFFEN
+            ErledigungsProtokoll.Unbekannt -> ErledigungsErgebnis.UNBEKANNT
+        }
+
+    suspend fun mitProtokoll(faelligkeitId: Long): ErledigungsProtokoll =
         transaktionen.inTransaktion { erledige(faelligkeitId) }
 
-    private suspend fun erledige(faelligkeitId: Long): ErledigungsErgebnis {
-        val vorher = faelligkeiten.nachId(faelligkeitId) ?: return ErledigungsErgebnis.UNBEKANNT
-        if (vorher.status != FaelligkeitStatus.OFFEN) return ErledigungsErgebnis.NICHT_OFFEN
+    private suspend fun erledige(faelligkeitId: Long): ErledigungsProtokoll {
+        val vorher = faelligkeiten.nachId(faelligkeitId) ?: return ErledigungsProtokoll.Unbekannt
+        if (vorher.status != FaelligkeitStatus.OFFEN) return ErledigungsProtokoll.NichtOffen
         val aktivitaet = aktivitaeten.nachId(vorher.aktivitaetId)
-            ?: return ErledigungsErgebnis.UNBEKANNT
+            ?: return ErledigungsProtokoll.Unbekannt
 
         val jetzt = LocalDateTime.now(uhr)
         val heute = LocalDate.now(uhr)
@@ -105,10 +125,12 @@ class FaelligkeitErledigen(
             tagesbonusBereitsGebucht = buchungen.tagesbonusGebuchtAm(heute),
         )
 
+        val gebuchteZeilen = punkteRechner.buchungen(kontext)
+
         faelligkeiten.aktualisieren(
             nachher.copy(warPuenktlich = punkteRechner.istPuenktlich(kontext)),
         )
-        buchungen.buchen(punkteRechner.buchungen(kontext))
-        return ErledigungsErgebnis.GEBUCHT
+        buchungen.buchen(gebuchteZeilen)
+        return ErledigungsProtokoll.Gebucht(faelligkeitVorher = vorher, buchungen = gebuchteZeilen)
     }
 }

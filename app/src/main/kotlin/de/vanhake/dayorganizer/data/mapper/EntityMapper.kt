@@ -19,6 +19,7 @@ fun AktivitaetEntity.zuDomaene(): Aktivitaet = Aktivitaet(
     name = name,
     notiz = notiz,
     farbe = farbe,
+    symbol = symbol,
     basisPunkte = basisPunkte,
     zeitplan = ZeitplanKodierung.dekodiere(
         ZeitplanFelder(
@@ -49,6 +50,7 @@ fun Aktivitaet.zuEntity(): AktivitaetEntity {
         name = name,
         notiz = notiz,
         farbe = farbe,
+        symbol = symbol,
         basisPunkte = basisPunkte,
         kulanzMinuten = kulanzMinuten,
         puenktlichkeitsBonus = puenktlichkeitsBonus,

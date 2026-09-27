@@ -6,6 +6,7 @@ import de.vanhake.dayorganizer.backup.Backup
 import de.vanhake.dayorganizer.backup.BackupUmwandlung
 import de.vanhake.dayorganizer.backup.ImportErgebnis
 import de.vanhake.dayorganizer.data.Einstellungen
+import de.vanhake.dayorganizer.data.ThemeModus
 import de.vanhake.dayorganizer.domain.model.Aktivitaet
 import de.vanhake.dayorganizer.domain.model.Zeitplan
 import de.vanhake.dayorganizer.platform.permission.Hinweis
@@ -15,6 +16,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -140,6 +142,40 @@ class EinstellungenViewModelTest {
             assertEquals(listOf(Hinweis.WAECHTER_HAENGT), zustand.hinweise)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    // Ein Farbmodus ist ein Umschalter, kein Formularfeld: die Aenderung muss sofort
+    // geschrieben werden, ohne auf den "Speichern"-Knopf zu warten (der nur fuer die
+    // Zahlenfelder gilt).
+    @Test
+    fun `themeModusAendern schreibt sofort, ohne auf Speichern zu warten`() = runTest(dispatcher) {
+        val speicher = FakeSpeicher()
+        val vm = viewModel(speicher)
+
+        vm.themeModusAendern(ThemeModus.DUNKEL)
+        advanceUntilIdle()
+
+        assertEquals(ThemeModus.DUNKEL, speicher.stand.value.themeModus)
+        assertEquals(ThemeModus.DUNKEL, vm.zustand.value.themeModus)
+    }
+
+    // Review-Fund (Kritisch): speichern() baute die neue Einstellungen bisher per
+    // Einstellungen(...) mit nur den beiden Zahlenfeldern statt per bisher.copy(...) --
+    // dadurch fiel themeModus stets auf den Klassendefault HELL zurueck, auch wenn zuvor
+    // per themeModusAendern() DUNKEL geschrieben wurde. Dieser Test haette den alten Bug
+    // gefangen: mit Einstellungen(...) waere neu.themeModus == HELL gewesen, unabhaengig
+    // vom zuvor gesetzten DUNKEL, und die Assertion unten waere fehlgeschlagen.
+    @Test
+    fun `speichern setzt den zuvor per themeModusAendern gesetzten Farbmodus nicht zurueck`() = runTest(dispatcher) {
+        val speicher = FakeSpeicher()
+        val vm = viewModel(speicher)
+
+        vm.themeModusAendern(ThemeModus.DUNKEL)
+        advanceUntilIdle()
+        vm.speichern().join()
+
+        assertEquals(ThemeModus.DUNKEL, speicher.stand.value.themeModus)
+        assertEquals(ThemeModus.DUNKEL, vm.zustand.value.themeModus)
     }
 
     @Test
