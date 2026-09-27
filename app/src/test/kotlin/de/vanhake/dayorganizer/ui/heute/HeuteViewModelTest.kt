@@ -9,11 +9,14 @@ import de.vanhake.dayorganizer.FakeTransaktionen
 import de.vanhake.dayorganizer.data.Einstellungen
 import de.vanhake.dayorganizer.domain.model.Aktivitaet
 import de.vanhake.dayorganizer.domain.model.Faelligkeit
+import de.vanhake.dayorganizer.domain.model.FaelligkeitStatus
 import de.vanhake.dayorganizer.domain.model.Zeitplan
 import de.vanhake.dayorganizer.domain.rechner.PunkteRechner
 import de.vanhake.dayorganizer.domain.rechner.SerienRechner
 import de.vanhake.dayorganizer.domainuse.FaelligkeitAuslassen
+import de.vanhake.dayorganizer.domainuse.FaelligkeitAuslassenRueckgaengig
 import de.vanhake.dayorganizer.domainuse.FaelligkeitErledigen
+import de.vanhake.dayorganizer.domainuse.FaelligkeitErledigenRueckgaengig
 import de.vanhake.dayorganizer.platform.notification.Erinnerungsanzeige
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -83,16 +86,20 @@ class HeuteViewModelTest {
         widgetAnstossen: suspend () -> Unit = {},
     ): HeuteViewModel {
         val aktivitaeten = FakeAktivitaetRepository(listOf(tabletten))
+        val transaktionen = FakeTransaktionen()
+        val erledigenUseCase = FaelligkeitErledigen(
+            aktivitaeten, faelligkeiten, buchungen, PunkteRechner(), SerienRechner(),
+            transaktionen, { Einstellungen(tagesbonusPunkte = 0) }, uhr,
+        )
         return HeuteViewModel(
             aktivitaeten = aktivitaeten,
             faelligkeiten = faelligkeiten,
             buchungen = buchungen,
             belohnungen = belohnungen,
-            erledigenUseCase = FaelligkeitErledigen(
-                aktivitaeten, faelligkeiten, buchungen, PunkteRechner(), SerienRechner(),
-                FakeTransaktionen(), { Einstellungen(tagesbonusPunkte = 0) }, uhr,
-            ),
+            erledigenUseCase = erledigenUseCase,
             auslassenUseCase = FaelligkeitAuslassen(faelligkeiten, uhr),
+            erledigenRueckgaengig = FaelligkeitErledigenRueckgaengig(faelligkeiten, buchungen, transaktionen, uhr),
+            auslassenRueckgaengig = FaelligkeitAuslassenRueckgaengig(faelligkeiten),
             anzeige = anzeige,
             alarmNeuPlanen = {},
             hinweiseLesen = { emptyList() },
@@ -216,5 +223,48 @@ class HeuteViewModelTest {
         }
 
         assertEquals(1, widgetAngestossen)
+    }
+
+    @Test
+    fun `Erledigen zeigt einen Toast mit Rueckgaengig-Option`() = runTest(dispatcher) {
+        val vm = viewModel(FakeFaelligkeitRepository(listOf(morgens)), FakeBuchungRepository())
+
+        vm.erledigen(10)
+        // Bewusst runCurrent() statt advanceUntilIdle(): Letzteres wuerde auch den erst in
+        // 3.8s faelligen Auto-Dismiss-Job der Toast-Anzeige mitausfuehren (virtuelle Zeit
+        // kennt keine Wartezeit) und den Toast damit vor der Zusicherung schon wieder loeschen.
+        dispatcher.scheduler.runCurrent()
+
+        assertEquals(true, vm.toast.value?.kannRueckgaengig)
+    }
+
+    @Test
+    fun `Rueckgaengig macht die Erledigung und ihre Buchungen wieder rueckgaengig`() = runTest(dispatcher) {
+        val faelligkeiten = FakeFaelligkeitRepository(listOf(morgens))
+        val buchungen = FakeBuchungRepository()
+        val vm = viewModel(faelligkeiten, buchungen)
+
+        vm.erledigen(10)
+        dispatcher.scheduler.runCurrent()
+        vm.rueckgaengig()
+        dispatcher.scheduler.runCurrent()
+
+        assertEquals(null, vm.toast.value)
+        assertEquals(0, buchungen.stand.value.sumOf { it.betrag })
+        assertEquals(FaelligkeitStatus.OFFEN, faelligkeiten.stand.value.single().status)
+    }
+
+    @Test
+    fun `der Toast verschwindet von selbst, wenn niemand Rueckgaengig antippt`() = runTest(dispatcher) {
+        val vm = viewModel(FakeFaelligkeitRepository(listOf(morgens)), FakeBuchungRepository())
+
+        vm.erledigen(10)
+        dispatcher.scheduler.runCurrent()
+        assertEquals(true, vm.toast.value != null)
+
+        dispatcher.scheduler.advanceTimeBy(3_900)
+        dispatcher.scheduler.runCurrent()
+
+        assertEquals(null, vm.toast.value)
     }
 }

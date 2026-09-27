@@ -8,19 +8,27 @@ import de.vanhake.dayorganizer.data.repository.AktivitaetRepository
 import de.vanhake.dayorganizer.data.repository.BelohnungRepository
 import de.vanhake.dayorganizer.data.repository.BuchungRepository
 import de.vanhake.dayorganizer.data.repository.FaelligkeitRepository
+import de.vanhake.dayorganizer.domain.model.BuchungsArt
+import de.vanhake.dayorganizer.domainuse.ErledigungsProtokoll
 import de.vanhake.dayorganizer.domainuse.FaelligkeitAuslassen
+import de.vanhake.dayorganizer.domainuse.FaelligkeitAuslassenRueckgaengig
 import de.vanhake.dayorganizer.domainuse.FaelligkeitErledigen
+import de.vanhake.dayorganizer.domainuse.FaelligkeitErledigenRueckgaengig
 import de.vanhake.dayorganizer.platform.alarm.AlarmPlaner
 import de.vanhake.dayorganizer.platform.notification.Erinnerungsanzeige
 import de.vanhake.dayorganizer.platform.permission.BerechtigungsHinweise
 import de.vanhake.dayorganizer.platform.permission.BerechtigungsPruefer
 import de.vanhake.dayorganizer.platform.permission.Hinweis
 import de.vanhake.dayorganizer.platform.permission.waechterHaengt
+import de.vanhake.dayorganizer.ui.gemeinsam.Hinweistoast
 import de.vanhake.dayorganizer.widget.WidgetAktualisierung
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
@@ -39,6 +47,8 @@ class HeuteViewModel(
     private val belohnungen: BelohnungRepository,
     private val erledigenUseCase: FaelligkeitErledigen,
     private val auslassenUseCase: FaelligkeitAuslassen,
+    private val erledigenRueckgaengig: FaelligkeitErledigenRueckgaengig,
+    private val auslassenRueckgaengig: FaelligkeitAuslassenRueckgaengig,
     private val anzeige: Erinnerungsanzeige,
     private val alarmNeuPlanen: suspend () -> Unit,
     private val hinweiseLesen: suspend () -> List<Hinweis>,
@@ -54,6 +64,8 @@ class HeuteViewModel(
         belohnungen: BelohnungRepository,
         erledigenUseCase: FaelligkeitErledigen,
         auslassenUseCase: FaelligkeitAuslassen,
+        erledigenRueckgaengig: FaelligkeitErledigenRueckgaengig,
+        auslassenRueckgaengig: FaelligkeitAuslassenRueckgaengig,
         anzeige: Erinnerungsanzeige,
         alarmPlaner: AlarmPlaner,
         pruefer: BerechtigungsPruefer,
@@ -61,7 +73,8 @@ class HeuteViewModel(
         uhr: Clock,
         widgetAktualisierung: WidgetAktualisierung,
     ) : this(
-        aktivitaeten, faelligkeiten, buchungen, belohnungen, erledigenUseCase, auslassenUseCase, anzeige,
+        aktivitaeten, faelligkeiten, buchungen, belohnungen, erledigenUseCase, auslassenUseCase,
+        erledigenRueckgaengig, auslassenRueckgaengig, anzeige,
         { alarmPlaner.neuPlanen() },
         {
             // BerechtigungsPruefer liest nur aus Context und kann DataStore nicht synchron
@@ -79,6 +92,17 @@ class HeuteViewModel(
 
     private val hinweise = MutableStateFlow<List<Hinweis>>(emptyList())
     private val tag = MutableStateFlow(LocalDate.now(uhr))
+
+    // Eigener Flow statt Teil der zustand-Kette unten -- exakt das Muster von
+    // EinstellungenViewModel._meldung/meldung. combine(...) hat nur typisierte
+    // Ueberladungen bis fuenf Flows (die zustand-Kette nutzt bereits alle fuenf), und ein
+    // gemeinsamer sechster Flow wuerde den DB-getriebenen Update und das Setzen des
+    // Toasts ausserdem in zwei getrennte Emissionen auseinanderreissen.
+    private val _toast = MutableStateFlow<Hinweistoast?>(null)
+    val toast: StateFlow<Hinweistoast?> = _toast.asStateFlow()
+
+    private var ausstehendesRueckgaengig: (suspend () -> Unit)? = null
+    private var toastJob: Job? = null
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val zustand: StateFlow<HeuteZustand> = combine(
@@ -110,19 +134,61 @@ class HeuteViewModel(
     // (der Weg ueber die Benachrichtigungsaktionen) versteckt sie schon, dieser Pfad muss
     // dasselbe tun (Finding 3 der Branch-Review).
     fun erledigen(faelligkeitId: Long) = viewModelScope.launch {
-        erledigenUseCase(faelligkeitId)
-        anzeige.verstecke(faelligkeitId)
-        alarmNeuPlanen()
-        widgetAnstossen()
+        when (val protokoll = erledigenUseCase.mitProtokoll(faelligkeitId)) {
+            is ErledigungsProtokoll.Gebucht -> {
+                anzeige.verstecke(faelligkeitId)
+                alarmNeuPlanen()
+                widgetAnstossen()
+                val gesamt = protokoll.buchungen.sumOf { it.betrag }
+                val text = if (protokoll.buchungen.any { it.art == BuchungsArt.TAGESBONUS }) {
+                    HeuteToastTexte.tagesbonusToast(gesamt)
+                } else {
+                    val name = aktivitaeten.nachId(protokoll.faelligkeitVorher.aktivitaetId)?.name.orEmpty()
+                    HeuteToastTexte.erledigtToast(gesamt, name)
+                }
+                zeigeToast(text, kannRueckgaengig = true) { erledigenRueckgaengig(protokoll) }
+            }
+            ErledigungsProtokoll.NichtOffen, ErledigungsProtokoll.Unbekannt -> Unit
+        }
     }
 
     fun auslassen(faelligkeitId: Long) = viewModelScope.launch {
-        auslassenUseCase(faelligkeitId)
+        val vorher = auslassenUseCase.mitProtokoll(faelligkeitId) ?: return@launch
         anzeige.verstecke(faelligkeitId)
+        alarmNeuPlanen()
+        widgetAnstossen()
+        val name = aktivitaeten.nachId(vorher.aktivitaetId)?.name.orEmpty()
+        zeigeToast(HeuteToastTexte.ausgelassenToast(name), kannRueckgaengig = true) {
+            auslassenRueckgaengig(vorher)
+        }
+    }
+
+    fun rueckgaengig() = viewModelScope.launch {
+        val aktion = ausstehendesRueckgaengig ?: return@launch
+        toastJob?.cancel()
+        ausstehendesRueckgaengig = null
+        _toast.value = null
+        aktion()
         alarmNeuPlanen()
         widgetAnstossen()
     }
 
-    private companion object {
+    private fun zeigeToast(text: String, kannRueckgaengig: Boolean, rueckgaengigAktion: suspend () -> Unit) {
+        toastJob?.cancel()
+        ausstehendesRueckgaengig = rueckgaengigAktion
+        _toast.value = Hinweistoast(text, kannRueckgaengig)
+        toastJob = viewModelScope.launch {
+            delay(3_800)
+            _toast.value = null
+            ausstehendesRueckgaengig = null
+        }
     }
+}
+
+/** Reine Textbausteine fuer die Heute-Toasts -- ausserhalb der Klasse, damit Tests sie
+ * nicht extra mocken muessen (keine Android-Ressourcen, kein Context noetig). */
+private object HeuteToastTexte {
+    fun erledigtToast(punkte: Int, name: String) = "+$punkte Punkte · $name"
+    fun tagesbonusToast(punkte: Int) = "+$punkte Punkte · inkl. Tagesbonus"
+    fun ausgelassenToast(name: String) = "$name ausgelassen"
 }

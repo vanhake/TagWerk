@@ -91,4 +91,5 @@
     <string name="backup_import_vorschau_abbrechen">Abbrechen</string>
     <string name="widget_weitere">+ %1$d weitere</string>
     <string name="widget_ziel_fortschritt">%1$d/%2$d</string>
+    <string name="toast_rueckgaengig">Rückgängig</string>
 </resources>

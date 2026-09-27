@@ -27,6 +27,7 @@ object HeuteZusammenstellung {
                 faelligkeitId = f.id,
                 aktivitaetName = aktivitaet.name,
                 farbe = aktivitaet.farbe,
+                symbol = aktivitaet.symbol,
                 zeitText = f.geplantFuer?.format(UHRZEIT),
                 sollAnzahl = f.sollAnzahl,
                 istAnzahl = f.istAnzahl,

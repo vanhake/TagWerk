@@ -7,6 +7,7 @@ data class HeuteEintrag(
     val faelligkeitId: Long,
     val aktivitaetName: String,
     val farbe: Int,
+    val symbol: String,
     /** "08:00" bei Terminen, null bei Zaehlzielen. */
     val zeitText: String?,
     val sollAnzahl: Int,
