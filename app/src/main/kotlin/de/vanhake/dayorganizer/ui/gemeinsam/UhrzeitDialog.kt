@@ -24,11 +24,11 @@ fun UhrzeitDialog(start: LocalTime, bestaetigen: (LocalTime) -> Unit, abbrechen:
         onDismissRequest = abbrechen,
         confirmButton = {
             TextButton(onClick = { bestaetigen(LocalTime.of(zustand.hour, zustand.minute)) }) {
-                Text(stringResource(R.string.uhrzeit_uebernehmen))
+                Text(stringResource(R.string.dialog_uebernehmen))
             }
         },
         dismissButton = {
-            TextButton(onClick = abbrechen) { Text(stringResource(R.string.uhrzeit_abbrechen)) }
+            TextButton(onClick = abbrechen) { Text(stringResource(R.string.dialog_abbrechen)) }
         },
         text = { TimePicker(state = zustand) },
     )

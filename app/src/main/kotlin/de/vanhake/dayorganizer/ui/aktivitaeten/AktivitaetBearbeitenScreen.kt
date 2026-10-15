@@ -5,18 +5,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -24,7 +19,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EventRepeat
@@ -33,8 +27,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,7 +39,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -55,10 +46,17 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.vanhake.dayorganizer.R
+import de.vanhake.dayorganizer.ui.gemeinsam.Abschnitt
+import de.vanhake.dayorganizer.ui.gemeinsam.AuswahlKarte
+import de.vanhake.dayorganizer.ui.gemeinsam.AuswahlKarten
+import de.vanhake.dayorganizer.ui.gemeinsam.FehlerText
+import de.vanhake.dayorganizer.ui.gemeinsam.Kopfzeile
+import de.vanhake.dayorganizer.ui.gemeinsam.NamensFeld
 import de.vanhake.dayorganizer.ui.gemeinsam.SpeicherErgebnis
 import de.vanhake.dayorganizer.ui.gemeinsam.Stepper
 import de.vanhake.dayorganizer.ui.gemeinsam.StepperZeile
 import de.vanhake.dayorganizer.ui.gemeinsam.StepperZeilenInhalt
+import de.vanhake.dayorganizer.ui.gemeinsam.SymbolRaster
 import de.vanhake.dayorganizer.ui.gemeinsam.UhrzeitDialog
 import de.vanhake.dayorganizer.ui.theme.AKTIVITAET_SYMBOLE
 import de.vanhake.dayorganizer.ui.theme.DayOrganizerFormen
@@ -67,6 +65,13 @@ import de.vanhake.dayorganizer.ui.theme.aktivitaetSymbol
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.LocalTime
+
+private val TYP_KARTEN = listOf(
+    AuswahlKarte(ZeitplanTyp.FESTE_ZEITEN, R.string.typ_feste_zeiten, R.string.typ_feste_zeiten_hinweis),
+    AuswahlKarte(ZeitplanTyp.INTERVALL, R.string.typ_intervall, R.string.typ_intervall_hinweis),
+    AuswahlKarte(ZeitplanTyp.TAGESZIEL, R.string.typ_tagesziel, R.string.typ_tagesziel_hinweis),
+    AuswahlKarte(ZeitplanTyp.WOCHENZIEL, R.string.typ_wochenziel, R.string.typ_wochenziel_hinweis),
+)
 
 /** Wofuer der offene Zeitwaehler gerade waehlt. */
 private enum class UhrzeitZiel { NEU, VON, BIS }
@@ -100,12 +105,15 @@ fun AktivitaetBearbeitenScreen(
         )
 
         Abschnitt(R.string.feld_symbol) {
-            SymbolRaster(entwurf.symbol) { neu -> viewModel.aendern { it.copy(symbol = neu) } }
+            SymbolRaster(AKTIVITAET_SYMBOLE, entwurf.symbol, ::aktivitaetSymbol) { neu ->
+                viewModel.aendern { it.copy(symbol = neu) }
+            }
         }
 
         Abschnitt(R.string.feld_name) {
-            NameFeld(
-                name = entwurf.name,
+            NamensFeld(
+                wert = entwurf.name,
+                platzhalterId = R.string.name_platzhalter,
                 fehlerhaft = EntwurfFehler.NAME_LEER in fehler,
                 aendern = { neu -> viewModel.aendern { it.copy(name = neu) } },
             )
@@ -125,7 +133,7 @@ fun AktivitaetBearbeitenScreen(
         }
 
         Abschnitt(R.string.feld_zeitplan) {
-            TypKarten(entwurf.typ) { typ -> viewModel.aendern { it.copy(typ = typ) } }
+            AuswahlKarten(TYP_KARTEN, entwurf.typ) { typ -> viewModel.aendern { it.copy(typ = typ) } }
         }
 
         if (entwurf.typ != ZeitplanTyp.WOCHENZIEL) {
@@ -208,149 +216,6 @@ fun AktivitaetBearbeitenScreen(
             },
             abbrechen = { uhrzeitZiel = null },
         )
-    }
-}
-
-@Composable
-private fun Kopfzeile(titel: String, zurueck: () -> Unit) {
-    Row(
-        modifier = Modifier.offset(x = (-8).dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        IconButton(onClick = zurueck) {
-            Icon(
-                Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = stringResource(R.string.zurueck),
-                tint = DayOrganizerTheme.farben.ink,
-            )
-        }
-        Text(titel, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = DayOrganizerTheme.farben.ink)
-    }
-}
-
-@Composable
-private fun Abschnitt(titelId: Int, inhalt: @Composable ColumnScope.() -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            stringResource(titelId),
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
-            color = DayOrganizerTheme.farben.ink2,
-        )
-        inhalt()
-    }
-}
-
-@Composable
-private fun FehlerText(sichtbar: Boolean, textId: Int) {
-    if (sichtbar) {
-        Text(
-            stringResource(textId),
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = DayOrganizerTheme.farben.coral,
-        )
-    }
-}
-
-@Composable
-private fun SymbolRaster(gewaehlt: String, waehlen: (String) -> Unit) {
-    val farben = DayOrganizerTheme.farben
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        AKTIVITAET_SYMBOLE.chunked(6).forEach { reihe ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                reihe.forEach { schluessel ->
-                    val aktiv = schluessel == gewaehlt
-                    Surface(
-                        selected = aktiv,
-                        onClick = { waehlen(schluessel) },
-                        modifier = Modifier.weight(1f).aspectRatio(1f),
-                        shape = DayOrganizerFormen.knopf,
-                        color = if (aktiv) farben.accent else farben.surface,
-                        contentColor = if (aktiv) farben.onAccent else farben.ink2,
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            // Der Schluessel ist zugleich die Bedienhilfe-Beschreibung: es gibt
-                            // keine deutschen Namen fuer die Symbole, und ein leeres
-                            // contentDescription machte das Raster fuer TalkBack stumm.
-                            Icon(aktivitaetSymbol(schluessel), contentDescription = schluessel, modifier = Modifier.size(24.dp))
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun NameFeld(name: String, fehlerhaft: Boolean, aendern: (String) -> Unit) {
-    val farben = DayOrganizerTheme.farben
-    OutlinedTextField(
-        value = name,
-        onValueChange = aendern,
-        placeholder = { Text(stringResource(R.string.name_platzhalter)) },
-        singleLine = true,
-        isError = fehlerhaft,
-        shape = DayOrganizerFormen.knopf,
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = farben.surface,
-            unfocusedContainerColor = farben.surface,
-            errorContainerColor = farben.surface,
-            focusedBorderColor = farben.accent,
-            unfocusedBorderColor = farben.line,
-            errorBorderColor = farben.coral,
-            focusedTextColor = farben.ink,
-            unfocusedTextColor = farben.ink,
-            errorTextColor = farben.ink,
-        ),
-        modifier = Modifier.fillMaxWidth(),
-    )
-}
-
-private data class TypKarte(val typ: ZeitplanTyp, val titelId: Int, val hinweisId: Int)
-
-private val TYP_KARTEN = listOf(
-    TypKarte(ZeitplanTyp.FESTE_ZEITEN, R.string.typ_feste_zeiten, R.string.typ_feste_zeiten_hinweis),
-    TypKarte(ZeitplanTyp.INTERVALL, R.string.typ_intervall, R.string.typ_intervall_hinweis),
-    TypKarte(ZeitplanTyp.TAGESZIEL, R.string.typ_tagesziel, R.string.typ_tagesziel_hinweis),
-    TypKarte(ZeitplanTyp.WOCHENZIEL, R.string.typ_wochenziel, R.string.typ_wochenziel_hinweis),
-)
-
-@Composable
-private fun TypKarten(gewaehlt: ZeitplanTyp, waehlen: (ZeitplanTyp) -> Unit) {
-    val farben = DayOrganizerTheme.farben
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        TYP_KARTEN.chunked(2).forEach { reihe ->
-            // IntrinsicSize.Min + fillMaxHeight: beide Karten einer Reihe gleich hoch, auch
-            // wenn ein Hinweistext bei grosser Schrift umbricht.
-            Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                reihe.forEach { karte ->
-                    val aktiv = karte.typ == gewaehlt
-                    Surface(
-                        selected = aktiv,
-                        onClick = { waehlen(karte.typ) },
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
-                        shape = DayOrganizerFormen.knopf,
-                        color = if (aktiv) farben.accentSoft else farben.surface,
-                        border = BorderStroke(2.dp, if (aktiv) farben.accent else Color.Transparent),
-                    ) {
-                        Column(
-                            Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                            verticalArrangement = Arrangement.spacedBy(3.dp),
-                        ) {
-                            Text(
-                                stringResource(karte.titelId),
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = if (aktiv) farben.onAccentSoft else farben.ink,
-                            )
-                            Text(stringResource(karte.hinweisId), fontSize = 12.sp, color = farben.ink2)
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 

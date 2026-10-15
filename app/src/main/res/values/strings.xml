@@ -67,8 +67,8 @@
     <string name="ziel_einheit_woche">mal pro Woche</string>
     <string name="uhrzeit_hinzufuegen">Uhrzeit</string>
     <string name="uhrzeit_entfernen">%1$s entfernen</string>
-    <string name="uhrzeit_uebernehmen">Übernehmen</string>
-    <string name="uhrzeit_abbrechen">Abbrechen</string>
+    <string name="dialog_uebernehmen">Übernehmen</string>
+    <string name="dialog_abbrechen">Abbrechen</string>
     <string name="stepper_weniger">Weniger</string>
     <string name="stepper_mehr">Mehr</string>
     <string name="zurueck">Zurück</string>
