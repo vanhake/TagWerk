@@ -31,7 +31,7 @@ fun AktivitaetenScreen(
     bearbeiten: (Long) -> Unit,
     viewModel: AktivitaetenViewModel = hiltViewModel(),
 ) {
-    val liste by viewModel.liste.collectAsStateWithLifecycle()
+    val liste by viewModel.zeilen.collectAsStateWithLifecycle()
 
     Scaffold(
         floatingActionButton = {
