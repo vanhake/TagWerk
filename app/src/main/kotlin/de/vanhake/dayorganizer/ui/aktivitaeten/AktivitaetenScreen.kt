@@ -41,6 +41,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.vanhake.dayorganizer.R
 import de.vanhake.dayorganizer.ui.gemeinsam.HinweistoastLeiste
+import de.vanhake.dayorganizer.ui.gemeinsam.SpeicherErgebnis
 import de.vanhake.dayorganizer.ui.theme.DayOrganizerFormen
 import de.vanhake.dayorganizer.ui.theme.DayOrganizerTheme
 import de.vanhake.dayorganizer.ui.theme.aktivitaetSymbol

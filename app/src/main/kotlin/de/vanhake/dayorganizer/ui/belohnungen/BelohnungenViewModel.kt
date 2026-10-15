@@ -8,11 +8,17 @@ import de.vanhake.dayorganizer.data.repository.BelohnungRepository
 import de.vanhake.dayorganizer.data.repository.BuchungRepository
 import de.vanhake.dayorganizer.domain.rechner.Hindernis
 import de.vanhake.dayorganizer.domainuse.BelohnungEinloesen
+import de.vanhake.dayorganizer.domainuse.BelohnungEinloesenRueckgaengig
 import de.vanhake.dayorganizer.domainuse.EinloeseErgebnis
+import de.vanhake.dayorganizer.ui.gemeinsam.Hinweistoast
+import de.vanhake.dayorganizer.ui.gemeinsam.SpeicherErgebnis
 import de.vanhake.dayorganizer.util.versuchen
 import de.vanhake.dayorganizer.widget.WidgetAktualisierung
 import javax.inject.Inject
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -27,6 +33,7 @@ class BelohnungenViewModel(
     private val belohnungen: BelohnungRepository,
     private val buchungen: BuchungRepository,
     private val einloesenUseCase: BelohnungEinloesen,
+    private val einloesenRueckgaengig: BelohnungEinloesenRueckgaengig,
     private val widgetAnstossen: suspend () -> Unit,
 ) : ViewModel() {
 
@@ -35,11 +42,13 @@ class BelohnungenViewModel(
         belohnungen: BelohnungRepository,
         buchungen: BuchungRepository,
         einloesenUseCase: BelohnungEinloesen,
+        einloesenRueckgaengig: BelohnungEinloesenRueckgaengig,
         widgetAktualisierung: WidgetAktualisierung,
     ) : this(
         belohnungen,
         buchungen,
         einloesenUseCase,
+        einloesenRueckgaengig,
         { widgetAktualisierung.anstossen() },
     )
 
@@ -64,6 +73,12 @@ class BelohnungenViewModel(
     private val _meldungFehlendePunkte = MutableStateFlow(0)
     val meldungFehlendePunkte: StateFlow<Int> = _meldungFehlendePunkte.asStateFlow()
 
+    // Eigener Flow wie in HeuteViewModel: synchron gesetzt, im Test deterministisch.
+    private val _toast = MutableStateFlow<Hinweistoast?>(null)
+    val toast: StateFlow<Hinweistoast?> = _toast.asStateFlow()
+    private var ausstehendesRueckgaengig: (suspend () -> Unit)? = null
+    private var toastJob: Job? = null
+
     val zustand: StateFlow<BelohnungenZustand> = combine(
         belohnungen.beobachteAktive(),
         buchungen.beobachteKontostand(),
@@ -77,12 +92,13 @@ class BelohnungenViewModel(
                     id = belohnung.id,
                     name = belohnung.name,
                     beschreibung = belohnung.beschreibung,
+                    symbol = belohnung.symbol,
                     preisPunkte = belohnung.preisPunkte,
                     einloesbarkeit = einloesenUseCase.einloesbarkeit(belohnung, kontostand),
                     wirdEingeloest = belohnung.id in laufende,
                 )
             },
-            einloesungen = einloesungen,
+            einloesungen = einloesungen.sichtbare(),
         )
     }
         // SerienRechner.aktuelleSerie laeuft je Emission und je Kachel mit Serienbedingung
@@ -120,11 +136,14 @@ class BelohnungenViewModel(
         }
     }
 
-    /** Setzt [_meldung] fuer alles ausser einem Erfolg -- Kachel und Historie zeigen den
-     * Erfolg bereits, eine zusaetzliche Snackbar waere ueberfluessig. */
+    /** Setzt [_meldung] fuer alles ausser einem Erfolg; ein Erfolg wird als Toast mit
+     * Rueckgaengig gezeigt. */
     private fun meldungFuer(ergebnis: EinloeseErgebnis) {
         when (ergebnis) {
-            is EinloeseErgebnis.Erfolg -> Unit
+            is EinloeseErgebnis.Erfolg -> zeigeToast(
+                BelohnungenToastTexte.eingeloest(ergebnis.einloesung.name, ergebnis.einloesung.preisPunkte),
+                rueckgaengigAktion = { einloesenRueckgaengig(ergebnis.einloesung) },
+            )
 
             is EinloeseErgebnis.Abgelehnt -> when (val hindernis = ergebnis.einloesbarkeit.hindernis) {
                 Hindernis.ZU_WENIG_PUNKTE -> {
@@ -148,9 +167,65 @@ class BelohnungenViewModel(
         _meldung.value = null
     }
 
-    fun archivieren(belohnungId: Long) = viewModelScope.launch { belohnungen.archivieren(belohnungId) }
+    fun rueckgaengig() = viewModelScope.launch {
+        val aktion = ausstehendesRueckgaengig ?: return@launch
+        toastJob?.cancel()
+        ausstehendesRueckgaengig = null
+        _toast.value = null
+        // Wie beim Einloesen darf eine Datenbankausnahme nicht die App mitreissen;
+        // ein Abbruch ist dagegen kein Fehler und wird weitergereicht.
+        try {
+            aktion()
+        } catch (abbruch: CancellationException) {
+            throw abbruch
+        } catch (ausnahme: Exception) {
+            Log.w(TAG, "Rueckgaengig fehlgeschlagen", ausnahme)
+            _meldung.value = EinloeseMeldung.FEHLER
+            return@launch
+        }
+        widgetAnstossen()
+    }
+
+    // Kein Rueckgaengig (Entscheidung in Plan 6, wie bei den Aktivitaeten in Plan 5).
+    fun archivieren(belohnungId: Long) = viewModelScope.launch {
+        val name = belohnungen.nachId(belohnungId)?.name
+        belohnungen.archivieren(belohnungId)
+        name?.let { zeigeToast(BelohnungenToastTexte.archiviert(it)) }
+    }
+
+    /** Vom Screen aufgerufen, wenn der Editor mit einem Ergebnis zurueckgekehrt ist. */
+    fun gespeichertMelden(ergebnis: SpeicherErgebnis) {
+        zeigeToast(
+            when (ergebnis) {
+                SpeicherErgebnis.ANGELEGT -> BelohnungenToastTexte.ANGELEGT
+                SpeicherErgebnis.GEAENDERT -> BelohnungenToastTexte.GEAENDERT
+            },
+        )
+    }
+
+    private fun zeigeToast(text: String, rueckgaengigAktion: (suspend () -> Unit)? = null) {
+        toastJob?.cancel()
+        ausstehendesRueckgaengig = rueckgaengigAktion
+        _toast.value = Hinweistoast(text, kannRueckgaengig = rueckgaengigAktion != null)
+        toastJob = viewModelScope.launch {
+            delay(TOAST_DAUER_MS)
+            _toast.value = null
+            ausstehendesRueckgaengig = null
+        }
+    }
 
     private companion object {
         const val TAG = "BelohnungenViewModel"
+
+        /** Wie HeuteViewModel. */
+        const val TOAST_DAUER_MS = 3_800L
     }
+}
+
+/** Reine Textbausteine, ohne Android-Ressourcen testbar -- Muster HeuteToastTexte. */
+private object BelohnungenToastTexte {
+    const val ANGELEGT = "Belohnung angelegt"
+    const val GEAENDERT = "Änderungen gespeichert"
+    fun archiviert(name: String) = "$name archiviert"
+    fun eingeloest(name: String, preis: Int) = "$name eingelöst · −$preis Punkte"
 }

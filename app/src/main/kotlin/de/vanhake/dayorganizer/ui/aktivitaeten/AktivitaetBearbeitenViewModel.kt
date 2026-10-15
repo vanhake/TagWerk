@@ -7,6 +7,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import de.vanhake.dayorganizer.data.EinstellungenSpeicher
 import de.vanhake.dayorganizer.data.repository.AktivitaetRepository
 import de.vanhake.dayorganizer.domainuse.AktivitaetNeuPlanen
+import de.vanhake.dayorganizer.ui.gemeinsam.SpeicherErgebnis
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

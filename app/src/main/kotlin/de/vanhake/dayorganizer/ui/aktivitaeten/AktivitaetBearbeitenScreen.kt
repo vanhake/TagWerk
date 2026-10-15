@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.vanhake.dayorganizer.R
+import de.vanhake.dayorganizer.ui.gemeinsam.SpeicherErgebnis
 import de.vanhake.dayorganizer.ui.gemeinsam.Stepper
 import de.vanhake.dayorganizer.ui.gemeinsam.StepperZeile
 import de.vanhake.dayorganizer.ui.gemeinsam.StepperZeilenInhalt

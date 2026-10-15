@@ -27,10 +27,10 @@ import androidx.navigation.compose.rememberNavController
 import de.vanhake.dayorganizer.R
 import de.vanhake.dayorganizer.ui.aktivitaeten.AktivitaetBearbeitenScreen
 import de.vanhake.dayorganizer.ui.aktivitaeten.AktivitaetenScreen
-import de.vanhake.dayorganizer.ui.aktivitaeten.SpeicherErgebnis
 import de.vanhake.dayorganizer.ui.belohnungen.BelohnungBearbeitenScreen
 import de.vanhake.dayorganizer.ui.belohnungen.BelohnungenScreen
 import de.vanhake.dayorganizer.ui.einstellungen.EinstellungenScreen
+import de.vanhake.dayorganizer.ui.gemeinsam.SpeicherErgebnis
 import de.vanhake.dayorganizer.ui.heute.HeuteScreen
 import de.vanhake.dayorganizer.ui.statistik.StatistikScreen
 
