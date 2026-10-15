@@ -162,7 +162,21 @@ fun DayOrganizerNavigation() {
             composable(Ziele.BELOHNUNG_BEARBEITEN) { eintrag ->
                 BelohnungBearbeitenScreen(
                     id = eintrag.arguments?.getString("id")?.toLongOrNull() ?: 0L,
-                    fertig = { navController.popBackStack() },
+                    // Nur im RESUMED-Zustand navigieren: ein zweiter Aufruf waehrend der
+                    // Ausblend-Animation riefe sonst popBackStack() erneut auf und
+                    // wuerfe auch die Liste vom Stapel.
+                    fertig = { ergebnis ->
+                        if (eintrag.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                            navController.previousBackStackEntry?.savedStateHandle
+                                ?.set(Ziele.ERGEBNIS_BELOHNUNG_GESPEICHERT, ergebnis.name)
+                            navController.popBackStack()
+                        }
+                    },
+                    zurueck = {
+                        if (eintrag.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                            navController.popBackStack()
+                        }
+                    },
                 )
             }
         }
