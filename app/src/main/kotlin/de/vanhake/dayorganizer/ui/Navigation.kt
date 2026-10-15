@@ -46,6 +46,9 @@ object Ziele {
     /** savedStateHandle-Schluessel: Bearbeiten -> Liste, Wert = SpeicherErgebnis.name. */
     const val ERGEBNIS_AKTIVITAET_GESPEICHERT = "aktivitaet_gespeichert"
 
+    /** savedStateHandle-Schluessel: Belohnungs-Editor -> Liste, Wert = SpeicherErgebnis.name. */
+    const val ERGEBNIS_BELOHNUNG_GESPEICHERT = "belohnung_gespeichert"
+
     fun aktivitaetBearbeiten(id: Long) = "aktivitaet/$id"
     fun belohnungBearbeiten(id: Long) = "belohnung/$id"
 }
@@ -119,9 +122,16 @@ fun DayOrganizerNavigation() {
                 )
             }
 
-            composable(Ziele.BELOHNUNGEN) {
+            composable(Ziele.BELOHNUNGEN) { eintrag ->
+                val gespeichert by eintrag.savedStateHandle
+                    .getStateFlow<String?>(Ziele.ERGEBNIS_BELOHNUNG_GESPEICHERT, null)
+                    .collectAsStateWithLifecycle()
                 BelohnungenScreen(
                     bearbeiten = { id -> navController.navigate(Ziele.belohnungBearbeiten(id)) },
+                    gespeichert = gespeichert?.let(SpeicherErgebnis::valueOf),
+                    gespeichertGezeigt = {
+                        eintrag.savedStateHandle[Ziele.ERGEBNIS_BELOHNUNG_GESPEICHERT] = null
+                    },
                 )
             }
 

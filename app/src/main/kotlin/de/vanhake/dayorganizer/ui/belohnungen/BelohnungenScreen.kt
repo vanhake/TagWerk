@@ -1,39 +1,65 @@
 package de.vanhake.dayorganizer.ui.belohnungen
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.HourglassTop
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.LockClock
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.vanhake.dayorganizer.R
+import de.vanhake.dayorganizer.domain.model.Einloesung
 import de.vanhake.dayorganizer.domain.rechner.Hindernis
+import de.vanhake.dayorganizer.ui.gemeinsam.Hinweistoast
+import de.vanhake.dayorganizer.ui.gemeinsam.HinweistoastLeiste
+import de.vanhake.dayorganizer.ui.gemeinsam.SpeicherErgebnis
+import de.vanhake.dayorganizer.ui.theme.DayOrganizerFesteFarben
+import de.vanhake.dayorganizer.ui.theme.DayOrganizerFormen
+import de.vanhake.dayorganizer.ui.theme.DayOrganizerTheme
+import de.vanhake.dayorganizer.ui.theme.belohnungSymbol
+import kotlinx.coroutines.delay
+import java.time.format.DateTimeFormatter
 
 private fun EinloeseMeldung.textId(): Int = when (this) {
     EinloeseMeldung.ZU_WENIG_PUNKTE -> R.string.noch_punkte_noetig
@@ -43,58 +69,91 @@ private fun EinloeseMeldung.textId(): Int = when (this) {
     EinloeseMeldung.FEHLER -> R.string.einloese_fehlgeschlagen
 }
 
+private val DATUM_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
+
+/** Wie lange eine Fehlschlag-Meldung steht -- gleich lang wie die Toasts der ViewModels. */
+private const val MELDUNG_DAUER_MS = 3_800L
+
 @Composable
 fun BelohnungenScreen(
     bearbeiten: (Long) -> Unit,
+    gespeichert: SpeicherErgebnis?,
+    gespeichertGezeigt: () -> Unit,
     viewModel: BelohnungenViewModel = hiltViewModel(),
 ) {
     val zustand by viewModel.zustand.collectAsStateWithLifecycle()
+    val toast by viewModel.toast.collectAsStateWithLifecycle()
     val meldung by viewModel.meldung.collectAsStateWithLifecycle()
     val kontext = LocalContext.current
-    val snackbarHostState = remember { SnackbarHostState() }
+    val farben = DayOrganizerTheme.farben
 
-    // Einmalig zeigen, dann zuruecksetzen -- sonst erschiene dieselbe Meldung bei jeder
-    // Rekomposition (z. B. Bildschirmdrehung) erneut. Gleiches Muster wie EinstellungenScreen.
-    LaunchedEffect(meldung) {
-        val aktuelleMeldung = meldung ?: return@LaunchedEffect
-        val text = if (aktuelleMeldung == EinloeseMeldung.ZU_WENIG_PUNKTE) {
-            kontext.getString(aktuelleMeldung.textId(), viewModel.meldungFehlendePunkte.value)
-        } else {
-            kontext.getString(aktuelleMeldung.textId())
+    // Ergebnis aus dem Editor einmalig melden und im savedStateHandle loeschen -- Muster
+    // AktivitaetenScreen.
+    LaunchedEffect(gespeichert) {
+        gespeichert?.let {
+            viewModel.gespeichertMelden(it)
+            gespeichertGezeigt()
         }
-        snackbarHostState.showSnackbar(text)
+    }
+
+    // Fehlschlag-Meldungen stehen so lange wie ein Toast und werden dann zurueckgesetzt --
+    // sonst erschiene dieselbe Meldung nach jeder Rotation erneut.
+    LaunchedEffect(meldung) {
+        if (meldung == null) return@LaunchedEffect
+        delay(MELDUNG_DAUER_MS)
         viewModel.meldungGezeigt()
     }
 
-    Scaffold(
-        floatingActionButton = {
-            FloatingActionButton(onClick = { bearbeiten(0L) }) {
-                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.neue_belohnung))
-            }
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-    ) { innen ->
+    val meldungsToast = meldung?.let { aktuelle ->
+        val text = if (aktuelle == EinloeseMeldung.ZU_WENIG_PUNKTE) {
+            kontext.getString(aktuelle.textId(), viewModel.meldungFehlendePunkte.value)
+        } else {
+            kontext.getString(aktuelle.textId())
+        }
+        Hinweistoast(text, kannRueckgaengig = false)
+    }
+    // Der Toast hat Vorrang: er gehoert zur letzten erfolgreichen Aktion.
+    val sichtbarerToast = toast ?: meldungsToast
+
+    Box(Modifier.fillMaxSize().background(farben.bg)) {
         LazyColumn(
-            modifier = Modifier.padding(innen).padding(16.dp),
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 110.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
                 Text(
-                    stringResource(R.string.punktestand, zustand.kontostand),
-                    style = MaterialTheme.typography.headlineSmall,
+                    stringResource(R.string.tab_belohnungen_titel),
+                    modifier = Modifier.padding(start = 4.dp, end = 4.dp, bottom = 4.dp),
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = (-0.02).em,
+                    color = farben.ink,
                 )
             }
 
-            // "kachel-"/"einloesung-" statt der nackten id: beide ids sind eigene,
-            // je bei 1 beginnende Autoincrement-Folgen. Ohne Praefix teilen sich
-            // die zwei items(...)-Aufrufe denselben Key-Namensraum der LazyColumn
-            // und kollidieren sobald beide ids gleich sind -- Compose stuerzt dann ab.
+            item { PunktestandKarte(zustand.kontostand) }
+
+            if (zustand.kacheln.isEmpty()) {
+                item {
+                    Text(
+                        stringResource(R.string.belohnungen_leer),
+                        modifier = Modifier.padding(horizontal = 4.dp),
+                        fontSize = 15.sp,
+                        color = farben.ink2,
+                    )
+                }
+            }
+
+            // "kachel-"/"einloesung-" statt der nackten id: beide ids sind eigene, je bei 1
+            // beginnende Autoincrement-Folgen und teilen sich sonst den Key-Namensraum der
+            // LazyColumn -- Compose stuerzt bei gleicher id ab.
             items(zustand.kacheln, key = { "kachel-${it.id}" }) { kachel ->
-                Kachel(
+                BelohnungKarte(
                     kachel = kachel,
                     kontostand = zustand.kontostand,
-                    einloesen = { viewModel.einloesen(kachel.id) },
                     bearbeiten = { bearbeiten(kachel.id) },
+                    einloesen = { viewModel.einloesen(kachel.id) },
                     archivieren = { viewModel.archivieren(kachel.id) },
                 )
             }
@@ -102,84 +161,202 @@ fun BelohnungenScreen(
             if (zustand.einloesungen.isNotEmpty()) {
                 item {
                     Text(
-                        stringResource(R.string.einloese_historie),
-                        style = MaterialTheme.typography.titleSmall,
+                        stringResource(R.string.einloese_historie).uppercase(),
+                        modifier = Modifier.padding(start = 4.dp, top = 14.dp, bottom = 0.dp),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 0.06.em,
+                        color = farben.ink2,
                     )
                 }
                 items(zustand.einloesungen, key = { "einloesung-${it.id}" }) { einloesung ->
-                    Text(
-                        stringResource(
-                            R.string.einloesung_zeile,
-                            einloesung.name,
-                            einloesung.preisPunkte,
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                    HistorienZeile(einloesung)
+                }
+            }
+        }
+
+        if (sichtbarerToast == null) {
+            ExtendedFloatingActionButton(
+                onClick = { bearbeiten(0L) },
+                icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                text = { Text(stringResource(R.string.neue_belohnung), fontSize = 15.sp, fontWeight = FontWeight.ExtraBold) },
+                shape = DayOrganizerFormen.feld,
+                containerColor = farben.accent,
+                contentColor = farben.onAccent,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+            )
+        }
+
+        sichtbarerToast?.let { aktueller ->
+            HinweistoastLeiste(
+                toast = aktueller,
+                rueckgaengig = { viewModel.rueckgaengig() },
+                modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun PunktestandKarte(kontostand: Int) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = DayOrganizerFormen.heldenKarte,
+        color = DayOrganizerTheme.farben.hero,
+        contentColor = Color.White,
+    ) {
+        Row(
+            modifier = Modifier.padding(22.dp),
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    stringResource(R.string.dein_punktestand),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White.copy(alpha = 0.85f),
+                )
+                Text(
+                    kontostand.toString(),
+                    fontSize = 48.sp,
+                    lineHeight = 48.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = (-0.03).em,
+                )
+            }
+            Icon(
+                Icons.Filled.Star,
+                contentDescription = null,
+                tint = DayOrganizerFesteFarben.heroStern,
+                modifier = Modifier.size(44.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun BelohnungKarte(
+    kachel: BelohnungKachel,
+    kontostand: Int,
+    bearbeiten: () -> Unit,
+    einloesen: () -> Unit,
+    archivieren: () -> Unit,
+) {
+    val farben = DayOrganizerTheme.farben
+    val moeglich = kachel.einloesbarkeit.moeglich
+    val anteil = (kontostand.toFloat() / kachel.preisPunkte).coerceIn(0f, 1f)
+
+    Surface(
+        onClick = bearbeiten,
+        shape = DayOrganizerFormen.karte,
+        color = farben.surface,
+        contentColor = farben.ink,
+    ) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.Top) {
+                Surface(
+                    shape = DayOrganizerFormen.knopf,
+                    color = farben.goldSoft,
+                    contentColor = farben.goldInk,
+                    modifier = Modifier.size(48.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(belohnungSymbol(kachel.symbol), contentDescription = null, modifier = Modifier.size(26.dp))
+                    }
+                }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(kachel.name, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    if (kachel.beschreibung.isNotBlank()) {
+                        Text(kachel.beschreibung, fontSize = 13.sp, lineHeight = 17.sp, color = farben.ink2)
+                    }
+                }
+                Text(
+                    stringResource(R.string.punkte_kurz, kachel.preisPunkte),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1,
+                )
+            }
+
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(farben.surface2),
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(anteil)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(if (moeglich) farben.green else farben.accent),
+                )
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                val (symbol, text) = hinweis(kachel)
+                Row(
+                    Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    val hinweisFarbe = if (moeglich) farben.green else farben.ink2
+                    Icon(symbol, contentDescription = null, tint = hinweisFarbe, modifier = Modifier.size(18.dp))
+                    Text(text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = hinweisFarbe)
+                }
+                IconButton(onClick = archivieren) {
+                    Icon(Icons.Outlined.Archive, contentDescription = stringResource(R.string.archivieren), tint = farben.ink2)
+                }
+                Button(
+                    onClick = einloesen,
+                    enabled = moeglich && !kachel.wirdEingeloest,
+                    shape = DayOrganizerFormen.kachel,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = farben.accent,
+                        contentColor = farben.onAccent,
+                        disabledContainerColor = farben.surface2,
+                        disabledContentColor = farben.ink2,
+                    ),
+                ) {
+                    Text(stringResource(R.string.einloesen), fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
                 }
             }
         }
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun Kachel(
-    kachel: BelohnungKachel,
-    kontostand: Int,
-    einloesen: () -> Unit,
-    bearbeiten: () -> Unit,
-    archivieren: () -> Unit,
-) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
-            Text(kachel.name, style = MaterialTheme.typography.titleMedium)
-            if (kachel.beschreibung.isNotBlank()) {
-                Text(kachel.beschreibung, style = MaterialTheme.typography.bodySmall)
+private fun hinweis(kachel: BelohnungKachel): Pair<ImageVector, String> =
+    when (kachel.einloesbarkeit.hindernis) {
+        Hindernis.ZU_WENIG_PUNKTE -> Icons.Filled.HourglassTop to
+            stringResource(R.string.noch_punkte_noetig, kachel.einloesbarkeit.fehlendePunkte)
+        Hindernis.SERIE_ZU_KURZ -> Icons.Filled.LocalFireDepartment to stringResource(R.string.serie_zu_kurz)
+        Hindernis.ZU_FRUEH -> Icons.Filled.LockClock to stringResource(R.string.noch_zu_frueh)
+        null -> Icons.Filled.CheckCircle to stringResource(R.string.bereit_zum_einloesen)
+    }
+
+@Composable
+private fun HistorienZeile(einloesung: Einloesung) {
+    val farben = DayOrganizerTheme.farben
+    Column(Modifier.padding(horizontal = 4.dp)) {
+        HorizontalDivider(color = farben.line)
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(einloesung.name, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = farben.ink)
+                Text(einloesung.zeitpunkt.format(DATUM_FORMAT), fontSize = 12.sp, color = farben.ink2)
             }
             Text(
-                stringResource(R.string.punktestand, kachel.preisPunkte),
-                style = MaterialTheme.typography.bodyMedium,
+                stringResource(R.string.einloesung_abzug, einloesung.preisPunkte),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = farben.ink2,
             )
-            LinearProgressIndicator(
-                progress = {
-                    (kontostand.toFloat() / kachel.preisPunkte).coerceIn(0f, 1f)
-                },
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-            )
-            // FlowRow statt Row: drei Knoepfe passen bei 360 dp Breite und grosser
-            // Schrift nicht in eine Zeile. In einer Row wurde "Archivieren" in den
-            // Restplatz gequetscht, brach senkrecht um und blaehte die Karte auf die
-            // halbe Bildschirmhoehe auf -- ohne selbst sichtbar zu sein. So auf dem
-            // Emulator gesehen (wm density 480, font_scale 1.3).
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Button(
-                    onClick = einloesen,
-                    enabled = kachel.einloesbarkeit.moeglich && !kachel.wirdEingeloest,
-                ) {
-                    Text(stringResource(R.string.einloesen))
-                }
-                Button(onClick = bearbeiten) { Text(stringResource(R.string.bearbeiten)) }
-                // Archivieren wirkt nur auf das archiviert-Flag und greift nicht in die
-                // Punkte-Transaktion des Einloesens ein (siehe BelohnungEinloesen.loese):
-                // anders als beim Einloesen-Knopf gibt es hier keinen Doppeltipp-Schaden,
-                // der eine Sperre waehrend wirdEingeloest rechtfertigen wuerde.
-                TextButton(onClick = archivieren) { Text(stringResource(R.string.archivieren)) }
-            }
-            val hinweis = when (kachel.einloesbarkeit.hindernis) {
-                Hindernis.ZU_WENIG_PUNKTE -> stringResource(
-                    R.string.noch_punkte_noetig,
-                    kachel.einloesbarkeit.fehlendePunkte,
-                )
-                Hindernis.SERIE_ZU_KURZ -> stringResource(R.string.serie_zu_kurz)
-                Hindernis.ZU_FRUEH -> stringResource(R.string.noch_zu_frueh)
-                null -> null
-            }
-            if (hinweis != null) {
-                Text(hinweis, style = MaterialTheme.typography.bodySmall)
-            }
         }
     }
 }

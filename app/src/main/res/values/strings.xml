@@ -81,12 +81,15 @@
     <string name="tab_belohnungen">Belohnung</string>
     <string name="neue_belohnung">Neue Belohnung</string>
     <string name="einloesen">Einlösen</string>
-    <string name="bearbeiten">Bearbeiten</string>
     <string name="noch_punkte_noetig">Noch %1$d Punkte nötig</string>
     <string name="serie_zu_kurz">Die geforderte Serie ist noch nicht erreicht</string>
     <string name="noch_zu_frueh">Noch nicht freigeschaltet</string>
     <string name="einloese_historie">Eingelöst</string>
-    <string name="einloesung_zeile">%1$s — %2$d Punkte</string>
+    <string name="tab_belohnungen_titel">Belohnungen</string>
+    <string name="dein_punktestand">Dein Punktestand</string>
+    <string name="bereit_zum_einloesen">Bereit zum Einlösen</string>
+    <string name="einloesung_abzug">−%1$d</string>
+    <string name="belohnungen_leer">Noch keine Belohnungen. Lege mit „Neue Belohnung“ die erste an.</string>
     <string name="einloese_nicht_mehr_vorhanden">Diese Belohnung gibt es nicht mehr</string>
     <string name="einloese_fehlgeschlagen">Einlösen ist fehlgeschlagen</string>
     <string name="feld_beschreibung">Beschreibung</string>
