@@ -85,8 +85,9 @@ class BelohnungEinloesen @Inject constructor(
             preisPunkte = belohnung.preisPunkte,
             zeitpunkt = jetzt,
         )
-        belohnungen.einloesungAnlegen(einloesung)
-        return EinloeseErgebnis.Erfolg(einloesung)
+        val id = belohnungen.einloesungAnlegen(einloesung)
+        // Mit der echten id, damit ein Rueckgaengig genau diese Zeile stornieren kann.
+        return EinloeseErgebnis.Erfolg(einloesung.copy(id = id))
     }
 
     private suspend fun serieFuer(belohnung: Belohnung): Int {

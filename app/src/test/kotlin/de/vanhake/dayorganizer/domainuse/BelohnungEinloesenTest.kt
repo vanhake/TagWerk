@@ -9,6 +9,7 @@ import de.vanhake.dayorganizer.domain.model.Belohnung
 import de.vanhake.dayorganizer.domain.model.Belohnungsbedingung
 import de.vanhake.dayorganizer.domain.model.Buchung
 import de.vanhake.dayorganizer.domain.model.BuchungsArt
+import de.vanhake.dayorganizer.domain.model.Einloesung
 import de.vanhake.dayorganizer.domain.model.Faelligkeit
 import de.vanhake.dayorganizer.domain.model.FaelligkeitStatus
 import de.vanhake.dayorganizer.domain.rechner.BelohnungsPruefer
@@ -69,6 +70,23 @@ class BelohnungEinloesenTest {
         transaktionen = transaktionen,
         uhr = uhr,
     )
+
+    @Test
+    fun `ein Erfolg traegt die echte id der angelegten Einloesung`() = runTest {
+        // Eine schon vorhandene Einloesung sorgt dafuer, dass die neue id nicht
+        // zufaellig dem Standardwert 0 + 1 entspricht.
+        val belohnungen = FakeBelohnungRepository(listOf(kinoabend))
+        belohnungen.einloesungen.value = listOf(
+            Einloesung(id = 7, belohnungId = 1, name = "Alt", preisPunkte = 10,
+                zeitpunkt = LocalDateTime.of(2026, 1, 1, 10, 0)),
+        )
+
+        val ergebnis = useCase(belohnungen, guthaben(250))(1)
+
+        val erfolg = ergebnis as EinloeseErgebnis.Erfolg
+        assertEquals(8, erfolg.einloesung.id)
+        assertEquals(belohnungen.einloesungen.value.single { it.id == 8L }, erfolg.einloesung)
+    }
 
     @Test
     fun `mit genug Punkten wird abgebucht und die Einloesung angelegt`() = runTest {
