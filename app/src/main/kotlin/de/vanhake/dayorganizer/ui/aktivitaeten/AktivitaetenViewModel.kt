@@ -1,5 +1,6 @@
 package de.vanhake.dayorganizer.ui.aktivitaeten
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -8,6 +9,7 @@ import de.vanhake.dayorganizer.data.repository.FaelligkeitRepository
 import de.vanhake.dayorganizer.domain.rechner.SerienRechner
 import de.vanhake.dayorganizer.domainuse.AktivitaetNeuPlanen
 import de.vanhake.dayorganizer.ui.gemeinsam.Hinweistoast
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -69,7 +71,15 @@ class AktivitaetenViewModel @Inject constructor(
     fun archivieren(id: Long) = viewModelScope.launch {
         val name = aktivitaeten.nachId(id)?.name
         aktivitaeten.archivieren(id, LocalDate.now(uhr))
-        neuPlanen(id)
+        // Archiviert ist die Aktivitaet in jedem Fall; eine Ausnahme der Nachbereitung darf
+        // weder den Toast verhindern noch im viewModelScope die App abstuerzen lassen.
+        try {
+            neuPlanen(id)
+        } catch (abbruch: CancellationException) {
+            throw abbruch
+        } catch (ausnahme: Exception) {
+            Log.w(TAG, "Nachbereitung nach dem Archivieren fehlgeschlagen", ausnahme)
+        }
         name?.let { zeigeToast(AktivitaetenToastTexte.archiviert(it)) }
     }
 
@@ -94,6 +104,8 @@ class AktivitaetenViewModel @Inject constructor(
     }
 
     private companion object {
+        const val TAG = "Aktivitaeten"
+
         /** Wie HeuteViewModel. */
         const val TOAST_DAUER_MS = 3_800L
     }

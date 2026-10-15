@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -130,12 +131,21 @@ fun DayOrganizerNavigation() {
             composable(Ziele.AKTIVITAET_BEARBEITEN) { eintrag ->
                 AktivitaetBearbeitenScreen(
                     id = eintrag.arguments?.getString("id")?.toLongOrNull() ?: 0L,
+                    // Nur im RESUMED-Zustand navigieren: ein zweiter Aufruf waehrend der
+                    // Ausblend-Animation riefe sonst popBackStack() erneut auf und
+                    // wuerfe auch die Liste vom Stapel.
                     fertig = { ergebnis ->
-                        navController.previousBackStackEntry?.savedStateHandle
-                            ?.set(Ziele.ERGEBNIS_AKTIVITAET_GESPEICHERT, ergebnis.name)
-                        navController.popBackStack()
+                        if (eintrag.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                            navController.previousBackStackEntry?.savedStateHandle
+                                ?.set(Ziele.ERGEBNIS_AKTIVITAET_GESPEICHERT, ergebnis.name)
+                            navController.popBackStack()
+                        }
                     },
-                    zurueck = { navController.popBackStack() },
+                    zurueck = {
+                        if (eintrag.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                            navController.popBackStack()
+                        }
+                    },
                 )
             }
 

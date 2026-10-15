@@ -41,7 +41,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -81,7 +81,7 @@ fun AktivitaetBearbeitenScreen(
     val fehler by viewModel.fehler.collectAsStateWithLifecycle()
     val bereich = rememberCoroutineScope()
     val farben = DayOrganizerTheme.farben
-    var uhrzeitZiel by remember { mutableStateOf<UhrzeitZiel?>(null) }
+    var uhrzeitZiel by rememberSaveable { mutableStateOf<UhrzeitZiel?>(null) }
 
     LaunchedEffect(id) { viewModel.laden(id) }
 
@@ -111,13 +111,16 @@ fun AktivitaetBearbeitenScreen(
             FehlerText(EntwurfFehler.NAME_LEER in fehler, R.string.fehler_name_leer)
         }
 
-        StepperZeile(titel = stringResource(R.string.feld_punkte)) {
-            Stepper(
-                wert = entwurf.basisPunkte,
-                verringern = { viewModel.aendern { it.punkteAendern(-1) } },
-                erhoehen = { viewModel.aendern { it.punkteAendern(+1) } },
-                verringernMoeglich = entwurf.basisPunkte > AktivitaetEntwurf.PUNKTE_MIN,
-            )
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            StepperZeile(titel = stringResource(R.string.feld_punkte)) {
+                Stepper(
+                    wert = entwurf.basisPunkte,
+                    verringern = { viewModel.aendern { it.punkteAendern(-1) } },
+                    erhoehen = { viewModel.aendern { it.punkteAendern(+1) } },
+                    verringernMoeglich = entwurf.basisPunkte > AktivitaetEntwurf.PUNKTE_MIN,
+                )
+            }
+            FehlerText(EntwurfFehler.PUNKTE_NICHT_POSITIV in fehler, R.string.fehler_punkte)
         }
 
         Abschnitt(R.string.feld_zeitplan) {
@@ -155,18 +158,21 @@ fun AktivitaetBearbeitenScreen(
         }
 
         if (entwurf.typ == ZeitplanTyp.TAGESZIEL || entwurf.typ == ZeitplanTyp.WOCHENZIEL) {
-            StepperZeile(
-                titel = stringResource(R.string.feld_zielanzahl),
-                untertitel = stringResource(
-                    if (entwurf.typ == ZeitplanTyp.WOCHENZIEL) R.string.ziel_einheit_woche else R.string.ziel_einheit_tag,
-                ),
-            ) {
-                Stepper(
-                    wert = entwurf.zielAnzahl,
-                    verringern = { viewModel.aendern { it.zielAendern(-1) } },
-                    erhoehen = { viewModel.aendern { it.zielAendern(+1) } },
-                    verringernMoeglich = entwurf.zielAnzahl > AktivitaetEntwurf.ZIEL_MIN,
-                )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                StepperZeile(
+                    titel = stringResource(R.string.feld_zielanzahl),
+                    untertitel = stringResource(
+                        if (entwurf.typ == ZeitplanTyp.WOCHENZIEL) R.string.ziel_einheit_woche else R.string.ziel_einheit_tag,
+                    ),
+                ) {
+                    Stepper(
+                        wert = entwurf.zielAnzahl,
+                        verringern = { viewModel.aendern { it.zielAendern(-1) } },
+                        erhoehen = { viewModel.aendern { it.zielAendern(+1) } },
+                        verringernMoeglich = entwurf.zielAnzahl > AktivitaetEntwurf.ZIEL_MIN,
+                    )
+                }
+                FehlerText(EntwurfFehler.ZIEL_NICHT_POSITIV in fehler, R.string.fehler_ziel)
             }
         }
 

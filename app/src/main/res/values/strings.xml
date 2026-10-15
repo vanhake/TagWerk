@@ -75,7 +75,9 @@
     <string name="fehler_name_leer">Bitte einen Namen eingeben</string>
     <string name="fehler_kein_wochentag">Mindestens einen Wochentag wählen</string>
     <string name="fehler_keine_zeit">Mindestens eine Uhrzeit hinzufügen</string>
-    <string name="fehler_intervall">Das Zeitfenster muss vor seinem Ende beginnen</string>
+    <string name="fehler_intervall">Intervall von 1 bis 12 Stunden und ein Zeitfenster, das vor seinem Ende beginnt</string>
+    <string name="fehler_punkte">Mindestens 1 Punkt je Erledigung</string>
+    <string name="fehler_ziel">Mindestens 1 Mal</string>
     <string name="tab_belohnungen">Belohnung</string>
     <string name="neue_belohnung">Neue Belohnung</string>
     <string name="einloesen">Einlösen</string>
