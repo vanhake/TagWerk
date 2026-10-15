@@ -13,6 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -204,5 +205,44 @@ class AktivitaetBearbeitenViewModelTest {
         vm.aendern { it.copy(wochentage = emptySet()) }
 
         assertEquals(listOf(EntwurfFehler.KEIN_WOCHENTAG), vm.fehler.value)
+    }
+
+    @Test
+    fun `ein spaeter zweiter Tipp nach dem Speichern legt kein Duplikat an`() = runTest(dispatcher) {
+        val repo = FakeAktivitaetRepository()
+        val vm = viewModel(repo)
+        vm.laden(0L).join()
+        vm.aendern { it.copy(name = "Lesen") }
+
+        val erstes = vm.speichern()
+        val zweites = vm.speichern()
+
+        assertEquals(1, repo.stand.value.size)
+        assertEquals(SpeicherErgebnis.ANGELEGT, erstes)
+        assertEquals(SpeicherErgebnis.GEAENDERT, zweites)
+    }
+
+    @Test
+    fun `nach einem abgebrochenen Speichern ist die Sperre wieder frei`() = runTest(dispatcher) {
+        val echt = FakeAktivitaetRepository()
+        val langsam = object : AktivitaetRepository by echt {
+            override suspend fun speichern(aktivitaet: Aktivitaet): Long {
+                delay(10)
+                return echt.speichern(aktivitaet)
+            }
+        }
+        val vm = viewModel(langsam)
+        vm.laden(0L).join()
+        vm.aendern { it.copy(name = "Lesen") }
+
+        val abgebrochen = async { vm.speichern() }
+        runCurrent()
+        abgebrochen.cancel()
+        runCurrent()
+        assertTrue(abgebrochen.isCancelled)
+        assertTrue(echt.stand.value.isEmpty())
+
+        assertEquals(SpeicherErgebnis.ANGELEGT, vm.speichern())
+        assertEquals(1, echt.stand.value.size)
     }
 }

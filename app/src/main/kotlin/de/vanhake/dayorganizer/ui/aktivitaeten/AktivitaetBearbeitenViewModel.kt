@@ -92,6 +92,10 @@ class AktivitaetBearbeitenViewModel(
 
             val ergebnis = if (_entwurf.value.id == 0L) SpeicherErgebnis.ANGELEGT else SpeicherErgebnis.GEAENDERT
             val id = aktivitaeten.speichern(_entwurf.value.zuAktivitaet(LocalDate.now(uhr)))
+            // Die neue id uebernehmen: Waehrend der Ausblend-Animation ist der Screen noch
+            // klickbar; ein spaeter Tipp wird so zum harmlosen Update statt zu einem
+            // zweiten Insert (die Sperre ist dann schon wieder frei).
+            _entwurf.value = _entwurf.value.copy(id = id)
             // Ohne diese Nachbereitung wirkt eine neue oder geaenderte Aktivitaet erst nach
             // dem naechtlichen Waechterlauf. Sie ist reine Optimierung: Wenn sie fehlschlaegt,
             // holt der naechtliche Waechterlauf das nach, darum darf sie das Ergebnis nicht
