@@ -118,7 +118,8 @@ fun DayOrganizerNavigation() {
             composable(Ziele.AKTIVITAET_BEARBEITEN) { eintrag ->
                 AktivitaetBearbeitenScreen(
                     id = eintrag.arguments?.getString("id")?.toLongOrNull() ?: 0L,
-                    fertig = { navController.popBackStack() },
+                    fertig = { _ -> navController.popBackStack() },
+                    zurueck = { navController.popBackStack() },
                 )
             }
 

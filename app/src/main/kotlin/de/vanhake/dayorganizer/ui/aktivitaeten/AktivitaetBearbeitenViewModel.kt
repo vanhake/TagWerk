@@ -56,16 +56,21 @@ class AktivitaetBearbeitenViewModel(
         aktivitaeten.nachId(id)?.let { _entwurf.value = AktivitaetEntwurf.aus(it) }
     }
 
+    /** Fehler bleiben bis zum ersten Speicherversuch stumm. Danach wird jede Aenderung neu
+     * geprueft, damit ein behobener Fehler sofort verschwindet (Prototyp: setName loescht
+     * err). */
     fun aendern(block: (AktivitaetEntwurf) -> AktivitaetEntwurf) {
         _entwurf.value = block(_entwurf.value)
+        if (_fehler.value.isNotEmpty()) _fehler.value = _entwurf.value.pruefen()
     }
 
-    /** Speichert und plant neu. Gibt false zurueck, wenn der Entwurf Fehler hat. */
-    suspend fun speichern(): Boolean {
+    /** Speichert und plant neu. Gibt null zurueck, wenn der Entwurf Fehler hat. */
+    suspend fun speichern(): SpeicherErgebnis? {
         val fehler = _entwurf.value.pruefen()
         _fehler.value = fehler
-        if (fehler.isNotEmpty()) return false
+        if (fehler.isNotEmpty()) return null
 
+        val ergebnis = if (_entwurf.value.id == 0L) SpeicherErgebnis.ANGELEGT else SpeicherErgebnis.GEAENDERT
         val id = aktivitaeten.speichern(_entwurf.value.zuAktivitaet(LocalDate.now(uhr)))
         // Ohne diese Nachbereitung wirkt eine neue oder geaenderte Aktivitaet erst nach
         // dem naechtlichen Waechterlauf. Sie ist reine Optimierung: Wenn sie fehlschlaegt,
@@ -78,7 +83,7 @@ class AktivitaetBearbeitenViewModel(
         }.onFailure { ausnahme ->
             Log.w(TAG, "Nachbereitung nach dem Speichern fehlgeschlagen", ausnahme)
         }
-        return true
+        return ergebnis
     }
 
     private companion object {
