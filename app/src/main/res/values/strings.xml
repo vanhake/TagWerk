@@ -30,8 +30,18 @@
     <string name="tab_heute">Heute</string>
     <string name="tab_aktivitaeten">Aktivitäten</string>
     <string name="neue_aktivitaet">Neue Aktivität</string>
-    <string name="punkte_je_erledigung">%1$d Punkte je Erledigung</string>
     <string name="archivieren">Archivieren</string>
+    <string name="anzahl_aktiv">%1$d aktiv</string>
+    <string name="punkte_kurz">%1$d Pkt</string>
+    <string name="aktivitaeten_leer">Noch keine Aktivitäten. Lege mit „Neue Aktivität“ die erste an.</string>
+    <plurals name="serie_tage">
+        <item quantity="one">%1$d Tag</item>
+        <item quantity="other">%1$d Tage</item>
+    </plurals>
+    <plurals name="serie_wochen">
+        <item quantity="one">%1$d Woche</item>
+        <item quantity="other">%1$d Wochen</item>
+    </plurals>
     <string name="feld_name">Name</string>
     <string name="feld_punkte">Punkte je Erledigung</string>
     <string name="feld_zeitplan">Zeitplan</string>
