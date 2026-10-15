@@ -18,6 +18,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -25,6 +27,7 @@ import androidx.navigation.compose.rememberNavController
 import de.vanhake.dayorganizer.R
 import de.vanhake.dayorganizer.ui.aktivitaeten.AktivitaetBearbeitenScreen
 import de.vanhake.dayorganizer.ui.aktivitaeten.AktivitaetenScreen
+import de.vanhake.dayorganizer.ui.aktivitaeten.SpeicherErgebnis
 import de.vanhake.dayorganizer.ui.belohnungen.BelohnungBearbeitenScreen
 import de.vanhake.dayorganizer.ui.belohnungen.BelohnungenScreen
 import de.vanhake.dayorganizer.ui.einstellungen.EinstellungenScreen
@@ -39,6 +42,9 @@ object Ziele {
     const val EINSTELLUNGEN = "einstellungen"
     const val AKTIVITAET_BEARBEITEN = "aktivitaet/{id}"
     const val BELOHNUNG_BEARBEITEN = "belohnung/{id}"
+
+    /** savedStateHandle-Schluessel: Bearbeiten -> Liste, Wert = SpeicherErgebnis.name. */
+    const val ERGEBNIS_AKTIVITAET_GESPEICHERT = "aktivitaet_gespeichert"
 
     fun aktivitaetBearbeiten(id: Long) = "aktivitaet/$id"
     fun belohnungBearbeiten(id: Long) = "belohnung/$id"
@@ -100,9 +106,16 @@ fun DayOrganizerNavigation() {
         ) {
             composable(Ziele.HEUTE) { HeuteScreen() }
 
-            composable(Ziele.AKTIVITAETEN) {
+            composable(Ziele.AKTIVITAETEN) { eintrag ->
+                val gespeichert by eintrag.savedStateHandle
+                    .getStateFlow<String?>(Ziele.ERGEBNIS_AKTIVITAET_GESPEICHERT, null)
+                    .collectAsStateWithLifecycle()
                 AktivitaetenScreen(
                     bearbeiten = { id -> navController.navigate(Ziele.aktivitaetBearbeiten(id)) },
+                    gespeichert = gespeichert?.let(SpeicherErgebnis::valueOf),
+                    gespeichertGezeigt = {
+                        eintrag.savedStateHandle[Ziele.ERGEBNIS_AKTIVITAET_GESPEICHERT] = null
+                    },
                 )
             }
 
@@ -118,7 +131,21 @@ fun DayOrganizerNavigation() {
             composable(Ziele.AKTIVITAET_BEARBEITEN) { eintrag ->
                 AktivitaetBearbeitenScreen(
                     id = eintrag.arguments?.getString("id")?.toLongOrNull() ?: 0L,
-                    fertig = { navController.popBackStack() },
+                    // Nur im RESUMED-Zustand navigieren: ein zweiter Aufruf waehrend der
+                    // Ausblend-Animation riefe sonst popBackStack() erneut auf und
+                    // wuerfe auch die Liste vom Stapel.
+                    fertig = { ergebnis ->
+                        if (eintrag.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                            navController.previousBackStackEntry?.savedStateHandle
+                                ?.set(Ziele.ERGEBNIS_AKTIVITAET_GESPEICHERT, ergebnis.name)
+                            navController.popBackStack()
+                        }
+                    },
+                    zurueck = {
+                        if (eintrag.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                            navController.popBackStack()
+                        }
+                    },
                 )
             }
 

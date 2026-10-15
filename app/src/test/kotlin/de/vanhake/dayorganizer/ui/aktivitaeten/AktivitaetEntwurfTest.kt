@@ -11,11 +11,14 @@ import kotlin.test.assertTrue
 
 class AktivitaetEntwurfTest {
 
+    private val acht = LocalTime.of(8, 0)
+    private val zwoelf = LocalTime.of(12, 0)
+
     private val gueltig = AktivitaetEntwurf(
         name = "Tabletten",
-        basisPunkteText = "10",
+        basisPunkte = 10,
         typ = ZeitplanTyp.FESTE_ZEITEN,
-        zeitenText = "08:00",
+        zeiten = listOf(acht),
         wochentage = DayOfWeek.entries.toSet(),
     )
 
@@ -25,8 +28,13 @@ class AktivitaetEntwurfTest {
     }
 
     @Test
+    fun `ein neuer Entwurf ist bis auf den Namen sofort gueltig`() {
+        assertEquals(listOf(EntwurfFehler.NAME_LEER), AktivitaetEntwurf().pruefen())
+    }
+
+    @Test
     fun `leerer Name und nicht positive Punkte werden gemeldet`() {
-        val fehler = gueltig.copy(name = "  ", basisPunkteText = "0").pruefen()
+        val fehler = gueltig.copy(name = "  ", basisPunkte = 0).pruefen()
 
         assertTrue(EntwurfFehler.NAME_LEER in fehler)
         assertTrue(EntwurfFehler.PUNKTE_NICHT_POSITIV in fehler)
@@ -34,7 +42,7 @@ class AktivitaetEntwurfTest {
 
     @Test
     fun `feste Zeiten brauchen mindestens eine Uhrzeit und einen Wochentag`() {
-        val fehler = gueltig.copy(zeitenText = "", wochentage = emptySet()).pruefen()
+        val fehler = gueltig.copy(zeiten = emptyList(), wochentage = emptySet()).pruefen()
 
         assertTrue(EntwurfFehler.KEINE_ZEIT in fehler)
         assertTrue(EntwurfFehler.KEIN_WOCHENTAG in fehler)
@@ -44,9 +52,9 @@ class AktivitaetEntwurfTest {
     fun `ein Wochenziel braucht keine Wochentage aber eine positive Anzahl`() {
         val entwurf = gueltig.copy(
             typ = ZeitplanTyp.WOCHENZIEL,
-            zeitenText = "",
+            zeiten = emptyList(),
             wochentage = emptySet(),
-            zielAnzahlText = "0",
+            zielAnzahl = 0,
         )
 
         assertEquals(listOf(EntwurfFehler.ZIEL_NICHT_POSITIV), entwurf.pruefen())
@@ -56,8 +64,8 @@ class AktivitaetEntwurfTest {
     fun `ein Intervall braucht ein positives Fenster`() {
         val entwurf = gueltig.copy(
             typ = ZeitplanTyp.INTERVALL,
-            zeitenText = "",
-            intervallStundenText = "0",
+            zeiten = emptyList(),
+            intervallStunden = 0,
             fensterVon = LocalTime.of(20, 0),
             fensterBis = LocalTime.of(8, 0),
         )
@@ -66,44 +74,102 @@ class AktivitaetEntwurfTest {
     }
 
     @Test
-    fun `ein Tagesziel braucht eine positive Anzahl und einen Wochentag`() {
+    fun `ein Tagesziel braucht eine positive Anzahl und einen Wochentag, aber keine Uhrzeit`() {
         val entwurf = gueltig.copy(
             typ = ZeitplanTyp.TAGESZIEL,
-            zeitenText = "",
+            zeiten = emptyList(),
             wochentage = emptySet(),
-            zielAnzahlText = "0",
+            zielAnzahl = 0,
         )
 
-        val fehler = entwurf.pruefen()
-
-        assertTrue(EntwurfFehler.ZIEL_NICHT_POSITIV in fehler)
-        assertTrue(EntwurfFehler.KEIN_WOCHENTAG in fehler)
+        assertEquals(
+            listOf(EntwurfFehler.ZIEL_NICHT_POSITIV, EntwurfFehler.KEIN_WOCHENTAG),
+            entwurf.pruefen(),
+        )
     }
 
     @Test
-    fun `ein unlesbarer Zeiteintrag wird bei festen Zeiten gemeldet`() {
-        val entwurf = gueltig.copy(zeitenText = "08:00, nicht-lesbar")
+    fun `Punkte bleiben beim Verringern mindestens 1`() {
+        val entwurf = gueltig.copy(basisPunkte = 1)
 
-        assertEquals(listOf(EntwurfFehler.ZEIT_UNLESBAR), entwurf.pruefen())
+        assertEquals(1, entwurf.punkteAendern(-1).basisPunkte)
+        assertEquals(2, entwurf.punkteAendern(+1).basisPunkte)
     }
 
     @Test
-    fun `ein unlesbarer Zeiteintrag wird auch beim Tagesziel gemeldet`() {
-        val entwurf = gueltig.copy(typ = ZeitplanTyp.TAGESZIEL, zeitenText = "nicht-lesbar")
-
-        assertTrue(EntwurfFehler.ZEIT_UNLESBAR in entwurf.pruefen())
+    fun `das Intervall bleibt zwischen 1 und 12 Stunden`() {
+        assertEquals(1, gueltig.copy(intervallStunden = 1).intervallAendern(-1).intervallStunden)
+        assertEquals(12, gueltig.copy(intervallStunden = 12).intervallAendern(+1).intervallStunden)
+        assertEquals(4, gueltig.copy(intervallStunden = 3).intervallAendern(+1).intervallStunden)
     }
 
     @Test
-    fun `eine gueltige kommagetrennte Liste wird sortiert geparst`() {
-        val entwurf = gueltig.copy(zeitenText = "12:00, 08:00")
+    fun `ein geladener Altwert ueber 12 Stunden faellt beim ersten Schritt auf 12`() {
+        assertEquals(12, gueltig.copy(intervallStunden = 16).intervallAendern(-1).intervallStunden)
+    }
+
+    @Test
+    fun `das Ziel bleibt beim Verringern mindestens 1`() {
+        assertEquals(1, gueltig.copy(zielAnzahl = 1).zielAendern(-1).zielAnzahl)
+        assertEquals(4, gueltig.copy(zielAnzahl = 3).zielAendern(+1).zielAnzahl)
+    }
+
+    @Test
+    fun `ein Wochentag wird umgeschaltet`() {
+        val ohneMontag = gueltig.wochentagUmschalten(DayOfWeek.MONDAY)
+
+        assertTrue(DayOfWeek.MONDAY !in ohneMontag.wochentage)
+        assertTrue(DayOfWeek.MONDAY in ohneMontag.wochentagUmschalten(DayOfWeek.MONDAY).wochentage)
+    }
+
+    @Test
+    fun `eine hinzugefuegte Uhrzeit wird einsortiert und nicht doppelt aufgenommen`() {
+        val entwurf = gueltig.copy(zeiten = listOf(zwoelf))
+            .zeitHinzufuegen(acht)
+            .zeitHinzufuegen(zwoelf)
+
+        assertEquals(listOf(acht, zwoelf), entwurf.zeiten)
+    }
+
+    @Test
+    fun `eine Uhrzeit wird entfernt`() {
+        val entwurf = gueltig.copy(zeiten = listOf(acht, zwoelf)).zeitEntfernen(acht)
+
+        assertEquals(listOf(zwoelf), entwurf.zeiten)
+    }
+
+    @Test
+    fun `der Zeitplan nimmt die Uhrzeiten sortiert auf`() {
+        val entwurf = gueltig.copy(zeiten = listOf(zwoelf, acht))
 
         assertEquals(
-            Zeitplan.FesteZeiten(
-                listOf(LocalTime.of(8, 0), LocalTime.of(12, 0)),
-                DayOfWeek.entries.toSet(),
-            ),
-            entwurf.zuAktivitaet(LocalDate.of(2026, 3, 2)).zeitplan,
+            Zeitplan.FesteZeiten(listOf(acht, zwoelf), DayOfWeek.entries.toSet()),
+            entwurf.zeitplan(),
+        )
+    }
+
+    @Test
+    fun `beim Tagesziel werden die Uhrzeiten zu Erinnerungszeiten`() {
+        val entwurf = gueltig.copy(typ = ZeitplanTyp.TAGESZIEL, zielAnzahl = 2, zeiten = listOf(acht))
+
+        assertEquals(
+            Zeitplan.Tagesziel(2, DayOfWeek.entries.toSet(), listOf(acht)),
+            entwurf.zeitplan(),
+        )
+    }
+
+    @Test
+    fun `das Intervall uebernimmt das Zeitfenster`() {
+        val entwurf = gueltig.copy(
+            typ = ZeitplanTyp.INTERVALL,
+            intervallStunden = 2,
+            fensterVon = LocalTime.of(9, 0),
+            fensterBis = LocalTime.of(17, 0),
+        )
+
+        assertEquals(
+            Zeitplan.Intervall(2, LocalTime.of(9, 0), LocalTime.of(17, 0), DayOfWeek.entries.toSet()),
+            entwurf.zeitplan(),
         )
     }
 
@@ -122,10 +188,24 @@ class AktivitaetEntwurfTest {
         )
 
         val entwurf = AktivitaetEntwurf.aus(aktivitaet)
-        assertEquals("08:00, 20:30", entwurf.zeitenText)
+        assertEquals(listOf(LocalTime.of(8, 0), LocalTime.of(20, 30)), entwurf.zeiten)
 
         val rundlauf = entwurf.zuAktivitaet(LocalDate.of(2026, 3, 2))
         assertEquals(aktivitaet.zeitplan, rundlauf.zeitplan)
+    }
+
+    @Test
+    fun `ein Tagesziel ohne Erinnerung laedt ohne Uhrzeiten`() {
+        val aktivitaet = Aktivitaet(
+            id = 7,
+            name = "Lesen",
+            farbe = 0xFF4CAF50.toInt(),
+            basisPunkte = 10,
+            zeitplan = Zeitplan.Tagesziel(1, DayOfWeek.entries.toSet()),
+            erstelltAm = LocalDate.of(2025, 12, 1),
+        )
+
+        assertEquals(emptyList(), AktivitaetEntwurf.aus(aktivitaet).zeiten)
     }
 
     @Test
@@ -135,14 +215,14 @@ class AktivitaetEntwurfTest {
         assertEquals("Tabletten", aktivitaet.name)
         assertEquals(10, aktivitaet.basisPunkte)
         assertEquals(
-            Zeitplan.FesteZeiten(listOf(LocalTime.of(8, 0)), DayOfWeek.entries.toSet()),
+            Zeitplan.FesteZeiten(listOf(acht), DayOfWeek.entries.toSet()),
             aktivitaet.zeitplan,
         )
     }
 
     @Test
     fun `ein Wochenziel wird in den Wochenziel-Zeitplan umgesetzt`() {
-        val entwurf = gueltig.copy(typ = ZeitplanTyp.WOCHENZIEL, zielAnzahlText = "3")
+        val entwurf = gueltig.copy(typ = ZeitplanTyp.WOCHENZIEL, zielAnzahl = 3)
 
         assertEquals(Zeitplan.Wochenziel(3), entwurf.zuAktivitaet(LocalDate.of(2026, 3, 2)).zeitplan)
     }
@@ -203,6 +283,7 @@ class AktivitaetEntwurfTest {
             name = "Tabletten",
             notiz = "vor dem Essen",
             farbe = 0xFF4CAF50.toInt(),
+            symbol = "pill",
             basisPunkte = 10,
             zeitplan = Zeitplan.FesteZeiten(listOf(LocalTime.of(8, 0)), DayOfWeek.entries.toSet()),
             kulanzMinuten = 45,

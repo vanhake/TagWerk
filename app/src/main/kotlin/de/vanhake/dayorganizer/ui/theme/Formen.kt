@@ -11,4 +11,10 @@ object DayOrganizerFormen {
     val kachel = RoundedCornerShape(14.dp)
     val knopf = RoundedCornerShape(16.dp)
     val pille = RoundedCornerShape(50)
+    /** Stepper-Zeilen, Intervall-Karte, Speichern-Knopf (Prototyp border-radius:18px). */
+    val feld = RoundedCornerShape(18.dp)
+    /** Zeilen der Aktivitaeten-Liste (Prototyp border-radius:22px). */
+    val listenKarte = RoundedCornerShape(22.dp)
+    /** Uhrzeit-Chips (Prototyp border-radius:12px). */
+    val chip = RoundedCornerShape(12.dp)
 }

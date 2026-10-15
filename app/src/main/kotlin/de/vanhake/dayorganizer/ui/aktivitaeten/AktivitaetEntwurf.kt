@@ -4,6 +4,7 @@ import de.vanhake.dayorganizer.domain.model.Aktivitaet
 import de.vanhake.dayorganizer.domain.model.Anstoss
 import de.vanhake.dayorganizer.domain.model.SerienSchwelle
 import de.vanhake.dayorganizer.domain.model.Zeitplan
+import de.vanhake.dayorganizer.ui.theme.AKTIVITAET_SYMBOL_STANDARD
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
@@ -14,30 +15,42 @@ enum class EntwurfFehler {
     NAME_LEER,
     PUNKTE_NICHT_POSITIV,
     KEINE_ZEIT,
-    ZEIT_UNLESBAR,
     KEIN_WOCHENTAG,
     ZIEL_NICHT_POSITIV,
     INTERVALL_UNGUELTIG,
 }
 
+/** Was [AktivitaetBearbeitenViewModel.speichern] getan hat -- die Liste zeigt danach den
+ * passenden Toast ("Aktivitaet angelegt" / "Aenderungen gespeichert"). */
+enum class SpeicherErgebnis { ANGELEGT, GEAENDERT }
+
 /**
- * Bearbeitbarer Zwischenstand. Zahlen bleiben Text, damit ein halb getipptes
- * Feld die Eingabe nicht zurueckspringen laesst.
+ * Bearbeitbarer Zwischenstand.
+ *
+ * Seit dem Redesign (Plan 5) kommen Punkte, Intervall und Zielanzahl aus Steppern und
+ * Uhrzeiten aus einem Zeitwaehler -- halb getippte Zahlen oder unlesbare Uhrzeiten gibt
+ * es nicht mehr, darum sind diese Felder typisiert. Die Felder, die der Bildschirm nicht
+ * anbietet (Kulanz, Nachfassen, ...), bleiben Text und werden unveraendert durchgereicht.
+ *
+ * Die Bearbeitungsoperationen (punkteAendern, zeitHinzufuegen, ...) tragen die Regeln der
+ * Bedienelemente, damit sie ohne Compose testbar sind.
  */
 data class AktivitaetEntwurf(
     val id: Long = 0,
     val name: String = "",
     val notiz: String = "",
     val farbe: Int = 0xFF4CAF50.toInt(),
-    val symbol: String = "self_improvement",
-    val basisPunkteText: String = "10",
+    val symbol: String = AKTIVITAET_SYMBOL_STANDARD,
+    val basisPunkte: Int = 10,
     val typ: ZeitplanTyp = ZeitplanTyp.FESTE_ZEITEN,
-    val zeitenText: String = "",
+    // Prototyp openEdit(0): eine neue Aktivitaet startet mit 08:00, damit "Feste Zeiten"
+    // ohne weiteren Schritt speicherbar ist.
+    val zeiten: List<LocalTime> = listOf(LocalTime.of(8, 0)),
     val wochentage: Set<DayOfWeek> = DayOfWeek.entries.toSet(),
-    val intervallStundenText: String = "3",
+    val intervallStunden: Int = 3,
     val fensterVon: LocalTime = LocalTime.of(8, 0),
     val fensterBis: LocalTime = LocalTime.of(22, 0),
-    val zielAnzahlText: String = "3",
+    val zielAnzahl: Int = 3,
     val anstoss: List<Anstoss> = emptyList(),
     val kulanzMinutenText: String = "60",
     val puenktlichkeitsBonusText: String = "5",
@@ -49,34 +62,34 @@ data class AktivitaetEntwurf(
     val erstelltAm: LocalDate? = null,
 ) {
 
-    private val basisPunkte: Int get() = basisPunkteText.toIntOrNull() ?: 0
-    private val intervallStunden: Int get() = intervallStundenText.toIntOrNull() ?: 0
-    private val zielAnzahl: Int get() = zielAnzahlText.toIntOrNull() ?: 0
+    fun punkteAendern(schritt: Int): AktivitaetEntwurf =
+        copy(basisPunkte = (basisPunkte + schritt).coerceAtLeast(PUNKTE_MIN))
 
-    /** Kommagetrennte HH:mm-Liste. Leere/blanke Eintraege werden uebersprungen (so bleibt ein
-     * abschliessendes Komma harmlos); ein unlesbarer Eintrag laesst das Ganze scheitern, statt
-     * ihn wie zeiten.mapNotNull{} still zu verschlucken -- genau das war der Fehler, den
-     * ZEIT_UNLESBAR beheben soll. */
-    private fun zeitenGeparst(): Result<List<LocalTime>> = runCatching {
-        zeitenText.split(",")
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .map { LocalTime.parse(it) }
-    }
+    /** coerceIn statt nur einer Untergrenze: der Prototyp begrenzt auf 12 Stunden. Ein
+     * geladener Altwert darueber bleibt stehen, bis der Stepper bedient wird. */
+    fun intervallAendern(schritt: Int): AktivitaetEntwurf =
+        copy(intervallStunden = (intervallStunden + schritt).coerceIn(INTERVALL_MIN, INTERVALL_MAX))
+
+    fun zielAendern(schritt: Int): AktivitaetEntwurf =
+        copy(zielAnzahl = (zielAnzahl + schritt).coerceAtLeast(ZIEL_MIN))
+
+    fun wochentagUmschalten(tag: DayOfWeek): AktivitaetEntwurf =
+        copy(wochentage = if (tag in wochentage) wochentage - tag else wochentage + tag)
+
+    /** Sortiert und ohne Doppelte -- dieselbe Uhrzeit zweimal ergaebe zwei identische
+     * Faelligkeiten. */
+    fun zeitHinzufuegen(zeit: LocalTime): AktivitaetEntwurf =
+        copy(zeiten = (zeiten + zeit).distinct().sorted())
+
+    fun zeitEntfernen(zeit: LocalTime): AktivitaetEntwurf = copy(zeiten = zeiten - zeit)
 
     fun pruefen(): List<EntwurfFehler> = buildList {
         if (name.isBlank()) add(EntwurfFehler.NAME_LEER)
         if (basisPunkte <= 0) add(EntwurfFehler.PUNKTE_NICHT_POSITIV)
 
-        val zeitenErgebnis = zeitenGeparst()
-
         when (typ) {
             ZeitplanTyp.FESTE_ZEITEN -> {
-                if (zeitenErgebnis.isFailure) {
-                    add(EntwurfFehler.ZEIT_UNLESBAR)
-                } else if (zeitenErgebnis.getOrThrow().isEmpty()) {
-                    add(EntwurfFehler.KEINE_ZEIT)
-                }
+                if (zeiten.isEmpty()) add(EntwurfFehler.KEINE_ZEIT)
                 if (wochentage.isEmpty()) add(EntwurfFehler.KEIN_WOCHENTAG)
             }
 
@@ -88,7 +101,6 @@ data class AktivitaetEntwurf(
             }
 
             ZeitplanTyp.TAGESZIEL -> {
-                if (zeitenErgebnis.isFailure) add(EntwurfFehler.ZEIT_UNLESBAR)
                 if (zielAnzahl <= 0) add(EntwurfFehler.ZIEL_NICHT_POSITIV)
                 if (wochentage.isEmpty()) add(EntwurfFehler.KEIN_WOCHENTAG)
             }
@@ -99,41 +111,45 @@ data class AktivitaetEntwurf(
         }
     }
 
+    /** Auch fuer einen noch fehlerhaften Entwurf aufrufbar -- die Plan-Zusammenfassung im
+     * Bildschirm zeigt den Zwischenstand live an. */
+    fun zeitplan(): Zeitplan {
+        val sortiert = zeiten.sorted()
+        return when (typ) {
+            ZeitplanTyp.FESTE_ZEITEN -> Zeitplan.FesteZeiten(sortiert, wochentage)
+            ZeitplanTyp.INTERVALL -> Zeitplan.Intervall(intervallStunden, fensterVon, fensterBis, wochentage)
+            ZeitplanTyp.TAGESZIEL -> Zeitplan.Tagesziel(zielAnzahl, wochentage, sortiert)
+            ZeitplanTyp.WOCHENZIEL -> Zeitplan.Wochenziel(zielAnzahl, anstoss)
+        }
+    }
+
     /** Nur aufrufen, wenn [pruefen] leer ist. [heute] gilt nur, wenn der Entwurf noch kein
      * eigenes [erstelltAm] traegt -- ein neu angelegter Entwurf bekommt so das heutige Datum,
      * eine bestehende Aktivitaet behaelt ihr echtes Anlegedatum ueber jedes Speichern hinweg. */
-    fun zuAktivitaet(heute: LocalDate): Aktivitaet {
-        // Nur aufrufen, wenn pruefen() leer ist -- dann ist zeitenGeparst() bereits
-        // erfolgreich. Der Fallback ist trotzdem da, gemaess demselben Muster wie die
-        // anderen *Text-Felder unten, die auch nicht auf gepruefte Eingaben vertrauen.
-        val zeiten = zeitenGeparst().getOrDefault(emptyList()).sorted()
-        return Aktivitaet(
-            id = id,
-            name = name.trim(),
-            notiz = notiz.trim(),
-            farbe = farbe,
-            symbol = symbol,
-            basisPunkte = basisPunkte,
-            zeitplan = when (typ) {
-                ZeitplanTyp.FESTE_ZEITEN -> Zeitplan.FesteZeiten(zeiten, wochentage)
-                ZeitplanTyp.INTERVALL -> Zeitplan.Intervall(
-                    intervallStunden, fensterVon, fensterBis, wochentage,
-                )
-                ZeitplanTyp.TAGESZIEL -> Zeitplan.Tagesziel(zielAnzahl, wochentage, zeiten)
-                ZeitplanTyp.WOCHENZIEL -> Zeitplan.Wochenziel(zielAnzahl, anstoss)
-            },
-            kulanzMinuten = kulanzMinutenText.toIntOrNull() ?: 60,
-            puenktlichkeitsBonus = puenktlichkeitsBonusText.toIntOrNull() ?: 0,
-            serienSchwellen = serienSchwellen,
-            nachfassAnzahl = nachfassAnzahlText.toIntOrNull() ?: 2,
-            nachfassAbstandMinuten = nachfassAbstandText.toIntOrNull() ?: 15,
-            erstelltAm = erstelltAm ?: heute,
-            aktiv = aktiv,
-            archiviertAm = archiviertAm,
-        )
-    }
+    fun zuAktivitaet(heute: LocalDate): Aktivitaet = Aktivitaet(
+        id = id,
+        name = name.trim(),
+        notiz = notiz.trim(),
+        farbe = farbe,
+        symbol = symbol,
+        basisPunkte = basisPunkte,
+        zeitplan = zeitplan(),
+        kulanzMinuten = kulanzMinutenText.toIntOrNull() ?: 60,
+        puenktlichkeitsBonus = puenktlichkeitsBonusText.toIntOrNull() ?: 0,
+        serienSchwellen = serienSchwellen,
+        nachfassAnzahl = nachfassAnzahlText.toIntOrNull() ?: 2,
+        nachfassAbstandMinuten = nachfassAbstandText.toIntOrNull() ?: 15,
+        erstelltAm = erstelltAm ?: heute,
+        aktiv = aktiv,
+        archiviertAm = archiviertAm,
+    )
 
     companion object {
+        const val PUNKTE_MIN = 1
+        const val INTERVALL_MIN = 1
+        const val INTERVALL_MAX = 12
+        const val ZIEL_MIN = 1
+
         fun aus(aktivitaet: Aktivitaet): AktivitaetEntwurf {
             val basis = AktivitaetEntwurf(
                 id = aktivitaet.id,
@@ -141,7 +157,7 @@ data class AktivitaetEntwurf(
                 notiz = aktivitaet.notiz,
                 farbe = aktivitaet.farbe,
                 symbol = aktivitaet.symbol,
-                basisPunkteText = aktivitaet.basisPunkte.toString(),
+                basisPunkte = aktivitaet.basisPunkte,
                 kulanzMinutenText = aktivitaet.kulanzMinuten.toString(),
                 puenktlichkeitsBonusText = aktivitaet.puenktlichkeitsBonus.toString(),
                 serienSchwellen = aktivitaet.serienSchwellen,
@@ -154,30 +170,28 @@ data class AktivitaetEntwurf(
             return when (val plan = aktivitaet.zeitplan) {
                 is Zeitplan.FesteZeiten -> basis.copy(
                     typ = ZeitplanTyp.FESTE_ZEITEN,
-                    zeitenText = plan.zeiten.zuText(),
+                    zeiten = plan.zeiten,
                     wochentage = plan.wochentage,
                 )
                 is Zeitplan.Intervall -> basis.copy(
                     typ = ZeitplanTyp.INTERVALL,
-                    intervallStundenText = plan.alleNStunden.toString(),
+                    intervallStunden = plan.alleNStunden,
                     fensterVon = plan.von,
                     fensterBis = plan.bis,
                     wochentage = plan.wochentage,
                 )
                 is Zeitplan.Tagesziel -> basis.copy(
                     typ = ZeitplanTyp.TAGESZIEL,
-                    zielAnzahlText = plan.anzahl.toString(),
+                    zielAnzahl = plan.anzahl,
                     wochentage = plan.wochentage,
-                    zeitenText = plan.anstossZeiten.zuText(),
+                    zeiten = plan.anstossZeiten,
                 )
                 is Zeitplan.Wochenziel -> basis.copy(
                     typ = ZeitplanTyp.WOCHENZIEL,
-                    zielAnzahlText = plan.anzahl.toString(),
+                    zielAnzahl = plan.anzahl,
                     anstoss = plan.anstoss,
                 )
             }
         }
-
-        private fun List<LocalTime>.zuText(): String = joinToString(", ") { it.toString() }
     }
 }
