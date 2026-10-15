@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..700,0..1,0&amp;display=block">
+<style>
+body{margin:0;background:#e7e5ec;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+button,input{font-family:inherit}
+a{color:oklch(0.52 0.22 285)}a:hover{color:oklch(0.42 0.2 285)}
+*::-webkit-scrollbar{display:none}
+[data-theme="dark"]{--bg:#100f15!important;--surface:#1b1923!important;--surface2:#26232f!important;--ink:#f3f1f8!important;--ink2:#a6a2b5!important;--line:rgba(255,255,255,.09)!important;--accent:oklch(0.70 0.17 285)!important;--onAccent:oklch(0.22 0.09 285)!important;--hero:oklch(0.46 0.2 285)!important;--accentSoft:oklch(0.31 0.08 285)!important;--onAccentSoft:oklch(0.88 0.07 285)!important;--coral:oklch(0.72 0.16 28)!important;--coralSoft:oklch(0.31 0.07 28)!important;--green:oklch(0.74 0.14 155)!important;--greenSoft:oklch(0.30 0.055 155)!important;--goldSoft:oklch(0.31 0.05 80)!important;--goldInk:oklch(0.86 0.12 85)!important;--inverse:#f3f1f8!important;--onInverse:#17151f!important;color-scheme:dark}
+</style>
+</helmet>
+<div style="min-height:100vh;box-sizing:border-box;padding:40px 24px 56px;display:flex;flex-direction:column;align-items:center;gap:28px">
+<div style="max-width:880px;width:100%;display:flex;flex-direction:column;gap:6px">
+<div style="font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:oklch(0.52 0.22 285)">DayOrganizer · Redesign</div>
+<div style="font-size:15px;line-height:1.5;color:#4a4757;text-wrap:pretty">Klickbarer Prototyp: Abhaken, Einlösen, Aktivität bearbeiten. Das Widget rechts nutzt denselben Zustand wie die App. Hell/Dunkel lässt sich unter Optionen umschalten.</div>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:48px;justify-content:center;align-items:flex-start">
+
+<div style="display:flex;flex-direction:column;align-items:center;gap:14px">
+<div style="width:400px;height:860px;border-radius:52px;padding:10px;background:#141318;box-shadow:0 30px 60px -20px rgba(30,20,60,.35),0 0 0 1px rgba(0,0,0,.2)">
+<div data-theme="{{ theme }}" style="--bg:#f6f5f9;--surface:#ffffff;--surface2:#efedf4;--ink:#17151f;--ink2:#5f5b6e;--line:rgba(23,21,31,.08);--accent:oklch(0.52 0.22 285);--onAccent:#ffffff;--hero:oklch(0.50 0.22 285);--accentSoft:oklch(0.94 0.035 285);--onAccentSoft:oklch(0.40 0.18 285);--coral:oklch(0.58 0.19 28);--coralSoft:oklch(0.95 0.03 28);--green:oklch(0.58 0.14 155);--greenSoft:oklch(0.95 0.04 155);--goldSoft:oklch(0.96 0.045 85);--goldInk:oklch(0.50 0.11 70);--inverse:#1d1b25;--onInverse:#ffffff;width:100%;height:100%;border-radius:42px;overflow:hidden;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;position:relative">
+<div style="height:40px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 26px 0 30px;font-size:14px;font-weight:600;color:var(--ink)">
+<span>11:40</span>
+<div style="width:22px;height:22px;border-radius:50%;background:#141318"></div>
+<div style="display:flex;gap:4px;font-family:'Material Symbols Rounded';font-size:17px;font-variation-settings:'FILL' 1"><span>signal_cellular_alt</span><span>wifi</span><span>battery_5_bar</span></div>
+</div>
+
+<div style="flex:1;position:relative;min-height:0">
+<div style="position:absolute;inset:0;overflow-y:auto;scrollbar-width:none">
+
+<sc-if value="{{ sHeute }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:14px;padding:8px 0 28px">
+<sc-if value="{{ warn }}" hint-placeholder-val="{{ true }}">
+<div style="margin:0 16px;display:flex;gap:12px;padding:14px;border-radius:20px;background:var(--goldSoft);color:var(--ink)">
+<span style="font-family:'Material Symbols Rounded';font-size:22px;color:var(--goldInk);font-variation-settings:'FILL' 1">battery_alert</span>
+<div style="flex:1;display:flex;flex-direction:column;gap:4px">
+<div style="font-size:14px;font-weight:700">Akkuoptimierung ist aktiv</div>
+<div style="font-size:13px;line-height:1.4;color:var(--ink2)">Das System kann Erinnerungen unterdrücken. Nimm DayOrganizer von der Optimierung aus.</div>
+<button onClick="{{ fixWarn }}" style="align-self:flex-start;margin-top:4px;border:0;background:none;padding:6px 0;font-size:13px;font-weight:700;color:var(--goldInk);cursor:pointer">Einstellung öffnen</button>
+</div>
+</div>
+</sc-if>
+<div style="display:flex;align-items:flex-end;justify-content:space-between;padding:6px 20px 0">
+<div style="display:flex;flex-direction:column;gap:2px">
+<span style="font-size:13px;font-weight:600;color:var(--ink2)">Samstag, 26. September</span>
+<span style="font-size:32px;font-weight:800;letter-spacing:-.02em">Heute</span>
+</div>
+<button onClick="{{ goBel }}" style="display:flex;align-items:center;gap:6px;height:40px;padding:0 14px 0 10px;border:0;border-radius:999px;background:var(--goldSoft);color:var(--goldInk);font-size:15px;font-weight:800;cursor:pointer;font-variant-numeric:tabular-nums">
+<span style="font-family:'Material Symbols Rounded';font-size:20px;font-variation-settings:'FILL' 1">star</span>{{ points }}</button>
+</div>
+
+<sc-if value="{{ hasHero }}" hint-placeholder-val="{{ true }}">
+<div style="margin:0 16px;border-radius:28px;padding:20px;display:flex;flex-direction:column;gap:18px;background:{{ hero.bg }};color:{{ hero.ink }}">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<span style="font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:6px 10px;border-radius:999px;background:{{ hero.chipBg }}">{{ hero.label }}</span>
+<span style="font-size:13px;font-weight:700;opacity:.9">{{ hero.pts }}</span>
+</div>
+<div style="display:flex;align-items:center;gap:14px">
+<div style="width:60px;height:60px;flex:none;border-radius:20px;display:grid;place-items:center;background:{{ hero.chipBg }}"><span style="font-family:'Material Symbols Rounded';font-size:32px;font-variation-settings:'FILL' 1">{{ hero.icon }}</span></div>
+<div style="display:flex;flex-direction:column;gap:4px;min-width:0">
+<span style="font-size:24px;font-weight:800;letter-spacing:-.015em;line-height:1.15;text-wrap:pretty">{{ hero.name }}</span>
+<span style="font-size:14px;font-weight:600;opacity:.85">{{ hero.sub }}</span>
+</div>
+</div>
+<div style="display:flex;gap:10px">
+<button onClick="{{ hero.onDone }}" style="flex:1;height:52px;border:0;border-radius:16px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:16px;font-weight:800;cursor:pointer;background:{{ hero.btnBg }};color:{{ hero.btnInk }}"><span style="font-family:'Material Symbols Rounded';font-size:22px">check</span>Erledigt</button>
+<button onClick="{{ hero.onSkip }}" style="height:52px;padding:0 18px;border-radius:16px;font-size:15px;font-weight:700;cursor:pointer;background:transparent;color:inherit;border:1.5px solid {{ hero.ghostLine }}">Auslassen</button>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ noHero }}" hint-placeholder-val="{{ false }}">
+<div style="margin:0 16px;border-radius:28px;padding:22px;display:flex;align-items:center;gap:14px;background:var(--greenSoft);color:var(--ink)">
+<div style="width:56px;height:56px;border-radius:18px;background:var(--green);color:#fff;display:grid;place-items:center"><span style="font-family:'Material Symbols Rounded';font-size:30px">done_all</span></div>
+<div style="display:flex;flex-direction:column;gap:3px"><span style="font-size:20px;font-weight:800">Alles erledigt</span><span style="font-size:14px;color:var(--ink2)">{{ bonusLine }}</span></div>
+</div>
+</sc-if>
+
+<div style="margin:0 16px;padding:16px;border-radius:24px;background:var(--surface);display:flex;align-items:center;gap:16px">
+<div style="position:relative;width:64px;height:64px;flex:none">
+<svg width="64" height="64" viewBox="0 0 64 64" style="transform:rotate(-90deg)"><circle cx="32" cy="32" r="27" fill="none" stroke="var(--surface2)" stroke-width="7"></circle><circle cx="32" cy="32" r="27" fill="none" stroke="var(--accent)" stroke-width="7" stroke-linecap="round" stroke-dasharray="{{ ringDash }}"></circle></svg>
+<div style="position:absolute;inset:0;display:grid;place-items:center;font-size:14px;font-weight:800;font-variant-numeric:tabular-nums">{{ doneCount }}/{{ totalCount }}</div>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:8px;min-width:0">
+<span style="font-size:15px;font-weight:700">Heute {{ doneCount }} von {{ totalCount }} erledigt</span>
+<div style="display:flex;flex-direction:column;gap:6px">
+<span style="font-size:13px;color:var(--ink2)">{{ rewardLine }}</span>
+<div style="height:6px;border-radius:3px;background:var(--surface2);overflow:hidden"><div style="height:100%;border-radius:3px;background:var(--accent);width:{{ rewardPct }}"></div></div>
+</div>
+</div>
+</div>
+
+<sc-for list="{{ sections }}" as="sec" hint-placeholder-count="3">
+<div style="display:flex;flex-direction:column;gap:8px;padding:0 16px">
+<div style="display:flex;align-items:center;gap:8px;padding:10px 4px 2px">
+<span style="font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:{{ sec.color }}">{{ sec.title }}</span>
+<span style="font-size:12px;font-weight:700;color:var(--ink2)">{{ sec.count }}</span>
+</div>
+<sc-for list="{{ sec.items }}" as="it" hint-placeholder-count="2">
+<div style="display:flex;align-items:center;gap:12px;padding:10px 8px 10px 10px;border-radius:20px;background:var(--surface);opacity:{{ it.opacity }}">
+<div style="width:44px;height:44px;flex:none;border-radius:14px;display:grid;place-items:center;background:{{ it.tileBg }};color:{{ it.tileInk }}"><span style="font-family:'Material Symbols Rounded';font-size:24px;font-variation-settings:'FILL' 1">{{ it.icon }}</span></div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+<span style="font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ it.name }}</span>
+<span style="font-size:13px;font-weight:600;color:{{ it.subColor }}">{{ it.sub }}</span>
+</div>
+<sc-if value="{{ it.open }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;gap:2px">
+<button onClick="{{ it.onSkip }}" title="Auslassen" style="width:44px;height:44px;border:0;border-radius:50%;background:transparent;color:var(--ink2);font-family:'Material Symbols Rounded';font-size:22px;cursor:pointer">skip_next</button>
+<button onClick="{{ it.onDone }}" title="Erledigt" style="width:44px;height:44px;border-radius:50%;border:2px solid var(--accent);background:transparent;color:var(--accent);font-family:'Material Symbols Rounded';font-size:22px;cursor:pointer">check</button>
+</div>
+</sc-if>
+<sc-if value="{{ it.closed }}" hint-placeholder-val="{{ false }}">
+<span style="display:flex;align-items:center;gap:4px;padding:6px 10px;margin-right:4px;border-radius:999px;font-size:12px;font-weight:700;background:{{ it.tileBg }};color:{{ it.tileInk }}"><span style="font-family:'Material Symbols Rounded';font-size:16px">{{ it.statusIcon }}</span>{{ it.statusText }}</span>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{ sAkt }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:10px;padding:14px 16px 110px">
+<div style="display:flex;flex-direction:column;gap:2px;padding:0 4px 8px">
+<span style="font-size:32px;font-weight:800;letter-spacing:-.02em">Aktivitäten</span>
+<span style="font-size:13px;font-weight:600;color:var(--ink2)">{{ actCount }}</span>
+</div>
+<sc-for list="{{ actRows }}" as="a" hint-placeholder-count="5">
+<div onClick="{{ a.onEdit }}" style="display:flex;align-items:center;gap:14px;padding:14px 8px 14px 14px;border-radius:22px;background:var(--surface);cursor:pointer">
+<div style="width:48px;height:48px;flex:none;border-radius:16px;display:grid;place-items:center;background:var(--accentSoft);color:var(--onAccentSoft)"><span style="font-family:'Material Symbols Rounded';font-size:26px;font-variation-settings:'FILL' 1">{{ a.icon }}</span></div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
+<span style="font-size:16px;font-weight:700">{{ a.name }}</span>
+<span style="font-size:13px;color:var(--ink2);line-height:1.35">{{ a.plan }}</span>
+<div style="display:flex;gap:6px;flex-wrap:wrap">
+<span style="display:flex;align-items:center;gap:3px;padding:3px 8px;border-radius:999px;background:var(--goldSoft);color:var(--goldInk);font-size:12px;font-weight:700"><span style="font-family:'Material Symbols Rounded';font-size:14px;font-variation-settings:'FILL' 1">star</span>{{ a.pts }}</span>
+<span style="display:flex;align-items:center;gap:3px;padding:3px 8px;border-radius:999px;background:var(--coralSoft);color:var(--coral);font-size:12px;font-weight:700"><span style="font-family:'Material Symbols Rounded';font-size:14px;font-variation-settings:'FILL' 1">local_fire_department</span>{{ a.serie }}</span>
+</div>
+</div>
+<button onClick="{{ a.onArchive }}" title="Archivieren" style="width:44px;height:44px;flex:none;border:0;border-radius:50%;background:transparent;color:var(--ink2);font-family:'Material Symbols Rounded';font-size:22px;cursor:pointer">archive</button>
+</div>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{ sBel }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:12px;padding:14px 16px 32px">
+<span style="font-size:32px;font-weight:800;letter-spacing:-.02em;padding:0 4px 4px">Belohnungen</span>
+<div style="border-radius:28px;padding:22px;background:var(--hero);color:#fff;display:flex;justify-content:space-between;align-items:flex-end">
+<div style="display:flex;flex-direction:column;gap:4px">
+<span style="font-size:13px;font-weight:700;opacity:.85">Dein Punktestand</span>
+<span style="font-size:48px;font-weight:800;letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums">{{ points }}</span>
+</div>
+<span style="font-family:'Material Symbols Rounded';font-size:44px;color:oklch(0.86 0.15 85);font-variation-settings:'FILL' 1">star</span>
+</div>
+<sc-for list="{{ rewardRows }}" as="r" hint-placeholder-count="3">
+<div style="display:flex;flex-direction:column;gap:14px;padding:16px;border-radius:24px;background:var(--surface)">
+<div style="display:flex;gap:14px;align-items:flex-start">
+<div style="width:48px;height:48px;flex:none;border-radius:16px;display:grid;place-items:center;background:var(--goldSoft);color:var(--goldInk)"><span style="font-family:'Material Symbols Rounded';font-size:26px;font-variation-settings:'FILL' 1">{{ r.icon }}</span></div>
+<div style="flex:1;display:flex;flex-direction:column;gap:3px;min-width:0">
+<span style="font-size:16px;font-weight:700">{{ r.name }}</span>
+<span style="font-size:13px;color:var(--ink2);line-height:1.35">{{ r.desc }}</span>
+</div>
+<span style="font-size:15px;font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums">{{ r.price }}</span>
+</div>
+<div style="height:8px;border-radius:4px;background:var(--surface2);overflow:hidden"><div style="height:100%;border-radius:4px;background:{{ r.barColor }};width:{{ r.pct }}"></div></div>
+<div style="display:flex;align-items:center;gap:10px">
+<span style="flex:1;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:{{ r.hintColor }}"><span style="font-family:'Material Symbols Rounded';font-size:18px">{{ r.hintIcon }}</span>{{ r.hint }}</span>
+<button onClick="{{ r.onArchive }}" title="Archivieren" style="width:44px;height:44px;border:0;border-radius:50%;background:transparent;color:var(--ink2);font-family:'Material Symbols Rounded';font-size:22px;cursor:pointer">archive</button>
+<button onClick="{{ r.onRedeem }}" style="height:44px;padding:0 18px;border:0;border-radius:14px;font-size:14px;font-weight:800;cursor:{{ r.cursor }};background:{{ r.btnBg }};color:{{ r.btnInk }}">Einlösen</button>
+</div>
+</div>
+</sc-for>
+<sc-if value="{{ hasHistory }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:0;padding:6px 4px 0">
+<span style="font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);padding:8px 0">Eingelöst</span>
+<sc-for list="{{ history }}" as="h" hint-placeholder-count="2">
+<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-top:1px solid var(--line);font-size:14px">
+<div style="display:flex;flex-direction:column;gap:2px"><span style="font-weight:700">{{ h.name }}</span><span style="font-size:12px;color:var(--ink2)">{{ h.date }}</span></div>
+<span style="font-weight:700;color:var(--ink2);font-variant-numeric:tabular-nums">−{{ h.price }}</span>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ sStat }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:12px;padding:14px 16px 32px">
+<span style="font-size:32px;font-weight:800;letter-spacing:-.02em;padding:0 4px 4px">Statistik</span>
+<div style="display:flex;gap:8px">
+<sc-for list="{{ ranges }}" as="rg" hint-placeholder-count="3">
+<button onClick="{{ rg.onClick }}" style="height:40px;padding:0 16px;border-radius:999px;font-size:14px;font-weight:700;cursor:pointer;background:{{ rg.bg }};color:{{ rg.ink }};border:1.5px solid {{ rg.line }}">{{ rg.label }}</button>
+</sc-for>
+</div>
+<div style="padding:16px;border-radius:24px;background:var(--surface);display:flex;flex-direction:column;gap:14px">
+<div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:16px;font-weight:700">Erledigt je Tag</span><span style="font-size:13px;font-weight:700;color:var(--accent)">{{ heatQuote }}</span></div>
+<div style="display:grid;grid-template-rows:repeat(7,auto);grid-auto-flow:column;justify-content:start;grid-template-columns:{{ heatCols }};gap:{{ heatGap }}">
+<sc-for list="{{ heat }}" as="c" hint-placeholder-count="35">
+<div style="aspect-ratio:1;border-radius:{{ c.r }};background:{{ c.bg }}"></div>
+</sc-for>
+</div>
+<div style="display:flex;align-items:center;justify-content:flex-end;gap:4px;font-size:11px;font-weight:600;color:var(--ink2)">
+<span style="margin-right:4px">weniger</span>
+<sc-for list="{{ legend }}" as="l" hint-placeholder-count="5"><div style="width:12px;height:12px;border-radius:3px;background:{{ l.bg }}"></div></sc-for>
+<span style="margin-left:4px">mehr</span>
+</div>
+</div>
+<div style="padding:16px;border-radius:24px;background:var(--surface);display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:16px;font-weight:700">Punkteverlauf</span><span style="font-size:13px;font-weight:700;color:var(--ink2)">{{ chartMax }} max.</span></div>
+<svg viewBox="0 0 320 120" preserveAspectRatio="none" style="width:100%;height:130px;display:block">
+<path d="{{ chartArea }}" fill="var(--accentSoft)"></path>
+<path d="{{ chartLine }}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path>
+</svg>
+<div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600;color:var(--ink2)"><span>{{ chartFrom }}</span><span>heute</span></div>
+</div>
+<sc-for list="{{ statRows }}" as="s" hint-placeholder-count="4">
+<div style="padding:14px 16px;border-radius:22px;background:var(--surface);display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;align-items:center;gap:12px">
+<div style="width:40px;height:40px;flex:none;border-radius:13px;display:grid;place-items:center;background:var(--accentSoft);color:var(--onAccentSoft)"><span style="font-family:'Material Symbols Rounded';font-size:22px;font-variation-settings:'FILL' 1">{{ s.icon }}</span></div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font-size:15px;font-weight:700">{{ s.name }}</span><span style="font-size:12px;color:var(--ink2)">{{ s.meta }}</span></div>
+<span style="font-size:22px;font-weight:800;font-variant-numeric:tabular-nums">{{ s.quote }}</span>
+</div>
+<div style="height:6px;border-radius:3px;background:var(--surface2);overflow:hidden"><div style="height:100%;border-radius:3px;background:var(--accent);width:{{ s.quote }}"></div></div>
+<div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--ink2)"><span style="font-family:'Material Symbols Rounded';font-size:16px;color:var(--coral);font-variation-settings:'FILL' 1">local_fire_department</span>{{ s.serie }}</div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{ sOpt }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:12px;padding:14px 16px 32px">
+<span style="font-size:32px;font-weight:800;letter-spacing:-.02em;padding:0 4px 4px">Optionen</span>
+<sc-if value="{{ warn }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;gap:12px;padding:14px;border-radius:20px;background:var(--goldSoft)">
+<span style="font-family:'Material Symbols Rounded';font-size:22px;color:var(--goldInk);font-variation-settings:'FILL' 1">battery_alert</span>
+<div style="flex:1;display:flex;flex-direction:column;gap:4px">
+<div style="font-size:14px;font-weight:700">Akkuoptimierung ist aktiv</div>
+<div style="font-size:13px;line-height:1.4;color:var(--ink2)">Das System kann Erinnerungen unterdrücken. Nimm DayOrganizer von der Optimierung aus.</div>
+<button onClick="{{ fixWarn }}" style="align-self:flex-start;margin-top:4px;border:0;background:none;padding:6px 0;font-size:13px;font-weight:700;color:var(--goldInk);cursor:pointer">Einstellung öffnen</button>
+</div>
+</div>
+</sc-if>
+<span style="font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);padding:8px 4px 0">Punkte</span>
+<div style="border-radius:22px;background:var(--surface);display:flex;flex-direction:column">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 12px 14px 16px">
+<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:15px;font-weight:700">Tagesbonus</span><span style="font-size:12px;color:var(--ink2)">wenn alles erledigt ist</span></div>
+<div style="display:flex;align-items:center;gap:2px;background:var(--surface2);border-radius:999px;padding:3px">
+<button onClick="{{ bonusDec }}" style="width:40px;height:40px;border:0;border-radius:50%;background:var(--surface);color:var(--ink);font-family:'Material Symbols Rounded';font-size:20px;cursor:pointer">remove</button>
+<span style="min-width:40px;text-align:center;font-size:16px;font-weight:800;font-variant-numeric:tabular-nums">{{ bonus }}</span>
+<button onClick="{{ bonusInc }}" style="width:40px;height:40px;border:0;border-radius:50%;background:var(--surface);color:var(--ink);font-family:'Material Symbols Rounded';font-size:20px;cursor:pointer">add</button>
+</div>
+</div>
+<div style="height:1px;background:var(--line);margin:0 16px"></div>
+<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 12px 14px 16px">
+<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:15px;font-weight:700">Kulanzfenster</span><span style="font-size:12px;color:var(--ink2)">Standard in Minuten</span></div>
+<div style="display:flex;align-items:center;gap:2px;background:var(--surface2);border-radius:999px;padding:3px">
+<button onClick="{{ kulanzDec }}" style="width:40px;height:40px;border:0;border-radius:50%;background:var(--surface);color:var(--ink);font-family:'Material Symbols Rounded';font-size:20px;cursor:pointer">remove</button>
+<span style="min-width:40px;text-align:center;font-size:16px;font-weight:800;font-variant-numeric:tabular-nums">{{ kulanz }}</span>
+<button onClick="{{ kulanzInc }}" style="width:40px;height:40px;border:0;border-radius:50%;background:var(--surface);color:var(--ink);font-family:'Material Symbols Rounded';font-size:20px;cursor:pointer">add</button>
+</div>
+</div>
+</div>
+<span style="font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);padding:8px 4px 0">Darstellung</span>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;border-radius:18px;background:var(--surface2)">
+<sc-for list="{{ themeSeg }}" as="t" hint-placeholder-count="2">
+<button onClick="{{ t.onClick }}" style="height:44px;border:0;border-radius:14px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:14px;font-weight:700;cursor:pointer;background:{{ t.bg }};color:{{ t.ink }}"><span style="font-family:'Material Symbols Rounded';font-size:18px">{{ t.icon }}</span>{{ t.label }}</button>
+</sc-for>
+</div>
+<span style="font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);padding:8px 4px 0">Backup</span>
+<div style="border-radius:22px;background:var(--surface);display:flex;flex-direction:column">
+<button onClick="{{ doExport }}" style="display:flex;align-items:center;gap:14px;padding:16px;border:0;background:transparent;color:var(--ink);text-align:left;cursor:pointer">
+<span style="width:40px;height:40px;border-radius:13px;display:grid;place-items:center;background:var(--accentSoft);color:var(--onAccentSoft);font-family:'Material Symbols Rounded';font-size:22px">download</span>
+<span style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:15px;font-weight:700">Backup speichern</span><span style="font-size:12px;color:var(--ink2)">dayorganizer-backup-2026-09-26.json</span></span>
+<span style="font-family:'Material Symbols Rounded';font-size:20px;color:var(--ink2)">chevron_right</span>
+</button>
+<div style="height:1px;background:var(--line);margin:0 16px"></div>
+<button onClick="{{ openImport }}" style="display:flex;align-items:center;gap:14px;padding:16px;border:0;background:transparent;color:var(--ink);text-align:left;cursor:pointer">
+<span style="width:40px;height:40px;border-radius:13px;display:grid;place-items:center;background:var(--accentSoft);color:var(--onAccentSoft);font-family:'Material Symbols Rounded';font-size:22px">upload</span>
+<span style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:15px;font-weight:700">Backup einlesen</span><span style="font-size:12px;color:var(--ink2)">ersetzt den aktuellen Bestand</span></span>
+<span style="font-family:'Material Symbols Rounded';font-size:20px;color:var(--ink2)">chevron_right</span>
+</button>
+</div>
+<span style="text-align:center;font-size:12px;color:var(--ink2);padding-top:10px">Läuft vollständig lokal · kein Konto, kein Server</span>
+</div>
+</sc-if>
+
+<sc-if value="{{ sEdit }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:18px;padding:4px 16px 32px">
+<div style="display:flex;align-items:center;gap:6px;margin-left:-8px">
+<button onClick="{{ closeEdit }}" style="width:44px;height:44px;border:0;border-radius:50%;background:transparent;color:var(--ink);font-family:'Material Symbols Rounded';font-size:24px;cursor:pointer">arrow_back</button>
+<span style="font-size:20px;font-weight:800">{{ editTitle }}</span>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<span style="font-size:13px;font-weight:700;color:var(--ink2)">Symbol</span>
+<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px">
+<sc-for list="{{ iconChoices }}" as="ic" hint-placeholder-count="12">
+<button onClick="{{ ic.onClick }}" style="aspect-ratio:1;border:0;border-radius:16px;display:grid;place-items:center;cursor:pointer;background:{{ ic.bg }};color:{{ ic.ink }};font-family:'Material Symbols Rounded';font-size:24px;font-variation-settings:'FILL' 1">{{ ic.icon }}</button>
+</sc-for>
+</div>
+</div>
+<label style="display:flex;flex-direction:column;gap:8px">
+<span style="font-size:13px;font-weight:700;color:var(--ink2)">Name</span>
+<input value="{{ draft.name }}" onChange="{{ setName }}" placeholder="z. B. Tabletten" style="height:52px;box-sizing:border-box;padding:0 16px;border-radius:16px;background:var(--surface);color:var(--ink);font-size:16px;font-weight:600;outline:none;border:2px solid {{ nameBorder }}">
+</label>
+<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 10px 10px 16px;border-radius:18px;background:var(--surface)">
+<span style="font-size:15px;font-weight:700">Punkte je Erledigung</span>
+<div style="display:flex;align-items:center;gap:2px;background:var(--surface2);border-radius:999px;padding:3px">
+<button onClick="{{ ptsDec }}" style="width:40px;height:40px;border:0;border-radius:50%;background:var(--surface);color:var(--ink);font-family:'Material Symbols Rounded';font-size:20px;cursor:pointer">remove</button>
+<span style="min-width:36px;text-align:center;font-size:16px;font-weight:800;font-variant-numeric:tabular-nums">{{ draft.pts }}</span>
+<button onClick="{{ ptsInc }}" style="width:40px;height:40px;border:0;border-radius:50%;background:var(--surface);color:var(--ink);font-family:'Material Symbols Rounded';font-size:20px;cursor:pointer">add</button>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<span style="font-size:13px;font-weight:700;color:var(--ink2)">Zeitplan</span>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+<sc-for list="{{ typChoices }}" as="tc" hint-placeholder-count="4">
+<button onClick="{{ tc.onClick }}" style="display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:12px 14px;border-radius:16px;text-align:left;cursor:pointer;background:{{ tc.bg }};color:var(--ink);border:2px solid {{ tc.line }}">
+<span style="font-size:14px;font-weight:800;color:{{ tc.ink }}">{{ tc.t }}</span><span style="font-size:12px;color:var(--ink2)">{{ tc.s }}</span></button>
+</sc-for>
+</div>
+</div>
+<sc-if value="{{ showTage }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:8px">
+<span style="font-size:13px;font-weight:700;color:var(--ink2)">Wochentage</span>
+<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px">
+<sc-for list="{{ dayChips }}" as="dc" hint-placeholder-count="7">
+<button onClick="{{ dc.onClick }}" style="height:44px;border:0;border-radius:14px;font-size:13px;font-weight:800;cursor:pointer;background:{{ dc.bg }};color:{{ dc.ink }}">{{ dc.label }}</button>
+</sc-for>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ showZeiten }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:8px">
+<span style="font-size:13px;font-weight:700;color:var(--ink2)">Uhrzeiten</span>
+<div style="display:flex;flex-wrap:wrap;gap:8px">
+<sc-for list="{{ timeChips }}" as="tm" hint-placeholder-count="2">
+<span style="display:flex;align-items:center;gap:2px;height:40px;padding:0 4px 0 14px;border-radius:12px;background:var(--accentSoft);color:var(--onAccentSoft);font-size:15px;font-weight:800;font-variant-numeric:tabular-nums">{{ tm.t }}<button onClick="{{ tm.onRemove }}" style="width:32px;height:32px;border:0;border-radius:50%;background:transparent;color:inherit;font-family:'Material Symbols Rounded';font-size:18px;cursor:pointer">close</button></span>
+</sc-for>
+<span style="display:flex;align-items:center;gap:4px;height:40px;padding:0 4px 0 10px;border-radius:12px;border:1.5px dashed var(--line);background:var(--surface)">
+<input type="time" value="{{ newTime }}" onChange="{{ setNewTime }}" style="border:0;background:transparent;color:var(--ink);font-size:15px;font-weight:700;outline:none;width:84px">
+<button onClick="{{ addTime }}" style="width:32px;height:32px;border:0;border-radius:50%;background:var(--accent);color:var(--onAccent);font-family:'Material Symbols Rounded';font-size:18px;cursor:pointer">add</button>
+</span>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ showIntervall }}" hint-placeholder-val="{{ false }}">
+<div style="border-radius:18px;background:var(--surface);display:flex;flex-direction:column">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 10px 10px 16px">
+<span style="font-size:15px;font-weight:700">Alle wie viele Stunden</span>
+<div style="display:flex;align-items:center;gap:2px;background:var(--surface2);border-radius:999px;padding:3px">
+<button onClick="{{ ivDec }}" style="width:40px;height:40px;border:0;border-radius:50%;background:var(--surface);color:var(--ink);font-family:'Material Symbols Rounded';font-size:20px;cursor:pointer">remove</button>
+<span style="min-width:36px;text-align:center;font-size:16px;font-weight:800">{{ draft.intervall }}</span>
+<button onClick="{{ ivInc }}" style="width:40px;height:40px;border:0;border-radius:50%;background:var(--surface);color:var(--ink);font-family:'Material Symbols Rounded';font-size:20px;cursor:pointer">add</button>
+</div>
+</div>
+<div style="height:1px;background:var(--line);margin:0 16px"></div>
+<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 16px">
+<span style="font-size:15px;font-weight:700">Zeitfenster</span>
+<div style="display:flex;align-items:center;gap:6px;font-size:14px;color:var(--ink2)">
+<input type="time" value="{{ draft.von }}" onChange="{{ setVon }}" style="border:0;border-radius:10px;padding:8px;background:var(--surface2);color:var(--ink);font-size:14px;font-weight:700;outline:none">bis<input type="time" value="{{ draft.bis }}" onChange="{{ setBis }}" style="border:0;border-radius:10px;padding:8px;background:var(--surface2);color:var(--ink);font-size:14px;font-weight:700;outline:none">
+</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ showZiel }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 10px 10px 16px;border-radius:18px;background:var(--surface)">
+<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:15px;font-weight:700">Wie oft</span><span style="font-size:12px;color:var(--ink2)">{{ zielUnit }}</span></div>
+<div style="display:flex;align-items:center;gap:2px;background:var(--surface2);border-radius:999px;padding:3px">
+<button onClick="{{ zielDec }}" style="width:40px;height:40px;border:0;border-radius:50%;background:var(--surface);color:var(--ink);font-family:'Material Symbols Rounded';font-size:20px;cursor:pointer">remove</button>
+<span style="min-width:36px;text-align:center;font-size:16px;font-weight:800">{{ draft.ziel }}</span>
+<button onClick="{{ zielInc }}" style="width:40px;height:40px;border:0;border-radius:50%;background:var(--surface);color:var(--ink);font-family:'Material Symbols Rounded';font-size:20px;cursor:pointer">add</button>
+</div>
+</div>
+</sc-if>
+<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:16px;background:var(--surface2);font-size:13px;font-weight:600;color:var(--ink2)"><span style="font-family:'Material Symbols Rounded';font-size:18px">event_repeat</span>{{ draftPlan }}</div>
+<button onClick="{{ saveEdit }}" style="height:56px;border:0;border-radius:18px;background:var(--accent);color:var(--onAccent);font-size:16px;font-weight:800;cursor:pointer">Speichern</button>
+</div>
+</sc-if>
+
+</div>
+
+<sc-if value="{{ showFab }}" hint-placeholder-val="{{ false }}">
+<button onClick="{{ fab.onClick }}" style="position:absolute;right:16px;bottom:16px;height:56px;padding:0 20px 0 16px;border:0;border-radius:18px;display:flex;align-items:center;gap:8px;background:var(--accent);color:var(--onAccent);font-size:15px;font-weight:800;cursor:pointer;box-shadow:0 8px 20px -6px oklch(0.45 0.2 285 / .6)"><span style="font-family:'Material Symbols Rounded';font-size:24px">add</span>{{ fab.label }}</button>
+</sc-if>
+
+<sc-if value="{{ hasToast }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;left:16px;right:16px;bottom:16px;min-height:52px;box-sizing:border-box;padding:6px 6px 6px 16px;border-radius:16px;background:var(--inverse);color:var(--onInverse);display:flex;align-items:center;gap:8px;box-shadow:0 10px 30px -10px rgba(0,0,0,.4)">
+<span style="flex:1;font-size:14px;font-weight:600">{{ toastText }}</span>
+<sc-if value="{{ toastUndo }}" hint-placeholder-val="{{ false }}"><button onClick="{{ undo }}" style="height:40px;padding:0 12px;border:0;border-radius:10px;background:transparent;color:oklch(0.78 0.13 285);font-size:14px;font-weight:800;cursor:pointer">Rückgängig</button></sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ dialog }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;background:rgba(10,8,20,.45);display:flex;align-items:center;justify-content:center;padding:24px">
+<div style="width:100%;border-radius:28px;background:var(--surface);padding:24px;display:flex;flex-direction:column;gap:14px">
+<span style="width:48px;height:48px;border-radius:16px;display:grid;place-items:center;background:var(--coralSoft);color:var(--coral);font-family:'Material Symbols Rounded';font-size:26px">upload_file</span>
+<span style="font-size:22px;font-weight:800">Backup importieren?</span>
+<span style="font-size:14px;line-height:1.5;color:var(--ink2)">Dieses Backup ist vom 19.09.2026 18:42 und enthält 6 Aktivitäten. Der aktuelle Bestand wird dabei vollständig ersetzt.</span>
+<div style="display:flex;justify-content:flex-end;gap:8px;padding-top:6px">
+<button onClick="{{ closeDialog }}" style="height:44px;padding:0 16px;border:0;border-radius:14px;background:transparent;color:var(--ink);font-size:14px;font-weight:700;cursor:pointer">Abbrechen</button>
+<button onClick="{{ confirmImport }}" style="height:44px;padding:0 18px;border:0;border-radius:14px;background:var(--coral);color:#fff;font-size:14px;font-weight:800;cursor:pointer">Importieren</button>
+</div>
+</div>
+</div>
+</sc-if>
+</div>
+
+<sc-if value="{{ showNav }}" hint-placeholder-val="{{ true }}">
+<div style="flex:none;display:grid;grid-template-columns:repeat(5,1fr);padding:10px 4px 6px;background:var(--surface);border-top:1px solid var(--line)">
+<sc-for list="{{ tabs }}" as="tb" hint-placeholder-count="5">
+<button onClick="{{ tb.onClick }}" style="border:0;background:transparent;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;padding:0;min-width:0;color:{{ tb.ink }}">
+<span style="width:60px;height:32px;border-radius:16px;display:grid;place-items:center;background:{{ tb.pill }}"><span style="font-family:'Material Symbols Rounded';font-size:24px;font-variation-settings:'FILL' {{ tb.fill }}">{{ tb.icon }}</span></span>
+<span style="font-size:12px;font-weight:{{ tb.weight }};max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ tb.label }}</span>
+</button>
+</sc-for>
+</div>
+</sc-if>
+<div style="height:22px;flex:none;display:grid;place-items:center;background:{{ gestureBg }}"><div style="width:120px;height:4px;border-radius:2px;background:var(--ink);opacity:.35"></div></div>
+</div>
+</div>
+<span style="font-size:13px;font-weight:600;color:#6b6778">App · klickbar</span>
+</div>
+
+<sc-if value="{{ showWidget }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;align-items:center;gap:14px">
+<div style="width:400px;height:860px;border-radius:52px;padding:10px;background:#141318;box-shadow:0 30px 60px -20px rgba(30,20,60,.35),0 0 0 1px rgba(0,0,0,.2)">
+<div data-theme="{{ theme }}" style="--bg:#f6f5f9;--surface:#ffffff;--surface2:#efedf4;--ink:#17151f;--ink2:#5f5b6e;--line:rgba(23,21,31,.08);--accent:oklch(0.52 0.22 285);--onAccent:#ffffff;--hero:oklch(0.50 0.22 285);--accentSoft:oklch(0.94 0.035 285);--onAccentSoft:oklch(0.40 0.18 285);--coral:oklch(0.58 0.19 28);--coralSoft:oklch(0.95 0.03 28);--green:oklch(0.58 0.14 155);--greenSoft:oklch(0.95 0.04 155);--goldSoft:oklch(0.96 0.045 85);--goldInk:oklch(0.50 0.11 70);width:100%;height:100%;border-radius:42px;overflow:hidden;position:relative;display:flex;flex-direction:column;background:repeating-linear-gradient(135deg,oklch(0.42 0.12 285) 0 14px,oklch(0.46 0.13 285) 14px 28px);color:#fff">
+<div style="height:40px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 26px 0 30px;font-size:14px;font-weight:600">
+<span>11:40</span><div style="width:22px;height:22px;border-radius:50%;background:#141318"></div>
+<div style="display:flex;gap:4px;font-family:'Material Symbols Rounded';font-size:17px;font-variation-settings:'FILL' 1"><span>signal_cellular_alt</span><span>wifi</span><span>battery_5_bar</span></div>
+</div>
+<div style="padding:36px 28px 28px;display:flex;flex-direction:column;gap:2px">
+<span style="font-size:64px;font-weight:300;letter-spacing:-.03em;line-height:1">11:40</span>
+<span style="font-size:15px;font-weight:600;opacity:.9">Sa., 26. Sept.</span>
+</div>
+<div style="margin:0 16px;border-radius:28px;background:var(--surface);color:var(--ink);padding:16px;display:flex;flex-direction:column;gap:10px;box-shadow:0 12px 30px -12px rgba(0,0,0,.4)">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<div style="display:flex;align-items:center;gap:8px"><span style="width:28px;height:28px;border-radius:9px;display:grid;place-items:center;background:var(--accent);color:var(--onAccent);font-family:'Material Symbols Rounded';font-size:18px;font-variation-settings:'FILL' 1">check_circle</span><span style="font-size:15px;font-weight:800">Heute</span><span style="font-size:13px;font-weight:600;color:var(--ink2)">{{ doneCount }}/{{ totalCount }}</span></div>
+<span style="display:flex;align-items:center;gap:4px;padding:4px 10px 4px 8px;border-radius:999px;background:var(--goldSoft);color:var(--goldInk);font-size:13px;font-weight:800"><span style="font-family:'Material Symbols Rounded';font-size:16px;font-variation-settings:'FILL' 1">star</span>{{ points }}</span>
+</div>
+<sc-for list="{{ widgetItems }}" as="w" hint-placeholder-count="4">
+<button onClick="{{ w.onTap }}" style="display:flex;align-items:center;gap:10px;padding:8px 8px 8px 10px;border:0;border-radius:16px;background:var(--surface2);color:var(--ink);text-align:left;cursor:pointer">
+<span style="font-family:'Material Symbols Rounded';font-size:20px;color:{{ w.ink }};font-variation-settings:'FILL' 1">{{ w.icon }}</span>
+<span style="flex:1;min-width:0;display:flex;flex-direction:column"><span style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ w.name }}</span><span style="font-size:12px;font-weight:600;color:{{ w.subColor }}">{{ w.sub }}</span></span>
+<span style="width:30px;height:30px;border-radius:50%;border:2px solid var(--accent);color:var(--accent);display:grid;place-items:center;font-family:'Material Symbols Rounded';font-size:18px">check</span>
+</button>
+</sc-for>
+<sc-if value="{{ hasMore }}" hint-placeholder-val="{{ true }}"><span style="font-size:12px;font-weight:700;color:var(--ink2);padding:0 4px">{{ moreText }}</span></sc-if>
+<sc-if value="{{ widgetEmpty }}" hint-placeholder-val="{{ false }}"><span style="font-size:14px;font-weight:700;color:var(--green);padding:8px 4px">Alles erledigt für heute</span></sc-if>
+</div>
+<div style="flex:1"></div>
+<div style="margin:0 auto 18px;font:600 11px ui-monospace,Menlo,monospace;letter-spacing:.06em;opacity:.7">HINTERGRUNDBILD</div>
+<div style="height:22px;flex:none;display:grid;place-items:center"><div style="width:120px;height:4px;border-radius:2px;background:#fff;opacity:.6"></div></div>
+</div>
+</div>
+<span style="font-size:13px;font-weight:600;color:#6b6778">Homescreen-Widget · antippen hakt ab</span>
+</div>
+</sc-if>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;hell&quot;,&quot;dunkel&quot;],&quot;default&quot;:&quot;hell&quot;,&quot;tsType&quot;:&quot;'hell'|'dunkel'&quot;},&quot;heroStil&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Fläche&quot;,&quot;Sanft&quot;],&quot;default&quot;:&quot;Fläche&quot;,&quot;tsType&quot;:&quot;'Fläche'|'Sanft'&quot;},&quot;showWidget&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+const DAYS = ['Mo','Di','Mi','Do','Fr','Sa','So'];
+const NOW = 11 * 60 + 40;
+const ALL = [true,true,true,true,true,true,true];
+const toMin = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+const rng = seed => { let s = seed; return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; }; };
+const ICONS = ['pill','medication','water_drop','fitness_center','menu_book','directions_walk','self_improvement','bedtime','restaurant','spa','music_note','cleaning_services'];
+const TYPES = [
+  { id: 'feste', t: 'Feste Zeiten', s: 'z. B. 8:00 und 20:00' },
+  { id: 'intervall', t: 'Intervall', s: 'alle paar Stunden' },
+  { id: 'tag', t: 'Mal pro Tag', s: 'ohne feste Uhrzeit' },
+  { id: 'woche', t: 'Mal pro Woche', s: 'z. B. 3× Sport' },
+];
+const TABS = [
+  { id: 'heute', label: 'Heute', icon: 'check_circle' },
+  { id: 'akt', label: 'Aktivitäten', icon: 'format_list_bulleted' },
+  { id: 'bel', label: 'Belohnung', icon: 'redeem' },
+  { id: 'stat', label: 'Statistik', icon: 'insights' },
+  { id: 'opt', label: 'Optionen', icon: 'tune' },
+];
+const LEVELS = ['var(--surface2)','color-mix(in oklch, var(--accent) 28%, var(--surface2))','color-mix(in oklch, var(--accent) 52%, var(--surface2))','color-mix(in oklch, var(--accent) 76%, var(--surface2))','var(--accent)'];
+
+function tageText(t) {
+  if (t.every(Boolean)) return 'Täglich';
+  if (t.slice(0,5).every(Boolean) && !t[5] && !t[6]) return 'Mo–Fr';
+  const l = DAYS.filter((_, i) => t[i]);
+  return l.length ? l.join(', ') : 'Keine Tage';
+}
+function planText(a) {
+  const tt = tageText(a.tage);
+  if (a.typ === 'feste') return `${tt} · ${a.zeiten.length ? a.zeiten.join(', ') : 'keine Uhrzeit'}`;
+  if (a.typ === 'intervall') return `${tt} · alle ${a.intervall} Std. von ${a.von} bis ${a.bis}`;
+  if (a.typ === 'tag') return `${a.ziel}× täglich${a.tage.every(Boolean) ? '' : ' · ' + tt}${a.zeiten.length ? ' · Erinnerung ' + a.zeiten.join(', ') : ''}`;
+  return `${a.ziel}× pro Woche`;
+}
+
+class Component extends DCLogic {
+  state = {
+    tab: 'heute', edit: false, draft: null, err: false, theme: null, points: 240,
+    acts: [
+      { id: 1, name: 'Tabletten', icon: 'pill', pts: 5, typ: 'feste', tage: [...ALL], zeiten: ['08:00','20:00'], intervall: 3, von: '08:00', bis: '22:00', ziel: 1, serie: 9, laengste: 21, erledigt: 56, verpasst: 2 },
+      { id: 2, name: 'Medizin zum Mittagessen', icon: 'medication', pts: 5, typ: 'feste', tage: [...ALL], zeiten: ['12:30'], intervall: 3, von: '08:00', bis: '22:00', ziel: 1, serie: 9, laengste: 14, erledigt: 28, verpasst: 1 },
+      { id: 3, name: 'Wasser trinken', icon: 'water_drop', pts: 2, typ: 'intervall', tage: [...ALL], zeiten: [], intervall: 3, von: '08:00', bis: '22:00', ziel: 1, serie: 4, laengste: 12, erledigt: 118, verpasst: 17 },
+      { id: 4, name: 'Sport', icon: 'fitness_center', pts: 20, typ: 'woche', tage: [...ALL], zeiten: [], intervall: 3, von: '08:00', bis: '22:00', ziel: 3, serie: 3, laengste: 6, erledigt: 11, verpasst: 2, wochen: true },
+      { id: 5, name: 'Lesen', icon: 'menu_book', pts: 10, typ: 'tag', tage: [...ALL], zeiten: [], intervall: 3, von: '08:00', bis: '22:00', ziel: 1, serie: 5, laengste: 18, erledigt: 24, verpasst: 6 },
+      { id: 6, name: 'Spaziergang', icon: 'directions_walk', pts: 8, typ: 'tag', tage: [...ALL], zeiten: [], intervall: 3, von: '08:00', bis: '22:00', ziel: 2, serie: 2, laengste: 9, erledigt: 41, verpasst: 13 },
+    ],
+    dues: [
+      { id: 1, aid: 1, time: '08:00', soll: 1, ist: 1, status: 'erledigt' },
+      { id: 2, aid: 3, time: '08:00', soll: 1, ist: 1, status: 'erledigt' },
+      { id: 3, aid: 3, time: '11:00', soll: 1, ist: 0, status: 'offen' },
+      { id: 4, aid: 2, time: '12:30', soll: 1, ist: 0, status: 'offen' },
+      { id: 5, aid: 5, time: null, soll: 1, ist: 0, status: 'offen' },
+      { id: 6, aid: 6, time: null, soll: 2, ist: 1, status: 'offen' },
+      { id: 7, aid: 4, time: null, soll: 3, ist: 1, status: 'offen', woche: true },
+      { id: 8, aid: 3, time: '14:00', soll: 1, ist: 0, status: 'offen' },
+      { id: 9, aid: 3, time: '17:00', soll: 1, ist: 0, status: 'offen' },
+      { id: 10, aid: 1, time: '20:00', soll: 1, ist: 0, status: 'offen' },
+    ],
+    rewards: [
+      { id: 1, name: 'Neues Buch', desc: 'Eins von der Wunschliste', icon: 'auto_stories', price: 150, cond: null },
+      { id: 2, name: 'Kinoabend', desc: 'Mit Popcorn, ohne schlechtes Gewissen', icon: 'movie', price: 300, cond: null },
+      { id: 3, name: 'Sushi bestellen', desc: 'Frühestens ab 01.10.2026', icon: 'ramen_dining', price: 200, cond: { typ: 'datum' } },
+      { id: 4, name: 'Wellness-Tag', desc: 'Mindestserie: 14 Tage Tabletten', icon: 'spa', price: 800, cond: { typ: 'serie', aid: 1, n: 14 } },
+    ],
+    history: [
+      { id: 1, name: 'Eis essen', price: 80, date: '19.09.2026' },
+      { id: 2, name: 'Serienabend', price: 120, date: '12.09.2026' },
+    ],
+    warn: true, toast: null, undo: null, range: 30, bonus: 15, kulanz: 30, dialog: false, newTime: '12:00',
+  };
+
+  componentWillUnmount() { clearTimeout(this._t); }
+  act(id) { return this.state.acts.find(a => a.id === id); }
+  snap() { const { dues, points, acts, history, rewards } = this.state; return { dues, points, acts, history, rewards }; }
+  toast(text, undo) {
+    clearTimeout(this._t);
+    this.setState({ toast: { text, undo: !!undo } });
+    this._t = setTimeout(() => this.setState({ toast: null }), 3800);
+  }
+  group(d) {
+    if (d.status !== 'offen') return 'done';
+    if (!d.time) return 'jetzt';
+    const t = toMin(d.time);
+    if (t < NOW - this.state.kulanz) return 'ueber';
+    if (t <= NOW + 60) return 'jetzt';
+    return 'spaeter';
+  }
+  erledigen(id) {
+    const s = this.snap();
+    const d = this.state.dues.find(x => x.id === id), a = this.act(d.aid);
+    if (!a || d.status !== 'offen') return;
+    const ist = d.ist + 1;
+    const dues = this.state.dues.map(x => x.id === id ? { ...x, ist, status: ist >= x.soll ? 'erledigt' : 'offen' } : x);
+    const allDone = dues.every(x => x.status !== 'offen');
+    const gain = a.pts + (allDone ? this.state.bonus : 0);
+    this.setState({ dues, points: this.state.points + gain, undo: s });
+    this.toast(allDone ? `+${gain} Punkte · inkl. Tagesbonus` : `+${a.pts} Punkte · ${a.name}`, true);
+  }
+  auslassen(id) {
+    const s = this.snap();
+    const d = this.state.dues.find(x => x.id === id), a = this.act(d.aid);
+    this.setState({ dues: this.state.dues.map(x => x.id === id ? { ...x, status: 'ausgelassen' } : x), undo: s });
+    this.toast(`${a ? a.name : 'Eintrag'} ausgelassen`, true);
+  }
+  undo() { if (this.state.undo) { clearTimeout(this._t); this.setState({ ...this.state.undo, undo: null, toast: null }); } }
+  hindernis(r) {
+    if (r.cond && r.cond.typ === 'datum') return 'frueh';
+    if (r.cond && r.cond.typ === 'serie') { const a = this.act(r.cond.aid); if (!a || a.serie < r.cond.n) return 'serie'; }
+    if (this.state.points < r.price) return 'punkte';
+    return null;
+  }
+  redeem(r) {
+    if (this.hindernis(r)) return;
+    const s = this.snap();
+    this.setState({ points: this.state.points - r.price, history: [{ id: Date.now(), name: r.name, price: r.price, date: '26.09.2026' }, ...this.state.history], undo: s });
+    this.toast(`${r.name} eingelöst · −${r.price} Punkte`, true);
+  }
+  openEdit(id) {
+    const a = id ? this.act(id) : { id: 0, name: '', icon: 'self_improvement', pts: 5, typ: 'feste', tage: [...ALL], zeiten: ['08:00'], intervall: 3, von: '08:00', bis: '22:00', ziel: 1, serie: 0, laengste: 0, erledigt: 0, verpasst: 0 };
+    this.setState({ edit: true, err: false, toast: null, draft: { ...a, tage: [...a.tage], zeiten: [...a.zeiten] } });
+  }
+  dr(patch) { this.setState(s => ({ draft: { ...s.draft, ...patch } })); }
+  save() {
+    const d = this.state.draft;
+    if (!d.name.trim()) { this.setState({ err: true }); return; }
+    const acts = d.id ? this.state.acts.map(a => a.id === d.id ? d : a) : [...this.state.acts, { ...d, id: Date.now() }];
+    this.setState({ acts, edit: false, draft: null, tab: 'akt' });
+    this.toast(d.id ? 'Änderungen gespeichert' : 'Aktivität angelegt');
+  }
+
+  renderVals() {
+    const st = this.state;
+    const theme = st.theme || (this.props.theme === 'dunkel' ? 'dark' : 'light');
+    const heroSoft = this.props.heroStil === 'Sanft';
+    const vis = st.dues.filter(d => this.act(d.aid));
+
+    const mk = d => {
+      const a = this.act(d.aid), g = this.group(d);
+      const done = d.status === 'erledigt', skipped = d.status === 'ausgelassen';
+      const cnt = d.woche ? `${d.ist} von ${d.soll} diese Woche` : `${d.ist} von ${d.soll} heute`;
+      let sub = d.time ? (g === 'ueber' ? `${d.time} · überfällig` : d.time) : cnt;
+      if (d.time && d.soll > 1) sub += ' · ' + cnt;
+      return {
+        key: d.id, name: a.name, icon: a.icon, sub, g, pts: `+${a.pts} Punkte`, time: d.time, soll: d.soll, ist: d.ist, woche: d.woche,
+        open: d.status === 'offen', closed: d.status !== 'offen',
+        opacity: skipped ? '.6' : '1',
+        tileBg: g === 'ueber' ? 'var(--coralSoft)' : done ? 'var(--greenSoft)' : skipped ? 'var(--surface2)' : 'var(--accentSoft)',
+        tileInk: g === 'ueber' ? 'var(--coral)' : done ? 'var(--green)' : skipped ? 'var(--ink2)' : 'var(--onAccentSoft)',
+        subColor: g === 'ueber' ? 'var(--coral)' : 'var(--ink2)',
+        statusIcon: done ? 'check' : 'skip_next', statusText: done ? 'Erledigt' : 'Ausgelassen',
+        onDone: () => this.erledigen(d.id), onSkip: () => this.auslassen(d.id),
+      };
+    };
+    const byTime = (x, y) => (x.time ? toMin(x.time) : 9999) - (y.time ? toMin(y.time) : 9999);
+    const all = vis.map(mk);
+    const G = k => all.filter(i => i.g === k).sort(byTime);
+    const ueber = G('ueber'), jetzt = G('jetzt'), spaeter = G('spaeter'), done = all.filter(i => i.g === 'done').sort(byTime);
+    const heroItem = ueber[0] || jetzt[0] || spaeter[0] || null;
+    const strip = l => heroItem ? l.filter(i => i.key !== heroItem.key) : l;
+    const sections = [
+      { title: 'Überfällig', items: strip(ueber), color: 'var(--coral)' },
+      { title: 'Jetzt dran', items: strip(jetzt), color: 'var(--accent)' },
+      { title: 'Später heute', items: strip(spaeter), color: 'var(--ink2)' },
+      { title: 'Erledigt', items: done, color: 'var(--green)' },
+    ].filter(s => s.items.length).map(s => ({ ...s, count: String(s.items.length) }));
+
+    let hero = null;
+    if (heroItem) {
+      const over = heroItem.g === 'ueber';
+      const mins = heroItem.time ? toMin(heroItem.time) - NOW : 0;
+      const label = over ? `Überfällig · ${heroItem.time}` : heroItem.time ? (heroItem.g === 'jetzt' ? `Als Nächstes · ${heroItem.time}` : `Später · ${heroItem.time}`) : 'Jetzt dran';
+      const sub = heroItem.time
+        ? (over ? `Seit ${-mins} Min. fällig` : mins > 0 ? `in ${Math.floor(mins / 60) ? Math.floor(mins / 60) + ' Std. ' : ''}${mins % 60} Min.` : 'Jetzt fällig')
+        : (heroItem.woche ? `${heroItem.ist} von ${heroItem.soll} diese Woche` : `${heroItem.ist} von ${heroItem.soll} heute`);
+      const solid = over ? 'oklch(0.58 0.19 28)' : 'var(--hero)';
+      hero = heroSoft && !over
+        ? { bg: 'var(--accentSoft)', ink: 'var(--onAccentSoft)', chipBg: 'color-mix(in oklch, var(--accent) 16%, transparent)', btnBg: 'var(--accent)', btnInk: 'var(--onAccent)', ghostLine: 'color-mix(in oklch, var(--accent) 40%, transparent)' }
+        : heroSoft && over
+        ? { bg: 'var(--coralSoft)', ink: 'var(--coral)', chipBg: 'color-mix(in oklch, var(--coral) 16%, transparent)', btnBg: 'var(--coral)', btnInk: '#fff', ghostLine: 'color-mix(in oklch, var(--coral) 40%, transparent)' }
+        : { bg: solid, ink: '#fff', chipBg: 'rgba(255,255,255,.18)', btnBg: '#fff', btnInk: over ? 'oklch(0.50 0.19 28)' : 'oklch(0.45 0.22 285)', ghostLine: 'rgba(255,255,255,.45)' };
+      Object.assign(hero, { label, sub, name: heroItem.name, icon: heroItem.icon, pts: heroItem.pts, onDone: heroItem.onDone, onSkip: heroItem.onSkip });
+    }
+
+    const totalCount = vis.length, doneCount = vis.filter(d => d.status === 'erledigt').length;
+    const circ = 2 * Math.PI * 27;
+    const ringDash = `${(totalCount ? doneCount / totalCount : 0) * circ} ${circ}`;
+
+    const free = st.rewards.filter(r => !r.cond || this.hindernis(r) === 'punkte' || this.hindernis(r) === null);
+    const target = free.filter(r => r.price > st.points).sort((a, b) => a.price - b.price)[0];
+    let rewardLine = '', rewardPct = '0%';
+    if (target) { rewardLine = `Noch ${target.price - st.points} Punkte bis ${target.name}`; rewardPct = Math.round(st.points / target.price * 100) + '%'; }
+    else if (free[0]) { rewardLine = `Punkte für ${free[0].name} reichen bereits`; rewardPct = '100%'; }
+
+    const actRows = st.acts.map(a => ({
+      name: a.name, icon: a.icon, plan: planText(a), pts: `${a.pts} Pkt`,
+      serie: a.wochen ? `${a.serie} Wochen` : `${a.serie} Tage`,
+      onEdit: () => this.openEdit(a.id),
+      onArchive: e => { e.stopPropagation(); const s = this.snap(); this.setState({ acts: this.state.acts.filter(x => x.id !== a.id), undo: s }); this.toast(`${a.name} archiviert`, true); },
+    }));
+
+    const rewardRows = st.rewards.map(r => {
+      const h = this.hindernis(r);
+      const ok = !h;
+      const hint = h === 'punkte' ? `Noch ${r.price - st.points} Punkte nötig` : h === 'serie' ? 'Die geforderte Serie ist noch nicht erreicht' : h === 'frueh' ? 'Noch nicht freigeschaltet' : 'Bereit zum Einlösen';
+      return {
+        name: r.name, desc: r.desc, icon: r.icon, price: `${r.price} Pkt`,
+        pct: Math.min(100, Math.round(st.points / r.price * 100)) + '%',
+        barColor: ok ? 'var(--green)' : 'var(--accent)',
+        hint, hintIcon: h === 'punkte' ? 'hourglass_top' : h === 'serie' ? 'local_fire_department' : h === 'frueh' ? 'lock_clock' : 'check_circle',
+        hintColor: ok ? 'var(--green)' : 'var(--ink2)',
+        btnBg: ok ? 'var(--accent)' : 'var(--surface2)', btnInk: ok ? 'var(--onAccent)' : 'var(--ink2)', cursor: ok ? 'pointer' : 'not-allowed',
+        onRedeem: () => this.redeem(r),
+        onArchive: () => { const s = this.snap(); this.setState({ rewards: this.state.rewards.filter(x => x.id !== r.id), undo: s }); this.toast(`${r.name} archiviert`, true); },
+      };
+    });
+
+    const weeks = Math.ceil(st.range / 7);
+    const R = rng(st.range + 7);
+    const heat = Array.from({ length: weeks * 7 }, (_, i) => {
+      const v = R(); const lvl = i >= weeks * 7 - 1 ? 2 : v < 0.06 ? 0 : v < 0.2 ? 1 : v < 0.45 ? 2 : v < 0.75 ? 3 : 4;
+      return { bg: LEVELS[lvl], r: st.range > 90 ? '2px' : st.range > 30 ? '4px' : '7px' };
+    });
+    const R2 = rng(st.range * 3 + 1);
+    const series = [st.points];
+    for (let i = 1; i < st.range; i++) {
+      let prev = series[0] - Math.round(18 + R2() * 30);
+      if (R2() < 0.07) prev += 100 + Math.round(R2() * 100);
+      series.unshift(Math.max(0, prev));
+    }
+    const mn = Math.min(...series), mx = Math.max(...series);
+    const pts = series.map((v, i) => [(i / (series.length - 1)) * 320, 112 - ((v - mn) / (mx - mn || 1)) * 100]);
+    const chartLine = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+    const chartArea = chartLine + ' L320,120 L0,120 Z';
+    const statRows = st.acts.map(a => {
+      const q = Math.round(a.erledigt / Math.max(1, a.erledigt + a.verpasst) * 100);
+      const u = a.wochen ? 'Wochen' : 'Tage';
+      return { name: a.name, icon: a.icon, quote: q + '%', meta: `${a.erledigt} geschafft · ${a.verpasst} verpasst`, serie: `Serie ${a.serie} ${u} · längste ${a.laengste} ${u}` };
+    });
+    const avgQ = Math.round(st.acts.reduce((s, a) => s + a.erledigt, 0) / Math.max(1, st.acts.reduce((s, a) => s + a.erledigt + a.verpasst, 0)) * 100);
+
+    const d = st.draft;
+    const draftVals = d ? {
+      draft: d, editTitle: d.id ? 'Aktivität bearbeiten' : 'Neue Aktivität',
+      nameBorder: st.err ? 'var(--coral)' : 'var(--line)',
+      iconChoices: ICONS.map(ic => ({ icon: ic, bg: d.icon === ic ? 'var(--accent)' : 'var(--surface)', ink: d.icon === ic ? 'var(--onAccent)' : 'var(--ink2)', onClick: () => this.dr({ icon: ic }) })),
+      typChoices: TYPES.map(t => ({ ...t, bg: d.typ === t.id ? 'var(--accentSoft)' : 'var(--surface)', line: d.typ === t.id ? 'var(--accent)' : 'transparent', ink: d.typ === t.id ? 'var(--onAccentSoft)' : 'var(--ink)', onClick: () => this.dr({ typ: t.id }) })),
+      dayChips: DAYS.map((l, i) => ({ label: l, bg: d.tage[i] ? 'var(--accent)' : 'var(--surface)', ink: d.tage[i] ? 'var(--onAccent)' : 'var(--ink2)', onClick: () => this.dr({ tage: d.tage.map((v, j) => j === i ? !v : v) }) })),
+      timeChips: d.zeiten.map(t => ({ t, onRemove: () => this.dr({ zeiten: d.zeiten.filter(z => z !== t) }) })),
+      showTage: d.typ !== 'woche', showZeiten: d.typ === 'feste' || d.typ === 'tag', showIntervall: d.typ === 'intervall', showZiel: d.typ === 'tag' || d.typ === 'woche',
+      zielUnit: d.typ === 'woche' ? 'mal pro Woche' : 'mal pro Tag', draftPlan: planText(d),
+    } : { draft: {}, iconChoices: [], typChoices: [], dayChips: [], timeChips: [] };
+
+    const widgetOpen = [...ueber, ...jetzt, ...spaeter];
+    const tab = st.edit ? null : st.tab;
+
+    return {
+      theme, points: st.points, warn: st.warn,
+      sHeute: tab === 'heute', sAkt: tab === 'akt', sBel: tab === 'bel', sStat: tab === 'stat', sOpt: tab === 'opt', sEdit: st.edit,
+      showNav: !st.edit, gestureBg: st.edit ? 'var(--bg)' : 'var(--surface)',
+      tabs: TABS.map(t => ({ ...t, pill: st.tab === t.id ? 'var(--accentSoft)' : 'transparent', ink: st.tab === t.id ? 'var(--onAccentSoft)' : 'var(--ink2)', fill: st.tab === t.id ? 1 : 0, weight: st.tab === t.id ? 800 : 600, onClick: () => this.setState({ tab: t.id, toast: null }) })),
+      goBel: () => this.setState({ tab: 'bel' }),
+      fixWarn: () => { this.setState({ warn: false }); this.toast('Akkuoptimierung deaktiviert'); },
+      hasHero: !!hero, noHero: !hero, hero: hero || {}, bonusLine: `Tagesbonus +${st.bonus} Punkte gutgeschrieben`,
+      sections, doneCount, totalCount, ringDash, rewardLine, rewardPct,
+      actRows, actCount: `${st.acts.length} aktiv`,
+      rewardRows, history: st.history, hasHistory: st.history.length > 0,
+      ranges: [30, 90, 365].map(r => ({ label: `${r} Tage`, bg: st.range === r ? 'var(--accentSoft)' : 'transparent', ink: st.range === r ? 'var(--onAccentSoft)' : 'var(--ink2)', line: st.range === r ? 'transparent' : 'var(--line)', onClick: () => this.setState({ range: r }) })),
+      heat, heatCols: st.range === 30 ? `repeat(${weeks}, 34px)` : `repeat(${weeks}, minmax(0,1fr))`, heatGap: st.range > 90 ? '2px' : st.range > 30 ? '3px' : '6px',
+      legend: LEVELS.map(bg => ({ bg })), heatQuote: `${avgQ} % erledigt`,
+      chartLine, chartArea, chartMax: `${mx}`, chartFrom: `vor ${st.range} Tagen`, statRows,
+      bonus: st.bonus, kulanz: st.kulanz,
+      bonusDec: () => this.setState({ bonus: Math.max(0, st.bonus - 5) }), bonusInc: () => this.setState({ bonus: st.bonus + 5 }),
+      kulanzDec: () => this.setState({ kulanz: Math.max(0, st.kulanz - 5) }), kulanzInc: () => this.setState({ kulanz: st.kulanz + 5 }),
+      themeSeg: [{ id: 'light', label: 'Hell', icon: 'light_mode' }, { id: 'dark', label: 'Dunkel', icon: 'dark_mode' }].map(t => ({ ...t, bg: theme === t.id ? 'var(--surface)' : 'transparent', ink: theme === t.id ? 'var(--ink)' : 'var(--ink2)', onClick: () => this.setState({ theme: t.id }) })),
+      doExport: () => this.toast('Backup gespeichert'),
+      openImport: () => this.setState({ dialog: true }), closeDialog: () => this.setState({ dialog: false }),
+      confirmImport: () => { this.setState({ dialog: false }); this.toast('Backup eingelesen'); },
+      dialog: st.dialog,
+      showFab: !st.edit && st.tab === 'akt' && !st.toast,
+      fab: { label: 'Neue Aktivität', onClick: () => this.openEdit(0) },
+      hasToast: !!st.toast, toastText: st.toast ? st.toast.text : '', toastUndo: !!(st.toast && st.toast.undo && st.undo), undo: () => this.undo(),
+      ...draftVals,
+      closeEdit: () => this.setState({ edit: false, draft: null }), saveEdit: () => this.save(),
+      setName: e => { this.dr({ name: e.target.value }); if (st.err) this.setState({ err: false }); },
+      ptsDec: () => this.dr({ pts: Math.max(1, d.pts - 1) }), ptsInc: () => this.dr({ pts: d.pts + 1 }),
+      ivDec: () => this.dr({ intervall: Math.max(1, d.intervall - 1) }), ivInc: () => this.dr({ intervall: Math.min(12, d.intervall + 1) }),
+      zielDec: () => this.dr({ ziel: Math.max(1, d.ziel - 1) }), zielInc: () => this.dr({ ziel: d.ziel + 1 }),
+      setVon: e => this.dr({ von: e.target.value }), setBis: e => this.dr({ bis: e.target.value }),
+      newTime: st.newTime, setNewTime: e => this.setState({ newTime: e.target.value }),
+      addTime: () => { if (st.newTime && !d.zeiten.includes(st.newTime)) this.dr({ zeiten: [...d.zeiten, st.newTime].sort() }); },
+      showWidget: this.props.showWidget ?? true,
+      widgetItems: widgetOpen.slice(0, 4).map(i => ({ name: i.name, icon: i.icon, sub: i.sub, subColor: i.subColor, ink: i.g === 'ueber' ? 'var(--coral)' : 'var(--accent)', onTap: i.onDone })),
+      hasMore: widgetOpen.length > 4, moreText: `+ ${widgetOpen.length - 4} weitere`, widgetEmpty: widgetOpen.length === 0,
+    };
+  }
+}
+</script>
+</body>
+</html>
