@@ -83,6 +83,8 @@ data class BelohnungDto(
     val bedingungPerioden: Int?,
     val bedingungDatum: String?,
     val archiviert: Boolean,
+    /** Seit Schema 3. Der Standardwert macht Schema-2-Dateien lesbar. */
+    val symbol: String = "redeem",
 )
 
 @Serializable
@@ -92,6 +94,8 @@ data class EinloesungDto(
     val name: String,
     val preisPunkte: Int,
     val zeitpunkt: String,
+    /** Seit Schema 3. Der Standardwert macht Schema-2-Dateien lesbar. */
+    val storniertAm: String? = null,
 )
 
 @Serializable
