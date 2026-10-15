@@ -41,6 +41,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -67,6 +71,7 @@ private fun EinloeseMeldung.textId(): Int = when (this) {
     EinloeseMeldung.ZU_FRUEH -> R.string.noch_zu_frueh
     EinloeseMeldung.NICHT_MEHR_VORHANDEN -> R.string.einloese_nicht_mehr_vorhanden
     EinloeseMeldung.FEHLER -> R.string.einloese_fehlgeschlagen
+    EinloeseMeldung.RUECKGAENGIG_FEHLGESCHLAGEN -> R.string.rueckgaengig_fehlgeschlagen
 }
 
 private val DATUM_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
@@ -245,10 +250,15 @@ private fun BelohnungKarte(
 ) {
     val farben = DayOrganizerTheme.farben
     val moeglich = kachel.einloesbarkeit.moeglich
-    val anteil = (kontostand.toFloat() / kachel.preisPunkte).coerceIn(0f, 1f)
+    // Preis 0 kann nur aus einem von Hand geaenderten Backup kommen (Editor und Import-Pfad
+    // erzeugen ihn nicht); ohne Schutz waere das 0/0 = NaN.
+    val anteil = if (kachel.preisPunkte <= 0) 1f else (kontostand.toFloat() / kachel.preisPunkte).coerceIn(0f, 1f)
+    val bearbeitenText = stringResource(R.string.belohnung_bearbeiten_aktion)
 
     Surface(
         onClick = bearbeiten,
+        // Beschriftet die Klick-Aktion fuer TalkBack ("Bearbeiten" statt "Aktivieren").
+        modifier = Modifier.semantics { onClick(label = bearbeitenText) { bearbeiten(); true } },
         shape = DayOrganizerFormen.karte,
         color = farben.surface,
         contentColor = farben.ink,
@@ -283,6 +293,7 @@ private fun BelohnungKarte(
                 Modifier
                     .fillMaxWidth()
                     .height(8.dp)
+                    .semantics { progressBarRangeInfo = ProgressBarRangeInfo(anteil, 0f..1f) }
                     .clip(RoundedCornerShape(4.dp))
                     .background(farben.surface2),
             ) {

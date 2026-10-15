@@ -92,6 +92,8 @@
     <string name="belohnungen_leer">Noch keine Belohnungen. Lege mit „Neue Belohnung“ die erste an.</string>
     <string name="einloese_nicht_mehr_vorhanden">Diese Belohnung gibt es nicht mehr</string>
     <string name="einloese_fehlgeschlagen">Einlösen ist fehlgeschlagen</string>
+    <string name="rueckgaengig_fehlgeschlagen">Rückgängig ist fehlgeschlagen</string>
+    <string name="belohnung_bearbeiten_aktion">Bearbeiten</string>
     <string name="feld_beschreibung">Beschreibung</string>
     <string name="feld_preis">Preis in Punkten</string>
     <string name="feld_bedingung">Zusätzliche Bedingung</string>

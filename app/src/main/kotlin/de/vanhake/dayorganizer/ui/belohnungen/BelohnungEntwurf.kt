@@ -34,8 +34,9 @@ data class BelohnungEntwurf(
     val archiviert: Boolean = false,
 ) {
 
-    /** Zehnerschritte; ein geladener Altpreis unter 10 bleibt stehen, bis der Stepper
-     * bedient wird. */
+    /** Zehnerschritte, nie unter [PREIS_MIN]. Der Bildschirm deaktiviert Minus bei einem Preis
+     * von 10 oder weniger; ein geladener Altpreis unter 10 laesst sich dort darum nur erhoehen
+     * (+10). Diese reine Entwurfsregel klemmt trotzdem auf [PREIS_MIN]. */
     fun preisAendern(schritt: Int): BelohnungEntwurf =
         copy(preisPunkte = (preisPunkte + schritt * PREIS_SCHRITT).coerceAtLeast(PREIS_MIN))
 

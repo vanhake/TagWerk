@@ -39,7 +39,7 @@ class BelohnungEinloesenRueckgaengig @Inject constructor(
                     betrag = einloesung.preisPunkte,
                     zeitpunkt = jetzt,
                     belohnungId = einloesung.belohnungId,
-                    notiz = "Rueckgaengig: ${BuchungsArt.EINLOESUNG}",
+                    notiz = "Rueckgaengig: ${BuchungsArt.EINLOESUNG} #${einloesung.id}",
                 ),
             ),
         )

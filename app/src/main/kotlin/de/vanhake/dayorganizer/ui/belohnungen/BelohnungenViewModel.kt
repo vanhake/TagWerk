@@ -161,7 +161,7 @@ class BelohnungenViewModel(
         }
     }
 
-    /** Vom Screen aufgerufen, nachdem die Snackbar gezeigt wurde -- sonst erschiene dieselbe
+    /** Vom Screen aufgerufen, nachdem der Hinweistoast gezeigt wurde -- sonst erschiene dieselbe
      * Meldung bei jeder Rekomposition erneut. Gleiches Muster wie EinstellungenViewModel. */
     fun meldungGezeigt() {
         _meldung.value = null
@@ -180,7 +180,7 @@ class BelohnungenViewModel(
             throw abbruch
         } catch (ausnahme: Exception) {
             Log.w(TAG, "Rueckgaengig fehlgeschlagen", ausnahme)
-            _meldung.value = EinloeseMeldung.FEHLER
+            _meldung.value = EinloeseMeldung.RUECKGAENGIG_FEHLGESCHLAGEN
             return@launch
         }
         widgetAnstossen()

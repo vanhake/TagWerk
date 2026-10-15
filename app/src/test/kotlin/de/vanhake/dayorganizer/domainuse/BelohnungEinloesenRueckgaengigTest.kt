@@ -47,6 +47,8 @@ class BelohnungEinloesenRueckgaengigTest {
         assertEquals(200, korrektur.betrag)
         assertEquals(1L, korrektur.belohnungId)
         assertEquals(jetzt, korrektur.zeitpunkt)
+        // die Einloesungs-Id macht zwei Einloesungen derselben Belohnung im Journal unterscheidbar
+        assertEquals("Rueckgaengig: EINLOESUNG #${einloesung.id}", korrektur.notiz)
     }
 
     @Test

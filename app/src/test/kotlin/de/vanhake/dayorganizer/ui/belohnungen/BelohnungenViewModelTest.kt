@@ -5,6 +5,7 @@ import de.vanhake.dayorganizer.FakeBelohnungRepository
 import de.vanhake.dayorganizer.FakeBuchungRepository
 import de.vanhake.dayorganizer.FakeFaelligkeitRepository
 import de.vanhake.dayorganizer.FakeTransaktionen
+import de.vanhake.dayorganizer.data.repository.BelohnungRepository
 import de.vanhake.dayorganizer.data.repository.BuchungRepository
 import de.vanhake.dayorganizer.domain.model.Belohnung
 import de.vanhake.dayorganizer.domain.model.Belohnungsbedingung
@@ -46,7 +47,7 @@ class BelohnungenViewModelTest {
     @After fun nachher() = Dispatchers.resetMain()
 
     private fun viewModel(
-        belohnungen: FakeBelohnungRepository,
+        belohnungen: BelohnungRepository,
         buchungen: BuchungRepository,
         widgetAnstossen: suspend () -> Unit = {},
     ): BelohnungenViewModel {
@@ -77,6 +78,13 @@ class BelohnungenViewModelTest {
      * BelohnungEinloesen.loese() -- simuliert eine Datenbankausnahme waehrend der Einloesung. */
     private class WerfendeBuchungRepository(delegate: BuchungRepository) : BuchungRepository by delegate {
         override suspend fun kontostand(): Int = error("Datenbank nicht erreichbar")
+    }
+
+    /** Das Stornieren, der erste Schritt des Rueckgaengig, scheitert -- das Einloesen davor
+     * laeuft normal durch. */
+    private class WerfendeStornoRepository(delegate: BelohnungRepository) : BelohnungRepository by delegate {
+        override suspend fun einloesungStornieren(id: Long, am: LocalDateTime): Boolean =
+            error("Datenbank nicht erreichbar")
     }
 
     /** Bricht beim Lesen des Kontostands ab -- so, als verliesse der Nutzer den Tab,
@@ -329,6 +337,27 @@ class BelohnungenViewModelTest {
         // einmal nach dem Einloesen, einmal nach dem Rueckgaengig
         assertEquals(2, widgetAngestossen)
     }
+
+    @Test
+    fun `ein gescheitertes Rueckgaengig meldet das und laesst den Kontostand beim eingeloesten Stand`() =
+        runTest(dispatcher) {
+            val belohnungen = WerfendeStornoRepository(
+                FakeBelohnungRepository(listOf(Belohnung(1, "Kinoabend", preisPunkte = 200))),
+            )
+            val buchungen = guthaben(250)
+            var widgetAngestossen = 0
+            val vm = viewModel(belohnungen, buchungen, widgetAnstossen = { widgetAngestossen++ })
+            vm.einloesen(1)
+            dispatcher.scheduler.runCurrent()
+
+            vm.rueckgaengig()
+            dispatcher.scheduler.runCurrent()
+
+            assertEquals(EinloeseMeldung.RUECKGAENGIG_FEHLGESCHLAGEN, vm.meldung.value)
+            // nur das Einloesen hat das Widget angestossen
+            assertEquals(1, widgetAngestossen)
+            assertEquals(50, buchungen.kontostand())
+        }
 
     @Test
     fun `nach Ablauf des Toasts gibt es kein Rueckgaengig mehr`() = runTest(dispatcher) {

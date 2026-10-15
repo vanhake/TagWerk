@@ -23,8 +23,8 @@ data class BelohnungenZustand(
 )
 
 /**
- * Ergebnis eines gescheiterten Einloesens, vom Screen einmalig als Snackbar gezeigt und
- * danach auf null zurueckgesetzt. Gleiches Muster wie Meldung in EinstellungenViewModel.
+ * Ergebnis eines gescheiterten Einloesens (oder Rueckgaengigs), vom Screen einmalig als
+ * kurzer Hinweistoast gezeigt; ein Timer setzt sie danach auf null zurueck. Gleiches Muster wie Meldung in EinstellungenViewModel.
  * Ein Erfolg braucht keine eigene Meldung -- er erscheint als Toast mit Rückgängig
  * (BelohnungenViewModel.toast).
  */
@@ -34,6 +34,7 @@ enum class EinloeseMeldung {
     ZU_FRUEH,
     NICHT_MEHR_VORHANDEN,
     FEHLER,
+    RUECKGAENGIG_FEHLGESCHLAGEN,
 }
 
 /** Stornierte Einloesungen bleiben fuer Backup und Nachvollziehbarkeit in der Datenbank,
