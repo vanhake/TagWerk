@@ -16,4 +16,5 @@ data class BelohnungEntity(
     val bedingungPerioden: Int?,
     val bedingungDatum: LocalDate?,
     val archiviert: Boolean,
+    val symbol: String = "redeem",
 )

@@ -64,3 +64,10 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
         )
     }
 }
+
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE belohnung ADD COLUMN symbol TEXT NOT NULL DEFAULT 'redeem'")
+        db.execSQL("ALTER TABLE einloesung ADD COLUMN storniertAm TEXT")
+    }
+}

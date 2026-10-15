@@ -523,4 +523,36 @@ class DaoTest {
 
         assertEquals(listOf("frueh", "spaet"), db.buchungDao().alle().map { it.notiz })
     }
+
+    @Test
+    fun belohnungssymbol_uebersteht_den_Rundlauf() = runTest {
+        val id = db.belohnungDao().einfuegen(belohnung(name = "Kino").copy(symbol = "movie"))
+
+        assertEquals("movie", db.belohnungDao().nachId(id)?.symbol)
+    }
+
+    @Test
+    fun einloesungEinfuegen_liefert_die_neue_id() = runTest {
+        val belohnungId = db.belohnungDao().einfuegen(belohnung())
+
+        val id = db.belohnungDao().einloesungEinfuegen(
+            einloesung(belohnungId = belohnungId, zeitpunkt = LocalDateTime.of(2026, 3, 2, 19, 0)),
+        )
+
+        assertEquals(id, db.belohnungDao().alleEinloesungen().single().id)
+    }
+
+    @Test
+    fun einloesungStornieren_wirkt_genau_einmal() = runTest {
+        val belohnungId = db.belohnungDao().einfuegen(belohnung())
+        val id = db.belohnungDao().einloesungEinfuegen(
+            einloesung(belohnungId = belohnungId, zeitpunkt = LocalDateTime.of(2026, 3, 2, 19, 0)),
+        )
+        val am = LocalDateTime.of(2026, 3, 2, 19, 1)
+
+        assertEquals(1, db.belohnungDao().einloesungStornieren(id, am))
+        assertEquals(0, db.belohnungDao().einloesungStornieren(id, am.plusMinutes(1)))
+        assertEquals(0, db.belohnungDao().einloesungStornieren(id + 99, am))
+        assertEquals(am, db.belohnungDao().alleEinloesungen().single().storniertAm)
+    }
 }

@@ -1,0 +1,595 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 5,
+    "identityHash": "6e30f2f1cdd8955682725d3f684ae5c0",
+    "entities": [
+      {
+        "tableName": "aktivitaet",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `notiz` TEXT NOT NULL, `farbe` INTEGER NOT NULL, `basisPunkte` INTEGER NOT NULL, `kulanzMinuten` INTEGER NOT NULL, `puenktlichkeitsBonus` INTEGER NOT NULL, `symbol` TEXT NOT NULL, `serienSchwellen` TEXT NOT NULL, `nachfassAnzahl` INTEGER NOT NULL, `nachfassAbstandMinuten` INTEGER NOT NULL, `aktiv` INTEGER NOT NULL, `erstelltAm` TEXT NOT NULL, `archiviertAm` TEXT, `zeitplanTyp` TEXT NOT NULL, `zeitplanZeiten` TEXT NOT NULL, `zeitplanWochentage` TEXT NOT NULL, `zeitplanIntervallStunden` INTEGER, `zeitplanFensterVon` TEXT, `zeitplanFensterBis` TEXT, `zeitplanZielAnzahl` INTEGER, `zeitplanAnstoss` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notiz",
+            "columnName": "notiz",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "farbe",
+            "columnName": "farbe",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "basisPunkte",
+            "columnName": "basisPunkte",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kulanzMinuten",
+            "columnName": "kulanzMinuten",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "puenktlichkeitsBonus",
+            "columnName": "puenktlichkeitsBonus",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "symbol",
+            "columnName": "symbol",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "serienSchwellen",
+            "columnName": "serienSchwellen",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nachfassAnzahl",
+            "columnName": "nachfassAnzahl",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nachfassAbstandMinuten",
+            "columnName": "nachfassAbstandMinuten",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "aktiv",
+            "columnName": "aktiv",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "erstelltAm",
+            "columnName": "erstelltAm",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archiviertAm",
+            "columnName": "archiviertAm",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "zeitplanTyp",
+            "columnName": "zeitplanTyp",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "zeitplanZeiten",
+            "columnName": "zeitplanZeiten",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "zeitplanWochentage",
+            "columnName": "zeitplanWochentage",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "zeitplanIntervallStunden",
+            "columnName": "zeitplanIntervallStunden",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "zeitplanFensterVon",
+            "columnName": "zeitplanFensterVon",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "zeitplanFensterBis",
+            "columnName": "zeitplanFensterBis",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "zeitplanZielAnzahl",
+            "columnName": "zeitplanZielAnzahl",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "zeitplanAnstoss",
+            "columnName": "zeitplanAnstoss",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "faelligkeit",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `aktivitaetId` INTEGER NOT NULL, `schluessel` TEXT NOT NULL, `periodeVon` TEXT NOT NULL, `periodeBis` TEXT NOT NULL, `geplantFuer` TEXT, `sollAnzahl` INTEGER NOT NULL, `istAnzahl` INTEGER NOT NULL, `status` TEXT NOT NULL, `erledigtAm` TEXT, `warPuenktlich` INTEGER NOT NULL, FOREIGN KEY(`aktivitaetId`) REFERENCES `aktivitaet`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "aktivitaetId",
+            "columnName": "aktivitaetId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "schluessel",
+            "columnName": "schluessel",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "periodeVon",
+            "columnName": "periodeVon",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "periodeBis",
+            "columnName": "periodeBis",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "geplantFuer",
+            "columnName": "geplantFuer",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "sollAnzahl",
+            "columnName": "sollAnzahl",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "istAnzahl",
+            "columnName": "istAnzahl",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "erledigtAm",
+            "columnName": "erledigtAm",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "warPuenktlich",
+            "columnName": "warPuenktlich",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_faelligkeit_schluessel",
+            "unique": true,
+            "columnNames": [
+              "schluessel"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_faelligkeit_schluessel` ON `${TABLE_NAME}` (`schluessel`)"
+          },
+          {
+            "name": "index_faelligkeit_aktivitaetId_periodeVon",
+            "unique": false,
+            "columnNames": [
+              "aktivitaetId",
+              "periodeVon"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_faelligkeit_aktivitaetId_periodeVon` ON `${TABLE_NAME}` (`aktivitaetId`, `periodeVon`)"
+          },
+          {
+            "name": "index_faelligkeit_status_geplantFuer",
+            "unique": false,
+            "columnNames": [
+              "status",
+              "geplantFuer"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_faelligkeit_status_geplantFuer` ON `${TABLE_NAME}` (`status`, `geplantFuer`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "aktivitaet",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "aktivitaetId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "buchung",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `art` TEXT NOT NULL, `betrag` INTEGER NOT NULL, `zeitpunkt` TEXT NOT NULL, `aktivitaetId` INTEGER, `faelligkeitId` INTEGER, `belohnungId` INTEGER, `schwelle` INTEGER, `notiz` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "art",
+            "columnName": "art",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "betrag",
+            "columnName": "betrag",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "zeitpunkt",
+            "columnName": "zeitpunkt",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "aktivitaetId",
+            "columnName": "aktivitaetId",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "faelligkeitId",
+            "columnName": "faelligkeitId",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "belohnungId",
+            "columnName": "belohnungId",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "schwelle",
+            "columnName": "schwelle",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "notiz",
+            "columnName": "notiz",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_buchung_zeitpunkt",
+            "unique": false,
+            "columnNames": [
+              "zeitpunkt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_buchung_zeitpunkt` ON `${TABLE_NAME}` (`zeitpunkt`)"
+          },
+          {
+            "name": "index_buchung_aktivitaetId_art",
+            "unique": false,
+            "columnNames": [
+              "aktivitaetId",
+              "art"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_buchung_aktivitaetId_art` ON `${TABLE_NAME}` (`aktivitaetId`, `art`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "erinnerung",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `faelligkeitId` INTEGER NOT NULL, `schluessel` TEXT NOT NULL, `zeitpunkt` TEXT NOT NULL, `versuch` INTEGER NOT NULL, `ausgeloest` INTEGER NOT NULL, FOREIGN KEY(`faelligkeitId`) REFERENCES `faelligkeit`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "faelligkeitId",
+            "columnName": "faelligkeitId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "schluessel",
+            "columnName": "schluessel",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "zeitpunkt",
+            "columnName": "zeitpunkt",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "versuch",
+            "columnName": "versuch",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ausgeloest",
+            "columnName": "ausgeloest",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_erinnerung_schluessel",
+            "unique": true,
+            "columnNames": [
+              "schluessel"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_erinnerung_schluessel` ON `${TABLE_NAME}` (`schluessel`)"
+          },
+          {
+            "name": "index_erinnerung_ausgeloest_zeitpunkt",
+            "unique": false,
+            "columnNames": [
+              "ausgeloest",
+              "zeitpunkt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_erinnerung_ausgeloest_zeitpunkt` ON `${TABLE_NAME}` (`ausgeloest`, `zeitpunkt`)"
+          },
+          {
+            "name": "index_erinnerung_faelligkeitId",
+            "unique": false,
+            "columnNames": [
+              "faelligkeitId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_erinnerung_faelligkeitId` ON `${TABLE_NAME}` (`faelligkeitId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "faelligkeit",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "faelligkeitId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "belohnung",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `beschreibung` TEXT NOT NULL, `preisPunkte` INTEGER NOT NULL, `bedingungTyp` TEXT, `bedingungAktivitaetId` INTEGER, `bedingungPerioden` INTEGER, `bedingungDatum` TEXT, `archiviert` INTEGER NOT NULL, `symbol` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "beschreibung",
+            "columnName": "beschreibung",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "preisPunkte",
+            "columnName": "preisPunkte",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bedingungTyp",
+            "columnName": "bedingungTyp",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "bedingungAktivitaetId",
+            "columnName": "bedingungAktivitaetId",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "bedingungPerioden",
+            "columnName": "bedingungPerioden",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "bedingungDatum",
+            "columnName": "bedingungDatum",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "archiviert",
+            "columnName": "archiviert",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "symbol",
+            "columnName": "symbol",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "einloesung",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `belohnungId` INTEGER NOT NULL, `name` TEXT NOT NULL, `preisPunkte` INTEGER NOT NULL, `zeitpunkt` TEXT NOT NULL, `storniertAm` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "belohnungId",
+            "columnName": "belohnungId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "preisPunkte",
+            "columnName": "preisPunkte",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "zeitpunkt",
+            "columnName": "zeitpunkt",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "storniertAm",
+            "columnName": "storniertAm",
+            "affinity": "TEXT",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_einloesung_zeitpunkt",
+            "unique": false,
+            "columnNames": [
+              "zeitpunkt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_einloesung_zeitpunkt` ON `${TABLE_NAME}` (`zeitpunkt`)"
+          }
+        ],
+        "foreignKeys": []
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '6e30f2f1cdd8955682725d3f684ae5c0')"
+    ]
+  }
+}

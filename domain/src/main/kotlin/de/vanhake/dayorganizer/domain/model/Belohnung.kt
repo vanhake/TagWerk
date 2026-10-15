@@ -17,11 +17,17 @@ data class Belohnung(
     val preisPunkte: Int,
     val bedingung: Belohnungsbedingung? = null,
     val archiviert: Boolean = false,
+    /** Schluessel aus dem BelohnungSymbol-Katalog (App-Modul), z. B. "movie". */
+    val symbol: String = "redeem",
 )
 
 /**
  * Name und Preis sind absichtlich kopiert statt verlinkt: die Historie muss
  * lesbar bleiben, auch wenn die Belohnung spaeter umbenannt wird.
+ *
+ * [storniertAm] ist gesetzt, wenn die Einloesung rueckgaengig gemacht wurde. Die Zeile
+ * bleibt stehen (Korrekturen faelschen keine Historie); der Kontostand wird ueber eine
+ * KORREKTUR-Buchung wiederhergestellt, siehe BelohnungEinloesenRueckgaengig.
  */
 data class Einloesung(
     val id: Long = 0,
@@ -29,4 +35,5 @@ data class Einloesung(
     val name: String,
     val preisPunkte: Int,
     val zeitpunkt: LocalDateTime,
+    val storniertAm: LocalDateTime? = null,
 )

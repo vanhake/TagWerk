@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
+import java.time.LocalDateTime
 
 @Dao
 interface BelohnungDao {
@@ -36,7 +37,13 @@ interface BelohnungDao {
     @Query("UPDATE belohnung SET archiviert = 1 WHERE id = :id")
     suspend fun archivieren(id: Long)
 
-    @Insert suspend fun einloesungEinfuegen(eintrag: EinloesungEntity)
+    @Insert suspend fun einloesungEinfuegen(eintrag: EinloesungEntity): Long
+
+    /** 1, wenn die Einloesung gerade storniert wurde; 0, wenn es sie nicht gibt oder sie schon
+     * storniert war. Die Bedingung "storniertAm IS NULL" macht das Stornieren idempotent --
+     * ein zweiter Rueckgaengig-Tipp darf keine zweite Gegenbuchung ausloesen. */
+    @Query("UPDATE einloesung SET storniertAm = :am WHERE id = :id AND storniertAm IS NULL")
+    suspend fun einloesungStornieren(id: Long, am: LocalDateTime): Int
 
     // ABORT (Standard) statt REPLACE: ein doppelter Schluessel in der Backup-Datei
     // soll die Transaktion zurueckrollen lassen, nicht still verschwinden.

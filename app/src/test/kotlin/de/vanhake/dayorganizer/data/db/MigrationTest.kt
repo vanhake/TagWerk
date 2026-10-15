@@ -85,6 +85,36 @@ class MigrationTest {
         db.close()
     }
 
+    @Test
+    fun `migration_4_auf_5 ergaenzt Belohnungssymbol und Stornodatum`() {
+        helfer.createDatabase(DB_NAME, 4).apply {
+            execSQL(
+                "INSERT INTO belohnung (id, name, beschreibung, preisPunkte, bedingungTyp, " +
+                    "bedingungAktivitaetId, bedingungPerioden, bedingungDatum, archiviert) VALUES " +
+                    "(1, 'Kinoabend', '', 200, NULL, NULL, NULL, NULL, 0)",
+            )
+            execSQL(
+                "INSERT INTO einloesung (id, belohnungId, name, preisPunkte, zeitpunkt) VALUES " +
+                    "(1, 1, 'Kinoabend', 200, '2026-03-02T19:00')",
+            )
+            close()
+        }
+
+        val db = helfer.runMigrationsAndValidate(
+            DB_NAME, 5, true, MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
+        )
+
+        db.query("SELECT symbol FROM belohnung WHERE id = 1").use {
+            it.moveToFirst()
+            assertEquals("redeem", it.getString(0))
+        }
+        db.query("SELECT storniertAm FROM einloesung WHERE id = 1").use {
+            it.moveToFirst()
+            assertEquals(true, it.isNull(0))
+        }
+        db.close()
+    }
+
     private companion object {
         const val DB_NAME = "migrationstest.db"
     }
