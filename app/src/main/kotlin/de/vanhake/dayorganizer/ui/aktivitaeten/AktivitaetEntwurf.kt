@@ -20,10 +20,6 @@ enum class EntwurfFehler {
     INTERVALL_UNGUELTIG,
 }
 
-/** Was [AktivitaetBearbeitenViewModel.speichern] getan hat -- die Liste zeigt danach den
- * passenden Toast ("Aktivitaet angelegt" / "Aenderungen gespeichert"). */
-enum class SpeicherErgebnis { ANGELEGT, GEAENDERT }
-
 /**
  * Bearbeitbarer Zwischenstand.
  *

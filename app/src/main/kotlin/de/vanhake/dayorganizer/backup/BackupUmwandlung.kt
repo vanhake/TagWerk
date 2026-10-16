@@ -34,11 +34,19 @@ data class BackupInhalt(
 
 object BackupUmwandlung {
 
-    const val SCHEMA_VERSION = 2
+    const val SCHEMA_VERSION = 3
+
+    /** Schema 2 bleibt lesbar: die mit Schema 3 neuen Felder haben DTO-Standardwerte, die
+     * genau dem Zustand vor Schema 3 entsprechen. Schema 1 kannte weder Aktivitaetensymbol
+     * noch Farbmodus ohne Standardwert und bleibt abgelehnt. */
+    val LESBARE_VERSIONEN: Set<Int> = setOf(2, SCHEMA_VERSION)
 
     private val json = Json {
         prettyPrint = true
         ignoreUnknownKeys = false
+        // Sonst fehlten Felder mit DTO-Standardwert in der Datei, sobald sie ihm entsprechen --
+        // die Datei waere dann je nach Inhalt mal vollstaendig, mal nicht.
+        encodeDefaults = true
     }
 
     /** Wandelt eine [BackupDatei] in formatiertes JSON um -- fuer Export und Ablage. */
@@ -51,10 +59,11 @@ object BackupUmwandlung {
      * strengen Parser zu scheitern und faelschlich als beschaedigt zu gelten. Fehlt das Feld
      * oder ist es keine Zahl, ist der Text kein DayOrganizer-Backup; das vollstaendige
      * Einlesen wirft dann eine gewoehnliche Ausnahme, die der Import als unlesbar meldet.
+     * Aeltere, lesbare Schemata werden ueber DTO-Standardwerte aufgefuellt.
      */
     fun ausText(text: String): BackupInhalt {
         val gefundeneVersion = schemaVersionVorabLesen(text)
-        if (gefundeneVersion != null && gefundeneVersion != SCHEMA_VERSION) {
+        if (gefundeneVersion != null && gefundeneVersion !in LESBARE_VERSIONEN) {
             throw UnbekanntesSchema(gefundeneVersion)
         }
         return ausDatei(json.decodeFromString(BackupDatei.serializer(), text))
@@ -89,7 +98,7 @@ object BackupUmwandlung {
     )
 
     fun ausDatei(datei: BackupDatei): BackupInhalt {
-        if (datei.schemaVersion != SCHEMA_VERSION) throw UnbekanntesSchema(datei.schemaVersion)
+        if (datei.schemaVersion !in LESBARE_VERSIONEN) throw UnbekanntesSchema(datei.schemaVersion)
 
         return BackupInhalt(
             // Fuer die Importvorschau (Review-Fund W2): der Nutzer soll sehen, von wann
@@ -188,6 +197,7 @@ object BackupUmwandlung {
         bedingungPerioden = (bedingung as? Belohnungsbedingung.MindestSerie)?.perioden,
         bedingungDatum = (bedingung as? Belohnungsbedingung.FruehestensAb)?.datum?.toString(),
         archiviert = archiviert,
+        symbol = symbol,
     )
 
     private fun BelohnungDto.zuDomaene() = Belohnung(
@@ -212,15 +222,18 @@ object BackupUmwandlung {
             else -> error("Unbekannte Belohnungsbedingung: $bedingungTyp")
         },
         archiviert = archiviert,
+        symbol = symbol,
     )
 
     private fun Einloesung.zuDto() = EinloesungDto(
         id = id, belohnungId = belohnungId, name = name,
         preisPunkte = preisPunkte, zeitpunkt = zeitpunkt.toString(),
+        storniertAm = storniertAm?.toString(),
     )
 
     private fun EinloesungDto.zuDomaene() = Einloesung(
         id = id, belohnungId = belohnungId, name = name,
         preisPunkte = preisPunkte, zeitpunkt = LocalDateTime.parse(zeitpunkt),
+        storniertAm = storniertAm?.let(LocalDateTime::parse),
     )
 }

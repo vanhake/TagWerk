@@ -37,6 +37,9 @@ object DayOrganizerFesteFarben {
     val toastRueckgaengigInk = Color(0xFFAFABFF)
     val heroChipflaeche = Color(0x2EFFFFFF)
     val heroGeisterlinie = Color(0x73FFFFFF)
+
+    /** Stern auf der Punktestand-Heldenkarte (Prototyp oklch(0.86 0.15 85)). */
+    val heroStern = Color(0xFFFEC84B)
 }
 
 val HellFarben = DayOrganizerFarben(

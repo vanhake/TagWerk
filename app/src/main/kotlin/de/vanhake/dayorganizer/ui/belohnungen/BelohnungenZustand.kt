@@ -7,6 +7,7 @@ data class BelohnungKachel(
     val id: Long,
     val name: String,
     val beschreibung: String,
+    val symbol: String,
     val preisPunkte: Int,
     val einloesbarkeit: Einloesbarkeit,
     // Waehrend eine Einloesung dieser Kachel laeuft true, siehe BelohnungenViewModel.einloesen.
@@ -22,9 +23,10 @@ data class BelohnungenZustand(
 )
 
 /**
- * Ergebnis eines gescheiterten Einloesens, vom Screen einmalig als Snackbar gezeigt und
- * danach auf null zurueckgesetzt. Gleiches Muster wie Meldung in EinstellungenViewModel.
- * Ein Erfolg braucht keine eigene Meldung -- Kachel und Historie zeigen ihn bereits.
+ * Ergebnis eines gescheiterten Einloesens (oder Rueckgaengigs), vom Screen einmalig als
+ * kurzer Hinweistoast gezeigt; ein Timer setzt sie danach auf null zurueck. Gleiches Muster wie Meldung in EinstellungenViewModel.
+ * Ein Erfolg braucht keine eigene Meldung -- er erscheint als Toast mit Rückgängig
+ * (BelohnungenViewModel.toast).
  */
 enum class EinloeseMeldung {
     ZU_WENIG_PUNKTE,
@@ -32,4 +34,9 @@ enum class EinloeseMeldung {
     ZU_FRUEH,
     NICHT_MEHR_VORHANDEN,
     FEHLER,
+    RUECKGAENGIG_FEHLGESCHLAGEN,
 }
+
+/** Stornierte Einloesungen bleiben fuer Backup und Nachvollziehbarkeit in der Datenbank,
+ * gehoeren aber nicht in die sichtbare Historie. */
+fun List<Einloesung>.sichtbare(): List<Einloesung> = filter { it.storniertAm == null }

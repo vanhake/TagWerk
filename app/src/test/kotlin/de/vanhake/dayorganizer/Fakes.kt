@@ -249,13 +249,23 @@ class FakeBelohnungRepository(
         stand.value = stand.value.map { if (it.id == id) it.copy(archiviert = true) else it }
     }
 
-    override suspend fun einloesungAnlegen(einloesung: Einloesung) {
+    override suspend fun einloesungAnlegen(einloesung: Einloesung): Long {
         // Nicht die Listengroesse als id nehmen: setzt ein Test Einloesungen direkt vor,
         // fuehrt das zu Kollisionen oder ruecklaeufigen ids -- und verfaelscht ausgerechnet
         // den id-DESC-Tiebreak der Sortierung. Wie naechsteId() in den anderen Fakes: groesser
         // als jede vorhandene id.
         val id = (einloesungen.value.maxOfOrNull { it.id } ?: 0L) + 1
         einloesungen.value = einloesungen.value + einloesung.copy(id = id)
+        return id
+    }
+
+    /** Spiegelt "UPDATE einloesung SET storniertAm = :am WHERE id = :id AND storniertAm IS NULL". */
+    override suspend fun einloesungStornieren(id: Long, am: LocalDateTime): Boolean {
+        val treffer = einloesungen.value.any { it.id == id && it.storniertAm == null }
+        if (treffer) {
+            einloesungen.value = einloesungen.value.map { if (it.id == id) it.copy(storniertAm = am) else it }
+        }
+        return treffer
     }
 
     /** Spiegelt "ORDER BY zeitpunkt DESC, id DESC". */

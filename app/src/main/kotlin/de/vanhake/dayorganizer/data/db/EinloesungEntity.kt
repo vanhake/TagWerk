@@ -12,4 +12,5 @@ data class EinloesungEntity(
     val name: String,
     val preisPunkte: Int,
     val zeitpunkt: LocalDateTime,
+    val storniertAm: LocalDateTime? = null,
 )

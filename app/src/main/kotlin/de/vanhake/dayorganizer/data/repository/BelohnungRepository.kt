@@ -7,6 +7,7 @@ import de.vanhake.dayorganizer.domain.model.Belohnung
 import de.vanhake.dayorganizer.domain.model.Einloesung
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import java.time.LocalDateTime
 import javax.inject.Inject
 
 interface BelohnungRepository {
@@ -15,7 +16,11 @@ interface BelohnungRepository {
     suspend fun nachId(id: Long): Belohnung?
     suspend fun speichern(belohnung: Belohnung): Long
     suspend fun archivieren(id: Long)
-    suspend fun einloesungAnlegen(einloesung: Einloesung)
+    /** Liefert die von der Datenbank vergebene id -- BelohnungEinloesen gibt sie im Erfolg
+     * zurueck, damit ein Rueckgaengig genau diese Zeile stornieren kann. */
+    suspend fun einloesungAnlegen(einloesung: Einloesung): Long
+    /** true, wenn die Einloesung gerade storniert wurde; false, wenn unbekannt oder schon storniert. */
+    suspend fun einloesungStornieren(id: Long, am: LocalDateTime): Boolean
     fun beobachteEinloesungen(): Flow<List<Einloesung>>
     suspend fun alleEinloesungen(): List<Einloesung>
 }
@@ -45,8 +50,11 @@ class RaumBelohnungRepository @Inject constructor(
 
     override suspend fun archivieren(id: Long) = dao.archivieren(id)
 
-    override suspend fun einloesungAnlegen(einloesung: Einloesung) =
+    override suspend fun einloesungAnlegen(einloesung: Einloesung): Long =
         dao.einloesungEinfuegen(einloesung.zuEntity())
+
+    override suspend fun einloesungStornieren(id: Long, am: LocalDateTime): Boolean =
+        dao.einloesungStornieren(id, am) > 0
 
     override fun beobachteEinloesungen(): Flow<List<Einloesung>> =
         dao.beobachteEinloesungen().map { liste -> liste.map { it.zuDomaene() } }

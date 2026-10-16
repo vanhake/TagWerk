@@ -27,10 +27,10 @@ import androidx.navigation.compose.rememberNavController
 import de.vanhake.dayorganizer.R
 import de.vanhake.dayorganizer.ui.aktivitaeten.AktivitaetBearbeitenScreen
 import de.vanhake.dayorganizer.ui.aktivitaeten.AktivitaetenScreen
-import de.vanhake.dayorganizer.ui.aktivitaeten.SpeicherErgebnis
 import de.vanhake.dayorganizer.ui.belohnungen.BelohnungBearbeitenScreen
 import de.vanhake.dayorganizer.ui.belohnungen.BelohnungenScreen
 import de.vanhake.dayorganizer.ui.einstellungen.EinstellungenScreen
+import de.vanhake.dayorganizer.ui.gemeinsam.SpeicherErgebnis
 import de.vanhake.dayorganizer.ui.heute.HeuteScreen
 import de.vanhake.dayorganizer.ui.statistik.StatistikScreen
 
@@ -45,6 +45,9 @@ object Ziele {
 
     /** savedStateHandle-Schluessel: Bearbeiten -> Liste, Wert = SpeicherErgebnis.name. */
     const val ERGEBNIS_AKTIVITAET_GESPEICHERT = "aktivitaet_gespeichert"
+
+    /** savedStateHandle-Schluessel: Belohnungs-Editor -> Liste, Wert = SpeicherErgebnis.name. */
+    const val ERGEBNIS_BELOHNUNG_GESPEICHERT = "belohnung_gespeichert"
 
     fun aktivitaetBearbeiten(id: Long) = "aktivitaet/$id"
     fun belohnungBearbeiten(id: Long) = "belohnung/$id"
@@ -119,9 +122,16 @@ fun DayOrganizerNavigation() {
                 )
             }
 
-            composable(Ziele.BELOHNUNGEN) {
+            composable(Ziele.BELOHNUNGEN) { eintrag ->
+                val gespeichert by eintrag.savedStateHandle
+                    .getStateFlow<String?>(Ziele.ERGEBNIS_BELOHNUNG_GESPEICHERT, null)
+                    .collectAsStateWithLifecycle()
                 BelohnungenScreen(
                     bearbeiten = { id -> navController.navigate(Ziele.belohnungBearbeiten(id)) },
+                    gespeichert = gespeichert?.let(SpeicherErgebnis::valueOf),
+                    gespeichertGezeigt = {
+                        eintrag.savedStateHandle[Ziele.ERGEBNIS_BELOHNUNG_GESPEICHERT] = null
+                    },
                 )
             }
 
@@ -152,7 +162,21 @@ fun DayOrganizerNavigation() {
             composable(Ziele.BELOHNUNG_BEARBEITEN) { eintrag ->
                 BelohnungBearbeitenScreen(
                     id = eintrag.arguments?.getString("id")?.toLongOrNull() ?: 0L,
-                    fertig = { navController.popBackStack() },
+                    // Nur im RESUMED-Zustand navigieren: ein zweiter Aufruf waehrend der
+                    // Ausblend-Animation riefe sonst popBackStack() erneut auf und
+                    // wuerfe auch die Liste vom Stapel.
+                    fertig = { ergebnis ->
+                        if (eintrag.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                            navController.previousBackStackEntry?.savedStateHandle
+                                ?.set(Ziele.ERGEBNIS_BELOHNUNG_GESPEICHERT, ergebnis.name)
+                            navController.popBackStack()
+                        }
+                    },
+                    zurueck = {
+                        if (eintrag.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                            navController.popBackStack()
+                        }
+                    },
                 )
             }
         }

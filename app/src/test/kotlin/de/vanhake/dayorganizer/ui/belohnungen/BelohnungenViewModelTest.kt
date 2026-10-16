@@ -5,6 +5,7 @@ import de.vanhake.dayorganizer.FakeBelohnungRepository
 import de.vanhake.dayorganizer.FakeBuchungRepository
 import de.vanhake.dayorganizer.FakeFaelligkeitRepository
 import de.vanhake.dayorganizer.FakeTransaktionen
+import de.vanhake.dayorganizer.data.repository.BelohnungRepository
 import de.vanhake.dayorganizer.data.repository.BuchungRepository
 import de.vanhake.dayorganizer.domain.model.Belohnung
 import de.vanhake.dayorganizer.domain.model.Belohnungsbedingung
@@ -14,6 +15,9 @@ import de.vanhake.dayorganizer.domain.rechner.BelohnungsPruefer
 import de.vanhake.dayorganizer.domain.rechner.Hindernis
 import de.vanhake.dayorganizer.domain.rechner.SerienRechner
 import de.vanhake.dayorganizer.domainuse.BelohnungEinloesen
+import de.vanhake.dayorganizer.domainuse.BelohnungEinloesenRueckgaengig
+import de.vanhake.dayorganizer.ui.gemeinsam.Hinweistoast
+import de.vanhake.dayorganizer.ui.gemeinsam.SpeicherErgebnis
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -43,19 +47,22 @@ class BelohnungenViewModelTest {
     @After fun nachher() = Dispatchers.resetMain()
 
     private fun viewModel(
-        belohnungen: FakeBelohnungRepository,
+        belohnungen: BelohnungRepository,
         buchungen: BuchungRepository,
         widgetAnstossen: suspend () -> Unit = {},
     ): BelohnungenViewModel {
         val faelligkeiten = FakeFaelligkeitRepository()
+        val transaktionen = FakeTransaktionen()
         return BelohnungenViewModel(
             belohnungen = belohnungen,
             buchungen = buchungen,
             einloesenUseCase = BelohnungEinloesen(
                 belohnungen, buchungen, faelligkeiten,
-                BelohnungsPruefer(), SerienRechner(), FakeTransaktionen(), uhr,
+                BelohnungsPruefer(), SerienRechner(), transaktionen, uhr,
             ),
+            einloesenRueckgaengig = BelohnungEinloesenRueckgaengig(belohnungen, buchungen, transaktionen, uhr),
             widgetAnstossen = widgetAnstossen,
+            rechenDispatcher = dispatcher,
         )
     }
 
@@ -72,6 +79,13 @@ class BelohnungenViewModelTest {
      * BelohnungEinloesen.loese() -- simuliert eine Datenbankausnahme waehrend der Einloesung. */
     private class WerfendeBuchungRepository(delegate: BuchungRepository) : BuchungRepository by delegate {
         override suspend fun kontostand(): Int = error("Datenbank nicht erreichbar")
+    }
+
+    /** Das Stornieren, der erste Schritt des Rueckgaengig, scheitert -- das Einloesen davor
+     * laeuft normal durch. */
+    private class WerfendeStornoRepository(delegate: BelohnungRepository) : BelohnungRepository by delegate {
+        override suspend fun einloesungStornieren(id: Long, am: LocalDateTime): Boolean =
+            error("Datenbank nicht erreichbar")
     }
 
     /** Bricht beim Lesen des Kontostands ab -- so, als verliesse der Nutzer den Tab,
@@ -293,5 +307,97 @@ class BelohnungenViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(EinloeseMeldung.NICHT_MEHR_VORHANDEN, vm.meldung.value)
+    }
+
+    @Test
+    fun `ein erfolgreiches Einloesen zeigt einen Toast mit Rueckgaengig`() = runTest(dispatcher) {
+        val belohnungen = FakeBelohnungRepository(listOf(Belohnung(1, "Kinoabend", preisPunkte = 200)))
+        val vm = viewModel(belohnungen, guthaben(250))
+
+        vm.einloesen(1)
+        dispatcher.scheduler.runCurrent()
+
+        assertEquals(Hinweistoast("Kinoabend eingelöst · −200 Punkte", kannRueckgaengig = true), vm.toast.value)
+    }
+
+    @Test
+    fun `Rueckgaengig nach dem Einloesen stellt Kontostand her und storniert`() = runTest(dispatcher) {
+        val belohnungen = FakeBelohnungRepository(listOf(Belohnung(1, "Kinoabend", preisPunkte = 200)))
+        val buchungen = guthaben(250)
+        var widgetAngestossen = 0
+        val vm = viewModel(belohnungen, buchungen, widgetAnstossen = { widgetAngestossen++ })
+        vm.einloesen(1)
+        dispatcher.scheduler.runCurrent()
+
+        vm.rueckgaengig()
+        dispatcher.scheduler.runCurrent()
+
+        assertEquals(250, buchungen.kontostand())
+        assertEquals(true, belohnungen.einloesungen.value.single().storniertAm != null)
+        assertNull(vm.toast.value)
+        // einmal nach dem Einloesen, einmal nach dem Rueckgaengig
+        assertEquals(2, widgetAngestossen)
+    }
+
+    @Test
+    fun `ein gescheitertes Rueckgaengig meldet das und laesst den Kontostand beim eingeloesten Stand`() =
+        runTest(dispatcher) {
+            val belohnungen = WerfendeStornoRepository(
+                FakeBelohnungRepository(listOf(Belohnung(1, "Kinoabend", preisPunkte = 200))),
+            )
+            val buchungen = guthaben(250)
+            var widgetAngestossen = 0
+            val vm = viewModel(belohnungen, buchungen, widgetAnstossen = { widgetAngestossen++ })
+            vm.einloesen(1)
+            dispatcher.scheduler.runCurrent()
+
+            vm.rueckgaengig()
+            dispatcher.scheduler.runCurrent()
+
+            assertEquals(EinloeseMeldung.RUECKGAENGIG_FEHLGESCHLAGEN, vm.meldung.value)
+            // nur das Einloesen hat das Widget angestossen
+            assertEquals(1, widgetAngestossen)
+            assertEquals(50, buchungen.kontostand())
+        }
+
+    @Test
+    fun `nach Ablauf des Toasts gibt es kein Rueckgaengig mehr`() = runTest(dispatcher) {
+        val belohnungen = FakeBelohnungRepository(listOf(Belohnung(1, "Kinoabend", preisPunkte = 200)))
+        val buchungen = guthaben(250)
+        val vm = viewModel(belohnungen, buchungen)
+        vm.einloesen(1)
+        dispatcher.scheduler.runCurrent()
+        dispatcher.scheduler.advanceTimeBy(3_801)
+        dispatcher.scheduler.runCurrent()
+
+        vm.rueckgaengig()
+        dispatcher.scheduler.runCurrent()
+
+        assertNull(vm.toast.value)
+        assertEquals(50, buchungen.kontostand())
+    }
+
+    @Test
+    fun `Archivieren zeigt einen Toast ohne Rueckgaengig`() = runTest(dispatcher) {
+        val belohnungen = FakeBelohnungRepository(listOf(Belohnung(1, "Kinoabend", preisPunkte = 200)))
+        val vm = viewModel(belohnungen, guthaben(0))
+
+        vm.archivieren(1)
+        dispatcher.scheduler.runCurrent()
+
+        assertEquals(Hinweistoast("Kinoabend archiviert", kannRueckgaengig = false), vm.toast.value)
+    }
+
+    @Test
+    fun `gespeichert melden zeigt den passenden Toast`() = runTest(dispatcher) {
+        val vm = viewModel(FakeBelohnungRepository(), guthaben(0))
+
+        vm.gespeichertMelden(SpeicherErgebnis.ANGELEGT)
+        dispatcher.scheduler.runCurrent()
+        assertEquals("Belohnung angelegt", vm.toast.value?.text)
+
+        vm.gespeichertMelden(SpeicherErgebnis.GEAENDERT)
+        dispatcher.scheduler.runCurrent()
+        assertEquals("Änderungen gespeichert", vm.toast.value?.text)
     }
 }

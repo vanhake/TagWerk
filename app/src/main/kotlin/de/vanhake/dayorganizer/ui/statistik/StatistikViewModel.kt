@@ -7,6 +7,7 @@ import de.vanhake.dayorganizer.data.repository.AktivitaetRepository
 import de.vanhake.dayorganizer.data.repository.BuchungRepository
 import de.vanhake.dayorganizer.data.repository.FaelligkeitRepository
 import de.vanhake.dayorganizer.domain.rechner.StatistikRechner
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -19,13 +20,26 @@ import java.time.LocalDate
 import javax.inject.Inject
 
 @HiltViewModel
-class StatistikViewModel @Inject constructor(
+class StatistikViewModel(
     private val aktivitaeten: AktivitaetRepository,
     private val faelligkeiten: FaelligkeitRepository,
     private val buchungen: BuchungRepository,
     private val rechner: StatistikRechner,
     private val uhr: Clock,
+    // Injizierbar, damit Tests die Berechnung auf ihrem Test-Dispatcher laufen lassen: auf
+    // einem echten Default-Thread kam der Zustand auf einem ausgelasteten CI-Runner nicht
+    // innerhalb von Turbines 3-s-Timeout an (flaky StatistikViewModelTest).
+    private val rechenDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
+
+    @Inject
+    constructor(
+        aktivitaeten: AktivitaetRepository,
+        faelligkeiten: FaelligkeitRepository,
+        buchungen: BuchungRepository,
+        rechner: StatistikRechner,
+        uhr: Clock,
+    ) : this(aktivitaeten, faelligkeiten, buchungen, rechner, uhr, Dispatchers.Default)
 
     private val zeitraum = MutableStateFlow(30)
 
@@ -35,7 +49,7 @@ class StatistikViewModel @Inject constructor(
         // ist O(Tage * Faelligkeiten)) -- ohne Dispatcher-Wechsel liefe das auf dem
         // Hauptthread, weil Korutinen nach jedem suspend-Aufruf in ihren Ausgangskontext
         // zurueckkehren (hier viewModelScope == Dispatchers.Main.immediate).
-        .flowOn(Dispatchers.Default)
+        .flowOn(rechenDispatcher)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StatistikZustand())
 
     /** Erlaubt sind 30, 90 und 365 Tage. */

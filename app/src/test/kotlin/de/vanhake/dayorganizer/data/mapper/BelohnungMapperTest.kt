@@ -2,7 +2,9 @@ package de.vanhake.dayorganizer.data.mapper
 
 import de.vanhake.dayorganizer.domain.model.Belohnung
 import de.vanhake.dayorganizer.domain.model.Belohnungsbedingung
+import de.vanhake.dayorganizer.domain.model.Einloesung
 import java.time.LocalDate
+import java.time.LocalDateTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -69,5 +71,18 @@ class BelohnungMapperTest {
     @Test
     fun `archivierte Belohnung uebersteht den Rundlauf`() {
         rundlauf(Belohnung(id = 4, name = "Alt", preisPunkte = 50, archiviert = true))
+    }
+
+    @Test
+    fun `Symbol und Stornodatum ueberstehen den Rundlauf durch die Entity`() {
+        val belohnung = Belohnung(id = 4, name = "Kino", preisPunkte = 300, symbol = "movie")
+        val einloesung = Einloesung(
+            id = 2, belohnungId = 4, name = "Kino", preisPunkte = 300,
+            zeitpunkt = LocalDateTime.of(2026, 3, 2, 19, 0),
+            storniertAm = LocalDateTime.of(2026, 3, 2, 19, 1),
+        )
+
+        assertEquals(belohnung, belohnung.zuEntity().zuDomaene())
+        assertEquals(einloesung, einloesung.zuEntity().zuDomaene())
     }
 }

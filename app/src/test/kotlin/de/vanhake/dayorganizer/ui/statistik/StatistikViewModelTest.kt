@@ -77,6 +77,7 @@ class StatistikViewModelTest {
             ),
             rechner = StatistikRechner(),
             uhr = uhr,
+            rechenDispatcher = dispatcher,
         )
 
         vm.zustand.test {
@@ -128,6 +129,7 @@ class StatistikViewModelTest {
             buchungen = FakeBuchungRepository(),
             rechner = StatistikRechner(),
             uhr = uhr,
+            rechenDispatcher = dispatcher,
         )
 
         vm.zustand.test {
@@ -162,6 +164,7 @@ class StatistikViewModelTest {
             ),
             rechner = StatistikRechner(),
             uhr = uhr,
+            rechenDispatcher = dispatcher,
         )
 
         vm.zustand.test {
@@ -185,6 +188,7 @@ class StatistikViewModelTest {
             buchungen = FakeBuchungRepository(),
             rechner = StatistikRechner(),
             uhr = uhr,
+            rechenDispatcher = dispatcher,
         )
 
         vm.zustand.test {

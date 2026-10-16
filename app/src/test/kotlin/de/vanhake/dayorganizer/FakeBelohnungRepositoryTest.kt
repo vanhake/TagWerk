@@ -81,4 +81,18 @@ class FakeBelohnungRepositoryTest {
             repository.speichern(guenstig.copy(id = 5))
         }
     }
+
+    @Test
+    fun `Stornieren wirkt genau einmal und liefert die neue id beim Anlegen`() = runTest {
+        val repository = FakeBelohnungRepository()
+        val id = repository.einloesungAnlegen(
+            Einloesung(belohnungId = 1, name = "Kino", preisPunkte = 300, zeitpunkt = LocalDateTime.of(2026, 3, 2, 19, 0)),
+        )
+        val am = LocalDateTime.of(2026, 3, 2, 19, 1)
+
+        assertEquals(true, repository.einloesungStornieren(id, am))
+        assertEquals(false, repository.einloesungStornieren(id, am.plusMinutes(1)))
+        assertEquals(false, repository.einloesungStornieren(id + 99, am))
+        assertEquals(am, repository.alleEinloesungen().single().storniertAm)
+    }
 }

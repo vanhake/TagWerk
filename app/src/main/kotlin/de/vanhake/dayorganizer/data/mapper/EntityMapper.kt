@@ -139,6 +139,7 @@ fun Belohnung.zuEntity(): BelohnungEntity = BelohnungEntity(
     bedingungPerioden = (bedingung as? Belohnungsbedingung.MindestSerie)?.perioden,
     bedingungDatum = (bedingung as? Belohnungsbedingung.FruehestensAb)?.datum,
     archiviert = archiviert,
+    symbol = symbol,
 )
 
 fun BelohnungEntity.zuDomaene(): Belohnung = Belohnung(
@@ -156,14 +157,15 @@ fun BelohnungEntity.zuDomaene(): Belohnung = Belohnung(
         else -> error("Unbekannte Belohnungsbedingung: $bedingungTyp")
     },
     archiviert = archiviert,
+    symbol = symbol,
 )
 
 fun Einloesung.zuEntity(): EinloesungEntity = EinloesungEntity(
     id = id, belohnungId = belohnungId, name = name,
-    preisPunkte = preisPunkte, zeitpunkt = zeitpunkt,
+    preisPunkte = preisPunkte, zeitpunkt = zeitpunkt, storniertAm = storniertAm,
 )
 
 fun EinloesungEntity.zuDomaene(): Einloesung = Einloesung(
     id = id, belohnungId = belohnungId, name = name,
-    preisPunkte = preisPunkte, zeitpunkt = zeitpunkt,
+    preisPunkte = preisPunkte, zeitpunkt = zeitpunkt, storniertAm = storniertAm,
 )
