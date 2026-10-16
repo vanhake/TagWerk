@@ -11,10 +11,46 @@ APK verteilt, nicht über den Play Store.
 
 ## Stand
 
-Das Fundament steht: Aktivitäten anlegen, zuverlässig erinnert werden, aus der
-Benachrichtigung abhaken, Punkte sammeln. Der Belohnungs-Shop, die Statistik,
-die Einstellungen, ein Homescreen-Widget und das JSON-Backup sind geplant und
-als eigene Pläne beschrieben (siehe [Dokumentation](#dokumentation)).
+Die App ist funktional vollständig und im Design des Redesign-Prototyps
+umgesetzt: Aktivitäten anlegen, zuverlässig erinnert werden, aus der
+Benachrichtigung oder vom Startbildschirm abhaken, Punkte sammeln und für
+Belohnungen einlösen, Statistik ansehen, Optionen und JSON-Backup. Die Pläne
+1–8 sind umgesetzt (siehe [Dokumentation](#dokumentation)). Offen ist ein
+Backlog kleiner Aufräumpunkte, der in `docs/HANDOFF.md` steht.
+
+## Die Oberfläche
+
+Die visuelle Vorlage ist der Prototyp unter
+[`docs/design/prototyp/`](docs/design/prototyp/) (`DayOrganizer App.dc.html`).
+Farben, Formen und Schrift (Manrope, als Ressource gebündelt) leben in
+`ui/theme`; jeder Bildschirm gibt es in Hell und Dunkel.
+
+**Heute.** Heldenkarte mit Tagesfortschritt und Punktestand, darunter die
+fälligen Aktivitäten als Kacheln mit Symbol. Erledigen und Auslassen zeigen
+einen Toast mit *Rückgängig*; das Rückgängig bucht eine exakte Gegenbuchung
+und stellt die Fälligkeit wieder her, die Historie bleibt erklärbar.
+
+**Aktivitäten.** Liste mit Symbolkachel, Plantext („Täglich · 08:00, 20:00“),
+Punkten und Serie. Der Editor hat ein Symbolraster, Stepper, Typkarten für die
+vier Zeitplanarten, Wochentag-Kacheln, Uhrzeit-Chips mit Zeitwähler, ein
+editierbares Zeitfenster für Intervalle und eine Zusammenfassung des Plans.
+
+**Belohnungen.** Heldenkarte mit dem Punktestand, Belohnungen mit Symbol und
+Bedingung (Mindestserie oder Startdatum), Verlauf der Einlösungen. Eine
+Einlösung lässt sich per Toast rückgängig machen: sie bleibt als stornierte
+Zeile stehen, eine Gegenbuchung stellt den Kontostand her.
+
+**Statistik.** Heatmap mit Stufen je Tag, Gesamtquote, Punkteverlauf als
+Flächendiagramm und eine Zeile je Aktivität mit Quote und Serie.
+
+**Optionen.** Tagesbonus und Kulanzfenster per Stepper, die sofort speichern
+(kein Speichern-Knopf). Umschalter Hell/Dunkel, Export und Import des Backups.
+
+**Widget.** Das Homescreen-Widget „Heute“ zeigt eine Kopfzeile mit Fortschritt
+und Punktestand und darunter höchstens vier Kacheln mit Symbol, Name, Untertitel
+(„08:00 · überfällig“, „2 von 3 diese Woche“) und Haken zum Abhaken. Die
+Zeilenzahl richtet sich nach der Widgethöhe, der Rest erscheint als „+ n
+weitere“. Die Farben folgen der Hell/Dunkel-Einstellung der App.
 
 ## Was die App kann
 
@@ -77,8 +113,14 @@ als absoluter Zeitstempel. Die Auflösung zu einem Instant passiert an genau
 einer Stelle, im `AlarmPlaner`. Sonst verschöbe die Sommerzeitumstellung die
 Tabletteneinnahme um eine Stunde.
 
-**Stack:** Kotlin, Jetpack Compose (Material 3), Room, Hilt, WorkManager,
-AlarmManager. Mindestens Android 13 (API 33), Ziel API 35.
+**Stack:** Kotlin, Jetpack Compose (Material 3), Glance (Widget), Room, Hilt,
+DataStore, WorkManager, AlarmManager. Mindestens Android 13 (API 33), Ziel API 35.
+
+**Daten.** Die Room-Datenbank steht auf Version 5 (Migrationen 1→2 bis 4→5,
+Schemata unter `app/schemas`). Das JSON-Backup trägt eine eigene Version, aktuell
+Schema 3; Backups mit Schema 2 bleiben lesbar, weil die neuen Felder
+Standardwerte haben. Ein Import lehnt fachlich ungültige Werte ab (Preis,
+Serienperioden oder Punkte von 0).
 
 ## Bauen
 
@@ -121,12 +163,16 @@ eigenen Schlüssel in den GitHub-Secrets.
 ./gradlew :domain:test :app:testDebugUnitTest
 ```
 
-167 Tests, alle auf der JVM. Datenbanktests laufen unter Robolectric, es wird
+466 Tests, alle auf der JVM. Datenbanktests laufen unter Robolectric, es wird
 also weder ein Gerät noch ein Emulator gebraucht. Der Schwerpunkt liegt auf den
 drei Regelmaschinen, jeweils mit fester Uhr: Wochentagsauswahl,
 Intervallgrenzen, Zähl- und Wochenziele, Kulanzfenster, Serienabbruch durch
 Verpassen gegenüber Überleben durch Auslassen, Zeitumstellung, Schaltjahr.
-Dazu Room-Tests inklusive Migration, Use-Case- und ViewModel-Tests.
+Dazu Room-Tests inklusive Migration, Use-Case- und ViewModel-Tests, reine
+Darstellungsfunktionen (Plantext, Heatmap-Stufen, Widget-Zustand) und
+Ressourcentests unter Robolectric. Compose- und Glance-Oberflächen haben keine
+UI-Tests; ob sie bauen, zeigt `:app:assembleDebug`, wie sie aussehen, die
+Sichtprüfung im Emulator.
 
 ## Dokumentation
 
@@ -134,8 +180,15 @@ Dazu Room-Tests inklusive Migration, Use-Case- und ViewModel-Tests.
 |---|---|
 | [Design](docs/superpowers/specs/2026-09-18-dayorganizer-design.md) | Fachliches Modell, Regeln, Architektur, Fehlerbehandlung |
 | [Plan 1](docs/superpowers/plans/2026-09-18-dayorganizer-01-fundament.md) | Fundament und Erinnerungskern — umgesetzt |
-| [Plan 2](docs/superpowers/plans/2026-09-18-dayorganizer-02-belohnungen.md) | Belohnungen, Statistik, Einstellungen — offen |
-| [Plan 3](docs/superpowers/plans/2026-09-18-dayorganizer-03-widget-backup.md) | Widget und Backup — offen |
+| [Plan 2](docs/superpowers/plans/2026-09-18-dayorganizer-02-belohnungen.md) | Belohnungen, Statistik, Einstellungen — umgesetzt |
+| [Plan 3](docs/superpowers/plans/2026-09-18-dayorganizer-03-widget-backup.md) | Widget und Backup — umgesetzt |
+| [Plan 4](docs/superpowers/plans/2026-09-26-dayorganizer-04-designsystem-heute.md) | Redesign: Design-System und Heute — umgesetzt |
+| [Plan 5](docs/superpowers/plans/2026-10-15-dayorganizer-05-aktivitaeten.md) | Redesign: Aktivitäten-Liste und Editor — umgesetzt |
+| [Plan 6](docs/superpowers/plans/2026-10-15-dayorganizer-06-belohnungen.md) | Redesign: Belohnungen, Symbol, Einlösen rückgängig — umgesetzt |
+| [Plan 7](docs/superpowers/plans/2026-10-16-dayorganizer-07-statistik-optionen-navigation.md) | Redesign: Statistik, Optionen, Navigationsleiste — umgesetzt |
+| [Plan 8](docs/superpowers/plans/2026-10-16-dayorganizer-08-widget.md) | Redesign: Homescreen-Widget, README/HANDOFF — umgesetzt |
+| [Design-Prototyp](docs/design/prototyp/) | Visuelle Vorlage für das Redesign (Pläne 4–8) |
+| [Übergabe](docs/HANDOFF.md) | Stand, Umgebung, Arbeitsweise, Backlog |
 
 Das Design-Dokument ist der Vertrag: es beschreibt, was die App tun soll und
 warum sie es so tut. Wo Umsetzung und Design auseinandergingen, wurde das

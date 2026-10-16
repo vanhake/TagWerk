@@ -156,7 +156,16 @@
     <string name="backup_import_vorschau_text">Dieses Backup ist vom %1$s und enthält %2$d Aktivitäten. Der aktuelle Bestand wird dabei vollständig ersetzt.</string>
     <string name="backup_import_vorschau_bestaetigen">Importieren</string>
     <string name="backup_import_vorschau_abbrechen">Abbrechen</string>
+    <string name="widget_titel">Heute</string>
+    <string name="widget_ueberfaellig">%1$s · überfällig</string>
+    <string name="widget_ziel_heute">%1$d von %2$d heute</string>
+    <string name="widget_ziel_woche">%1$d von %2$d diese Woche</string>
+    <string name="widget_untertitel_verbindung">%1$s · %2$s</string>
+    <string name="widget_alles_erledigt">Alles erledigt für heute</string>
+    <string name="widget_nichts_geplant">Heute steht nichts an</string>
+    <string name="widget_abhaken">%1$s abhaken</string>
     <string name="widget_weitere">+ %1$d weitere</string>
     <string name="widget_ziel_fortschritt">%1$d/%2$d</string>
+    <string name="widget_beschreibung">Offene Aufgaben von heute abhaken</string>
     <string name="toast_rueckgaengig">Rückgängig</string>
 </resources>

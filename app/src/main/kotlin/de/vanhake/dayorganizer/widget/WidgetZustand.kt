@@ -1,5 +1,7 @@
 package de.vanhake.dayorganizer.widget
 
+import android.content.res.Resources
+import de.vanhake.dayorganizer.R
 import de.vanhake.dayorganizer.domain.model.Aktivitaet
 import de.vanhake.dayorganizer.domain.model.Faelligkeit
 import de.vanhake.dayorganizer.domain.model.FaelligkeitStatus
@@ -9,20 +11,29 @@ import java.time.format.DateTimeFormatter
 data class WidgetEintrag(
     val faelligkeitId: Long,
     val name: String,
+    /** Aktivitaet.symbol, Schluessel wie AKTIVITAET_SYMBOLE. */
+    val symbol: String,
     val zeitText: String?,
     val ueberfaellig: Boolean,
-    /** Wie HeuteZusammenstellung/HeuteScreen: bei Zaehlzielen (sollAnzahl > 1) zeigt das
-     * Widget den Stand "istAnzahl/sollAnzahl" (Review-Fund G2) -- ein Tipp aendert sonst
-     * nichts sichtbar, und ein zweiter Tipp aus Unsicherheit zaehlt doppelt. */
     val istAnzahl: Int,
     val sollAnzahl: Int,
+    /** periodeBis > periodeVon: Wochenziel statt Tagesziel. */
+    val wochenziel: Boolean,
 )
+
+/** Warum das Widget keine offenen Eintraege zeigt. */
+enum class WidgetLeer { ALLES_ERLEDIGT, NICHTS_GEPLANT }
 
 data class WidgetZustand(
     val kontostand: Int = 0,
-    val eintraege: List<WidgetEintrag> = emptyList(),
-    /** Wie viele offene Eintraege nicht mehr auf das Widget passen. */
-    val weitere: Int = 0,
+    /** Status ERLEDIGT, nur aktive Aktivitaeten. */
+    val erledigt: Int = 0,
+    /** Alle Faelligkeiten des Tages aktiver Aktivitaeten, unabhaengig vom Status. */
+    val gesamt: Int = 0,
+    /** Alle offenen Eintraege, sortiert; wie viele passen, bestimmt WidgetMasse. */
+    val offen: List<WidgetEintrag> = emptyList(),
+    /** null, solange etwas offen ist. */
+    val leer: WidgetLeer? = null,
 )
 
 /** Reine Umformung von Rohdaten in den Widget-Zustand, analog zu HeuteZusammenstellung. */
@@ -35,7 +46,6 @@ object WidgetZusammenstellung {
         aktivitaeten: List<Aktivitaet>,
         kontostand: Int,
         jetzt: LocalDateTime,
-        hoechstens: Int,
     ): WidgetZustand {
         val nachId = aktivitaeten.associateBy { it.id }
 
@@ -50,8 +60,9 @@ object WidgetZusammenstellung {
         // Ties zwischen mehreren Ziel-Eintraegen (gleiches MAX) behalten deshalb die Reihenfolge
         // der Eingabeliste -- und die kommt deterministisch aus der DB-Abfrage (ORDER BY
         // periodeVon, geplantFuer IS NULL, geplantFuer in FaelligkeitDao.fuerZeitraum).
-        val offen = faelligkeiten
-            .filter { it.status == FaelligkeitStatus.OFFEN && nachId.containsKey(it.aktivitaetId) }
+        val dieserTag = faelligkeiten.filter { nachId.containsKey(it.aktivitaetId) }
+        val offen = dieserTag
+            .filter { it.status == FaelligkeitStatus.OFFEN }
             .sortedWith(
                 compareByDescending<Faelligkeit> {
                     it.geplantFuer != null && it.geplantFuer!!.isBefore(jetzt)
@@ -60,17 +71,50 @@ object WidgetZusammenstellung {
 
         return WidgetZustand(
             kontostand = kontostand,
-            eintraege = offen.take(hoechstens).map { f ->
+            erledigt = dieserTag.count { it.status == FaelligkeitStatus.ERLEDIGT },
+            gesamt = dieserTag.size,
+            offen = offen.map { f ->
+                val aktivitaet = nachId.getValue(f.aktivitaetId)
                 WidgetEintrag(
                     faelligkeitId = f.id,
-                    name = nachId.getValue(f.aktivitaetId).name,
+                    name = aktivitaet.name,
+                    symbol = aktivitaet.symbol,
                     zeitText = f.geplantFuer?.format(UHRZEIT),
                     ueberfaellig = f.geplantFuer != null && f.geplantFuer!!.isBefore(jetzt),
                     istAnzahl = f.istAnzahl,
                     sollAnzahl = f.sollAnzahl,
+                    wochenziel = f.periodeBis.isAfter(f.periodeVon),
                 )
             },
-            weitere = (offen.size - hoechstens).coerceAtLeast(0),
+            leer = when {
+                dieserTag.isEmpty() -> WidgetLeer.NICHTS_GEPLANT
+                offen.isEmpty() -> WidgetLeer.ALLES_ERLEDIGT
+                else -> null
+            },
         )
+    }
+}
+
+/**
+ * Untertitel einer Zeile, Copy wie mk() im Prototyp. Zaehlziele (sollAnzahl > 1) zeigen
+ * ihren Stand wie der Heute-Bildschirm (Review-Fund G2) -- ein Tipp aendert sonst nichts
+ * sichtbar, und ein zweiter Tipp aus Unsicherheit zaehlt doppelt.
+ */
+fun widgetUntertitel(eintrag: WidgetEintrag, res: Resources): String {
+    val zaehltext = res.getString(
+        if (eintrag.wochenziel) R.string.widget_ziel_woche else R.string.widget_ziel_heute,
+        eintrag.istAnzahl,
+        eintrag.sollAnzahl,
+    )
+    val zeitText = eintrag.zeitText ?: return zaehltext
+    val zeit = if (eintrag.ueberfaellig) {
+        res.getString(R.string.widget_ueberfaellig, zeitText)
+    } else {
+        zeitText
+    }
+    return if (eintrag.sollAnzahl > 1) {
+        res.getString(R.string.widget_untertitel_verbindung, zeit, zaehltext)
+    } else {
+        zeit
     }
 }
