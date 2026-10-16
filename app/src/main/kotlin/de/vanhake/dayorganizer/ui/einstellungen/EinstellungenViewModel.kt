@@ -78,6 +78,7 @@ class EinstellungenViewModel(
     private val hinweiseLesen: suspend () -> List<Hinweis>,
     private val backupDienst: Backup,
     private val nachImport: suspend () -> Unit,
+    private val nachFarbmodus: suspend () -> Unit,
     private val ioDispatcher: CoroutineDispatcher,
     private val heute: () -> LocalDate,
 ) : ViewModel() {
@@ -116,6 +117,7 @@ class EinstellungenViewModel(
             // zeichnet erst der naechste Waechter-Lauf neu (Review-Fund W1).
             widgetAktualisierung.anstossen()
         },
+        nachFarbmodus = { widgetAktualisierung.anstossen() },
         ioDispatcher = Dispatchers.IO,
         // Kein now(): dasselbe injizierte Clock, das auch fuer die Hinweise benutzt wird
         // (Review-Fund W2 -- der vorgeschlagene Export-Dateiname traegt das heutige Datum).
@@ -313,14 +315,16 @@ class EinstellungenViewModel(
         // nach dem Tipp bricht viewModelScope ab; der Tipp ist aber schon angezeigt und darf
         // nicht verloren gehen.
         val fehlgeschlagen = withContext(NonCancellable) {
-            schreibSperre.withLock {
+            var farbmodusGeaendert = false
+            val fehler = schreibSperre.withLock {
                 val z = _zustand.value
+                val gespeichert = lesen()
                 // DataStore.edit wirft bei Platten- oder Korruptionsfehlern eine IOException --
                 // unbehandelt reisst sie die App mit. Gleiches Muster wie
                 // AktivitaetBearbeitenViewModel.speichern(): protokollieren statt abstuerzen.
                 versuchen {
                     schreiben(
-                        lesen().copy(
+                        gespeichert.copy(
                             tagesbonusPunkte = z.tagesbonusPunkte,
                             standardKulanzMinuten = z.standardKulanzMinuten,
                             themeModus = z.themeModus,
@@ -328,8 +332,14 @@ class EinstellungenViewModel(
                     )
                 }.onFailure { ausnahme ->
                     Log.w(TAG, "Speichern der Einstellungen fehlgeschlagen", ausnahme)
-                }.isFailure
+                }.also { farbmodusGeaendert = it.isSuccess && gespeichert.themeModus != z.themeModus }
+                    .isFailure
             }
+            // Nach dem Loesen der Sperre, aber noch unter NonCancellable: ein Tab-Wechsel
+            // direkt nach dem Tipp darf den Anstoss nicht verschlucken. Das Widget liest
+            // den Modus beim Neuzeichnen, deshalb erst nach dem erfolgreichen Schreiben.
+            if (farbmodusGeaendert) nachFarbmodus()
+            fehler
         }
         // Nur im Fehlerfall: die Anzeige zeigt wieder den tatsaechlich gespeicherten Stand.
         if (fehlgeschlagen) neuLaden()

@@ -104,6 +104,7 @@ class EinstellungenViewModelTest {
         hinweiseLesen: suspend () -> List<Hinweis> = { emptyList() },
         backupDienst: Backup = FakeBackup(),
         nachImport: suspend () -> Unit = {},
+        nachFarbmodus: suspend () -> Unit = {},
         // Ohne den Test-Dispatcher wuerde exportieren/importieren -- seit sie auf
         // Dispatchers.IO laufen (Review-Fund K1) -- ausserhalb der virtuellen Testzeit
         // ablaufen, und advanceUntilIdle()/join() koennten nicht mehr deterministisch
@@ -131,6 +132,7 @@ class EinstellungenViewModelTest {
             hinweiseLesen = hinweiseLesen,
             backupDienst = backupDienst,
             nachImport = nachImport,
+            nachFarbmodus = nachFarbmodus,
             ioDispatcher = ioDispatcher,
             heute = heute,
         )
@@ -681,5 +683,53 @@ class EinstellungenViewModelTest {
         val vm = viewModel(FakeSpeicher(), heute = { LocalDate.of(2026, 4, 17) })
 
         assertEquals("2026-04-17", vm.exportDatum)
+    }
+
+    @Test
+    fun `ein Farbmoduswechsel stoesst das Widget an`() = runTest(dispatcher) {
+        var anstoesse = 0
+        val vm = viewModel(FakeSpeicher(Einstellungen(themeModus = ThemeModus.HELL)), nachFarbmodus = { anstoesse++ })
+        advanceUntilIdle()
+
+        vm.themeModusAendern(ThemeModus.DUNKEL).join()
+
+        assertEquals(1, anstoesse)
+    }
+
+    @Test
+    fun `ein Tipp auf den gespeicherten Farbmodus stoesst nicht an`() = runTest(dispatcher) {
+        var anstoesse = 0
+        val vm = viewModel(FakeSpeicher(Einstellungen(themeModus = ThemeModus.HELL)), nachFarbmodus = { anstoesse++ })
+        advanceUntilIdle()
+
+        vm.themeModusAendern(ThemeModus.HELL).join()
+
+        assertEquals(0, anstoesse)
+    }
+
+    @Test
+    fun `ein Stepper-Tipp stoesst das Widget nicht an`() = runTest(dispatcher) {
+        var anstoesse = 0
+        val vm = viewModel(FakeSpeicher(), nachFarbmodus = { anstoesse++ })
+        advanceUntilIdle()
+
+        vm.tagesbonusAendern(+5).join()
+
+        assertEquals(0, anstoesse)
+    }
+
+    @Test
+    fun `ein fehlgeschlagener Farbmodus-Schreibvorgang stoesst nicht an`() = runTest(dispatcher) {
+        var anstoesse = 0
+        val vm = viewModel(
+            FakeSpeicher(Einstellungen(themeModus = ThemeModus.HELL)),
+            nachFarbmodus = { anstoesse++ },
+            schreibFehler = true,
+        )
+        advanceUntilIdle()
+
+        vm.themeModusAendern(ThemeModus.DUNKEL).join()
+
+        assertEquals(0, anstoesse)
     }
 }

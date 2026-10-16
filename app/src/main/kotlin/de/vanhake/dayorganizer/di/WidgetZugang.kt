@@ -3,6 +3,7 @@ package de.vanhake.dayorganizer.di
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import de.vanhake.dayorganizer.data.EinstellungenSpeicher
 import de.vanhake.dayorganizer.data.repository.AktivitaetRepository
 import de.vanhake.dayorganizer.data.repository.BuchungRepository
 import de.vanhake.dayorganizer.data.repository.FaelligkeitRepository
@@ -28,4 +29,5 @@ interface WidgetZugang {
     fun alarmPlaner(): AlarmPlaner
     fun anzeige(): Erinnerungsanzeige
     fun uhr(): Clock
+    fun einstellungen(): EinstellungenSpeicher
 }
