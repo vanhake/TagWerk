@@ -5,42 +5,63 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.unit.dp
 import de.vanhake.dayorganizer.domain.rechner.TagesBilanz
+import de.vanhake.dayorganizer.ui.theme.DayOrganizerFarben
+import de.vanhake.dayorganizer.ui.theme.DayOrganizerTheme
 import java.time.DayOfWeek
 
 /**
- * Mindestanteil, mit dem ein belegter Tag eingefaerbt wird, selbst wenn die Quote
- * genau null ist. Ohne diese Untergrenze ergibt mische(leer, basis, 0f) exakt [leer]
- * -- ein Tag mit drei verpassten Faelligkeiten saehe dann genauso aus wie ein Tag
- * ganz ohne Faelligkeit. Auf einem Bildschirm, dessen Zweck Rechenschaft ist, muss
- * "belegt und nichts geschafft" sichtbar anders aussehen als "nichts geplant".
- */
-private const val MINDESTANTEIL_BELEGTER_TAG = 0.18f
-
-/**
  * Obergrenze fuer die Kantenlaenge einer Tageskachel. Ein Kalendergitter mit wenigen
- * Wochen soll nicht bildschirmfuellend werden, nur weil Platz da waere.
+ * Wochen soll nicht bildschirmfuellend werden, nur weil Platz da waere. Nur die
+ * 30-Tage-Ansicht (sechs Spalten) darf groesser werden; bei 90 und 365 Tagen
+ * begrenzt ohnehin die Breite.
  */
 private val HOECHSTE_KANTE = 18.dp
+private val HOECHSTE_KANTE_30_TAGE = 34.dp
+
+/** Eckradius und Abstand der Kacheln je Zeitraum: kleine Gitter bekommen weichere Kacheln. */
+private fun radiusDp(zeitraumTage: Int): Float = when (zeitraumTage) {
+    30 -> 7f
+    90 -> 4f
+    else -> 2f
+}
+
+private fun abstandDp(zeitraumTage: Int): Float = when (zeitraumTage) {
+    30 -> 6f
+    90 -> 3f
+    else -> 2f
+}
+
+/**
+ * Farbe einer Heatmap-Stufe 0..4: Stufe 0 ist die leere Flaeche, Stufe 4 die volle
+ * Akzentfarbe, dazwischen Mischungen zu 28, 52 und 76 Prozent (linear in sRGB, eine
+ * bewusste Vereinfachung gegenueber der oklch-Mischung des Prototyps).
+ */
+fun heatFarbe(stufe: Int, farben: DayOrganizerFarben): Color = when (stufe) {
+    0 -> farben.surface2
+    1 -> mische(farben.surface2, farben.accent, 0.28f)
+    2 -> mische(farben.surface2, farben.accent, 0.52f)
+    3 -> mische(farben.surface2, farben.accent, 0.76f)
+    else -> farben.accent
+}
 
 /**
  * Kalender-Heatmap im Wochenraster: eine Spalte je Woche, sieben Zeilen von
- * Montag bis Sonntag. Die Faerbung ist der Anteil erledigter Faelligkeiten.
+ * Montag bis Sonntag. Die Faerbung ist die Stufe aus [heatStufe].
  */
 @Composable
-fun Heatmap(bilanzen: List<TagesBilanz>, modifier: Modifier = Modifier) {
+fun Heatmap(bilanzen: List<TagesBilanz>, zeitraumTage: Int, modifier: Modifier = Modifier) {
     if (bilanzen.isEmpty()) return
-    val basis = MaterialTheme.colorScheme.primary
-    val leer = MaterialTheme.colorScheme.surfaceVariant
+    val farben = DayOrganizerTheme.farben
 
     val ersterTag = bilanzen.first().tag
     val versatz = ersterTag.dayOfWeek.value - DayOfWeek.MONDAY.value
@@ -55,11 +76,11 @@ fun Heatmap(bilanzen: List<TagesBilanz>, modifier: Modifier = Modifier) {
     // Passt das Gitter nicht in die Breite (ein Jahr sind 53 Spalten), gewinnt die
     // Breite; sonst steht es in seiner natuerlichen Groesse mittig.
     BoxWithConstraints(modifier.fillMaxWidth()) {
-        val kante = minOf(maxWidth / wochen, HOECHSTE_KANTE)
+        val kante = minOf(maxWidth / wochen, if (zeitraumTage == 30) HOECHSTE_KANTE_30_TAGE else HOECHSTE_KANTE)
         val breite = kante * wochen
 
         Canvas(Modifier.width(breite).height(kante * 7).align(Alignment.Center)) {
-            zeichne(bilanzen, versatz, size.width / wochen, basis, leer)
+            zeichne(bilanzen, versatz, size.width / wochen, zeitraumTage, farben)
         }
     }
 }
@@ -68,25 +89,22 @@ private fun DrawScope.zeichne(
     bilanzen: List<TagesBilanz>,
     versatz: Int,
     kante: Float,
-    basis: Color,
-    leer: Color,
+    zeitraumTage: Int,
+    farben: DayOrganizerFarben,
 ) {
-    val abstand = kante * 0.15f
+    val abstand = abstandDp(zeitraumTage).dp.toPx()
+    val radius = radiusDp(zeitraumTage).dp.toPx()
 
     bilanzen.forEachIndexed { index, bilanz ->
         val position = index + versatz
         val spalte = position / 7
         val zeile = position % 7
-        val anteil = if (bilanz.gesamt == 0) {
-            0f
-        } else {
-            (bilanz.erledigt.toFloat() / bilanz.gesamt).coerceAtLeast(MINDESTANTEIL_BELEGTER_TAG)
-        }
 
-        drawRect(
-            color = if (bilanz.gesamt == 0) leer else mische(leer, basis, anteil),
+        drawRoundRect(
+            color = heatFarbe(heatStufe(bilanz), farben),
             topLeft = Offset(spalte * kante, zeile * kante),
             size = Size(kante - abstand, kante - abstand),
+            cornerRadius = CornerRadius(radius),
         )
     }
 }

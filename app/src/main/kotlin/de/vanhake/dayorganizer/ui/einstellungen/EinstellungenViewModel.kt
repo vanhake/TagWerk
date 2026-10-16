@@ -35,16 +35,23 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 data class EinstellungenZustand(
-    val tagesbonusText: String = "",
-    val standardKulanzText: String = "",
+    val tagesbonusPunkte: Int = 15,
+    val standardKulanzMinuten: Int = 60,
     val themeModus: ThemeModus = ThemeModus.HELL,
     val hinweise: List<Hinweis> = emptyList(),
+    /** Erst nach dem ersten Laden zeigt der Zustand gespeicherte Werte statt Defaults. */
+    val geladen: Boolean = false,
 )
 
-/** Ergebnis von Export oder Import, vom Screen einmalig als Snackbar gezeigt. */
+/**
+ * Ergebnis von Export oder Import, vom Screen einmalig als Toast gezeigt. Der Screen
+ * startet beim Eintreffen einen Timer (3 800 ms) und ruft danach [EinstellungenViewModel.meldungGezeigt].
+ */
 enum class Meldung {
     EXPORT_FERTIG,
     EXPORT_FEHLGESCHLAGEN,
@@ -118,6 +125,9 @@ class EinstellungenViewModel(
     private val _zustand = MutableStateFlow(EinstellungenZustand())
     val zustand: StateFlow<EinstellungenZustand> = _zustand.asStateFlow()
 
+    // Serialisiert die Schreibvorgaenge der Stepper und des Farbmodus (siehe uebernehmen()).
+    private val schreibSperre = Mutex()
+
     private val _meldung = MutableStateFlow<Meldung?>(null)
     val meldung: StateFlow<Meldung?> = _meldung.asStateFlow()
 
@@ -139,8 +149,8 @@ class EinstellungenViewModel(
         viewModelScope.launch { neuLaden() }
     }
 
-    /** Vom Screen aufgerufen, nachdem die Snackbar gezeigt wurde -- sonst erschiene
-     * dieselbe Meldung bei jeder Rekomposition erneut. */
+    /** Vom Screen aufgerufen, wenn der Toast-Timer (MELDUNG_DAUER_MS) abgelaufen ist --
+     * sonst erschiene dieselbe Meldung bei jeder Rekomposition erneut. */
     fun meldungGezeigt() {
         _meldung.value = null
     }
@@ -251,24 +261,31 @@ class EinstellungenViewModel(
         }
     }
 
-    fun tagesbonusAendern(text: String) {
-        _zustand.value = _zustand.value.copy(tagesbonusText = text)
+    /** [schritt] ist +1 oder -1 und wird mit [STEPPER_SCHRITT] multipliziert. */
+    fun tagesbonusAendern(schritt: Int): Job {
+        val z = _zustand.value
+        if (!z.geladen) return ignoriert()
+        _zustand.value = z.copy(
+            tagesbonusPunkte = (z.tagesbonusPunkte + schritt * STEPPER_SCHRITT).coerceAtLeast(STEPPER_MIN),
+        )
+        return uebernehmen()
     }
 
-    fun kulanzAendern(text: String) {
-        _zustand.value = _zustand.value.copy(standardKulanzText = text)
+    fun kulanzAendern(schritt: Int): Job {
+        val z = _zustand.value
+        if (!z.geladen) return ignoriert()
+        _zustand.value = z.copy(
+            standardKulanzMinuten = (z.standardKulanzMinuten + schritt * STEPPER_SCHRITT)
+                .coerceAtLeast(STEPPER_MIN),
+        )
+        return uebernehmen()
     }
 
-    /** Wirkt sofort, anders als tagesbonusAendern/kulanzAendern: ein Farbmodus ist ein
-     * Umschalter, kein Formularfeld, das erst ueber "Speichern" uebernommen wird. */
-    fun themeModusAendern(neu: ThemeModus) = viewModelScope.launch {
-        val bisher = lesen()
-        versuchen {
-            schreiben(bisher.copy(themeModus = neu))
-        }.onFailure { ausnahme ->
-            Log.w(TAG, "Speichern des Farbmodus fehlgeschlagen", ausnahme)
-        }
-        neuLaden()
+    /** Wirkt wie die Stepper sofort: ein Farbmodus ist ein Umschalter, kein Formularfeld. */
+    fun themeModusAendern(neu: ThemeModus): Job {
+        if (!_zustand.value.geladen) return ignoriert()
+        _zustand.value = _zustand.value.copy(themeModus = neu)
+        return uebernehmen()
     }
 
     /**
@@ -280,40 +297,58 @@ class EinstellungenViewModel(
         viewModelScope.launch { _zustand.value = _zustand.value.copy(hinweise = hinweiseLesen()) }
     }
 
+    /** Vor dem Erstladen zeigt der Zustand nur Defaults; ein Tipp wuerde sie speichern und
+     * die echten Werte still ueberschreiben. Deshalb zaehlt er nicht (kein Schreibvorgang). */
+    private fun ignoriert(): Job = Job().apply { complete() }
+
     /**
-     * Ungueltige Eingaben werden verworfen, nicht gespeichert. Ein leeres Feld
-     * darf den Tagesbonus nicht auf null setzen.
+     * Schreibt den *aktuellen* Zustand, nicht den zum Tipp-Zeitpunkt: Die Anzeige wurde
+     * schon synchron geaendert, und unter der Sperre liest jeder Lauf den neuesten Stand.
+     * So traegt jeder Schreibvorgang alle bisherigen Tipps, und ein spaeterer Lauf
+     * ueberholt nie einen frueheren -- fuenf schnelle Tipps ergeben +25, nicht +5.
+     * Kein neuLaden() nach Erfolg, sonst spraenge die Anzeige bei schnellen Tipps zurueck.
      */
-    fun speichern(): Job = viewModelScope.launch {
-        val bisher = lesen()
-        val neu = bisher.copy(
-            tagesbonusPunkte = _zustand.value.tagesbonusText.toIntOrNull()
-                ?.takeIf { it >= 0 } ?: bisher.tagesbonusPunkte,
-            standardKulanzMinuten = _zustand.value.standardKulanzText.toIntOrNull()
-                ?.takeIf { it >= 0 } ?: bisher.standardKulanzMinuten,
-        )
-        // DataStore.edit wirft bei Platten- oder Korruptionsfehlern eine IOException --
-        // unbehandelt reisst sie die App mit. Gleiches Muster wie
-        // AktivitaetBearbeitenViewModel.speichern(): protokollieren statt abstuerzen.
-        versuchen {
-            schreiben(neu)
-        }.onFailure { ausnahme ->
-            Log.w(TAG, "Speichern der Einstellungen fehlgeschlagen", ausnahme)
+    private fun uebernehmen(): Job = viewModelScope.launch {
+        // NonCancellable (wie bei importBestaetigen, Review-Fund W1): ein Tab-Wechsel direkt
+        // nach dem Tipp bricht viewModelScope ab; der Tipp ist aber schon angezeigt und darf
+        // nicht verloren gehen.
+        val fehlgeschlagen = withContext(NonCancellable) {
+            schreibSperre.withLock {
+                val z = _zustand.value
+                // DataStore.edit wirft bei Platten- oder Korruptionsfehlern eine IOException --
+                // unbehandelt reisst sie die App mit. Gleiches Muster wie
+                // AktivitaetBearbeitenViewModel.speichern(): protokollieren statt abstuerzen.
+                versuchen {
+                    schreiben(
+                        lesen().copy(
+                            tagesbonusPunkte = z.tagesbonusPunkte,
+                            standardKulanzMinuten = z.standardKulanzMinuten,
+                            themeModus = z.themeModus,
+                        ),
+                    )
+                }.onFailure { ausnahme ->
+                    Log.w(TAG, "Speichern der Einstellungen fehlgeschlagen", ausnahme)
+                }.isFailure
+            }
         }
-        neuLaden()
+        // Nur im Fehlerfall: die Anzeige zeigt wieder den tatsaechlich gespeicherten Stand.
+        if (fehlgeschlagen) neuLaden()
     }
 
     private suspend fun neuLaden() {
         val aktuell = lesen()
         _zustand.value = EinstellungenZustand(
-            tagesbonusText = aktuell.tagesbonusPunkte.toString(),
-            standardKulanzText = aktuell.standardKulanzMinuten.toString(),
+            tagesbonusPunkte = aktuell.tagesbonusPunkte,
+            standardKulanzMinuten = aktuell.standardKulanzMinuten,
             themeModus = aktuell.themeModus,
             hinweise = hinweiseLesen(),
+            geladen = true,
         )
     }
 
-    private companion object {
-        const val TAG = "EinstellungenVM"
+    companion object {
+        const val STEPPER_SCHRITT = 5
+        const val STEPPER_MIN = 0
+        private const val TAG = "EinstellungenVM"
     }
 }

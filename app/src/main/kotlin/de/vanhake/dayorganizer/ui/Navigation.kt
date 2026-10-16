@@ -2,22 +2,20 @@ package de.vanhake.dayorganizer.ui
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
+import androidx.compose.material.icons.automirrored.outlined.FormatListBulleted
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Insights
-import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material.icons.filled.Redeem
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Insights
+import androidx.compose.material.icons.outlined.Redeem
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
@@ -30,6 +28,8 @@ import de.vanhake.dayorganizer.ui.aktivitaeten.AktivitaetenScreen
 import de.vanhake.dayorganizer.ui.belohnungen.BelohnungBearbeitenScreen
 import de.vanhake.dayorganizer.ui.belohnungen.BelohnungenScreen
 import de.vanhake.dayorganizer.ui.einstellungen.EinstellungenScreen
+import de.vanhake.dayorganizer.ui.gemeinsam.Navigationsleiste
+import de.vanhake.dayorganizer.ui.gemeinsam.NavigationsEintrag
 import de.vanhake.dayorganizer.ui.gemeinsam.SpeicherErgebnis
 import de.vanhake.dayorganizer.ui.heute.HeuteScreen
 import de.vanhake.dayorganizer.ui.statistik.StatistikScreen
@@ -53,14 +53,23 @@ object Ziele {
     fun belohnungBearbeiten(id: Long) = "belohnung/$id"
 }
 
-private data class Tab(val ziel: String, val icon: ImageVector, val titelId: Int)
-
 private val TABS = listOf(
-    Tab(Ziele.HEUTE, Icons.Default.CheckCircle, R.string.tab_heute),
-    Tab(Ziele.AKTIVITAETEN, Icons.Default.List, R.string.tab_aktivitaeten),
-    Tab(Ziele.BELOHNUNGEN, Icons.Default.Star, R.string.tab_belohnungen),
-    Tab(Ziele.STATISTIK, Icons.Default.Insights, R.string.tab_statistik),
-    Tab(Ziele.EINSTELLUNGEN, Icons.Default.Settings, R.string.tab_einstellungen),
+    NavigationsEintrag(
+        Ziele.HEUTE, R.string.tab_heute, Icons.Filled.CheckCircle, Icons.Outlined.CheckCircle,
+    ),
+    NavigationsEintrag(
+        Ziele.AKTIVITAETEN, R.string.tab_aktivitaeten,
+        Icons.AutoMirrored.Filled.FormatListBulleted, Icons.AutoMirrored.Outlined.FormatListBulleted,
+    ),
+    NavigationsEintrag(
+        Ziele.BELOHNUNGEN, R.string.tab_belohnungen, Icons.Filled.Redeem, Icons.Outlined.Redeem,
+    ),
+    NavigationsEintrag(
+        Ziele.STATISTIK, R.string.tab_statistik, Icons.Filled.Insights, Icons.Outlined.Insights,
+    ),
+    NavigationsEintrag(
+        Ziele.EINSTELLUNGEN, R.string.tab_einstellungen, Icons.Filled.Tune, Icons.Outlined.Tune,
+    ),
 )
 
 @Composable
@@ -75,28 +84,10 @@ fun DayOrganizerNavigation() {
             // waere ohnehin kein Tab markiert, und ein Tipp wuerfe ueber das popUpTo unten
             // den halb ausgefuellten Bearbeiten-Bildschirm ohne Rueckfrage vom Stapel.
             if (TABS.any { it.ziel == aktuell }) {
-                NavigationBar {
-                    TABS.forEach { tab ->
-                        NavigationBarItem(
-                            selected = aktuell == tab.ziel,
-                            onClick = {
-                                navController.navigate(tab.ziel) {
-                                    popUpTo(Ziele.HEUTE)
-                                    launchSingleTop = true
-                                }
-                            },
-                            icon = { Icon(tab.icon, contentDescription = null) },
-                            // Einzeilig mit Auslassungszeichen: bei grosser Schrift passen fuenf
-                            // Beschriftungen nicht nebeneinander, und ein Umbruch mitten im Wort
-                            // ("Statisti/k") ist schlechter als ein gekuerztes "Statis...".
-                            label = {
-                                Text(
-                                    stringResource(tab.titelId),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            },
-                        )
+                Navigationsleiste(TABS, aktuell) { ziel ->
+                    navController.navigate(ziel) {
+                        popUpTo(Ziele.HEUTE)
+                        launchSingleTop = true
                     }
                 }
             }

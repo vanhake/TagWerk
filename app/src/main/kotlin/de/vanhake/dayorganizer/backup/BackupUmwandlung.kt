@@ -97,6 +97,14 @@ object BackupUmwandlung {
         ),
     )
 
+    /**
+     * Wandelt [datei] in Domaenenobjekte um und wirft [IllegalArgumentException], wenn ein
+     * Wert fachlich unmoeglich ist. Geprueft werden genau drei: Belohnungspreis, Perioden
+     * einer Serienbedingung und Basispunkte einer Aktivitaet muessen positiv sein. Die
+     * Editoren erzeugen nie 0 oder weniger, und jeder dieser Werte haette sichtbare Folgen
+     * (Belohnung immer einloesbar, Serienbedingung immer erfuellt, Erledigung ohne Punkte).
+     * Alle uebrigen Felder haben Standardwert-Fallbacks und brauchen keine Pruefung.
+     */
     fun ausDatei(datei: BackupDatei): BackupInhalt {
         if (datei.schemaVersion !in LESBARE_VERSIONEN) throw UnbekanntesSchema(datei.schemaVersion)
 
@@ -139,23 +147,26 @@ object BackupUmwandlung {
         )
     }
 
-    private fun AktivitaetDto.zuDomaene() = Aktivitaet(
-        id = id, name = name, notiz = notiz, farbe = farbe, symbol = symbol,
-        basisPunkte = basisPunkte,
-        zeitplan = ZeitplanKodierung.dekodiere(
-            ZeitplanFelder(
-                typ = zeitplanTyp, zeiten = zeitplanZeiten, wochentage = zeitplanWochentage,
-                intervallStunden = zeitplanIntervallStunden,
-                fensterVon = zeitplanFensterVon, fensterBis = zeitplanFensterBis,
-                zielAnzahl = zeitplanZielAnzahl, anstoss = zeitplanAnstoss,
+    private fun AktivitaetDto.zuDomaene(): Aktivitaet {
+        require(basisPunkte > 0) { "Aktivitaet $id: basisPunkte muss positiv sein" }
+        return Aktivitaet(
+            id = id, name = name, notiz = notiz, farbe = farbe, symbol = symbol,
+            basisPunkte = basisPunkte,
+            zeitplan = ZeitplanKodierung.dekodiere(
+                ZeitplanFelder(
+                    typ = zeitplanTyp, zeiten = zeitplanZeiten, wochentage = zeitplanWochentage,
+                    intervallStunden = zeitplanIntervallStunden,
+                    fensterVon = zeitplanFensterVon, fensterBis = zeitplanFensterBis,
+                    zielAnzahl = zeitplanZielAnzahl, anstoss = zeitplanAnstoss,
+                ),
             ),
-        ),
-        kulanzMinuten = kulanzMinuten, puenktlichkeitsBonus = puenktlichkeitsBonus,
-        serienSchwellen = ZeitplanKodierung.dekodiereSchwellen(serienSchwellen),
-        nachfassAnzahl = nachfassAnzahl, nachfassAbstandMinuten = nachfassAbstandMinuten,
-        aktiv = aktiv, erstelltAm = LocalDate.parse(erstelltAm),
-        archiviertAm = archiviertAm?.let(LocalDate::parse),
-    )
+            kulanzMinuten = kulanzMinuten, puenktlichkeitsBonus = puenktlichkeitsBonus,
+            serienSchwellen = ZeitplanKodierung.dekodiereSchwellen(serienSchwellen),
+            nachfassAnzahl = nachfassAnzahl, nachfassAbstandMinuten = nachfassAbstandMinuten,
+            aktiv = aktiv, erstelltAm = LocalDate.parse(erstelltAm),
+            archiviertAm = archiviertAm?.let(LocalDate::parse),
+        )
+    }
 
     private fun Faelligkeit.zuDto() = FaelligkeitDto(
         id = id, aktivitaetId = aktivitaetId,
@@ -200,30 +211,33 @@ object BackupUmwandlung {
         symbol = symbol,
     )
 
-    private fun BelohnungDto.zuDomaene() = Belohnung(
-        id = id, name = name, beschreibung = beschreibung, preisPunkte = preisPunkte,
-        bedingung = when (bedingungTyp) {
-            "MINDESTSERIE" -> Belohnungsbedingung.MindestSerie(
-                requireNotNull(bedingungAktivitaetId) {
-                    "Belohnung $id: bedingungAktivitaetId fehlt fuer MINDESTSERIE"
-                },
-                requireNotNull(bedingungPerioden) {
-                    "Belohnung $id: bedingungPerioden fehlt fuer MINDESTSERIE"
-                },
-            )
-            "FRUEHESTENS_AB" -> Belohnungsbedingung.FruehestensAb(
-                LocalDate.parse(
-                    requireNotNull(bedingungDatum) {
-                        "Belohnung $id: bedingungDatum fehlt fuer FRUEHESTENS_AB"
+    private fun BelohnungDto.zuDomaene(): Belohnung {
+        require(preisPunkte > 0) { "Belohnung $id: preisPunkte muss positiv sein" }
+        return Belohnung(
+            id = id, name = name, beschreibung = beschreibung, preisPunkte = preisPunkte,
+            bedingung = when (bedingungTyp) {
+                "MINDESTSERIE" -> Belohnungsbedingung.MindestSerie(
+                    requireNotNull(bedingungAktivitaetId) {
+                        "Belohnung $id: bedingungAktivitaetId fehlt fuer MINDESTSERIE"
                     },
-                ),
-            )
-            null -> null
-            else -> error("Unbekannte Belohnungsbedingung: $bedingungTyp")
-        },
-        archiviert = archiviert,
-        symbol = symbol,
-    )
+                    requireNotNull(bedingungPerioden) {
+                        "Belohnung $id: bedingungPerioden fehlt fuer MINDESTSERIE"
+                    }.also { require(it > 0) { "Belohnung $id: bedingungPerioden muss positiv sein" } },
+                )
+                "FRUEHESTENS_AB" -> Belohnungsbedingung.FruehestensAb(
+                    LocalDate.parse(
+                        requireNotNull(bedingungDatum) {
+                            "Belohnung $id: bedingungDatum fehlt fuer FRUEHESTENS_AB"
+                        },
+                    ),
+                )
+                null -> null
+                else -> error("Unbekannte Belohnungsbedingung: $bedingungTyp")
+            },
+            archiviert = archiviert,
+            symbol = symbol,
+        )
+    }
 
     private fun Einloesung.zuDto() = EinloesungDto(
         id = id, belohnungId = belohnungId, name = name,
