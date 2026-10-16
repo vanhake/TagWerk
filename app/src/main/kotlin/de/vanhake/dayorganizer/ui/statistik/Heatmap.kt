@@ -90,13 +90,10 @@ fun Heatmap(bilanzen: List<TagesBilanz>, zeitraumTage: Int, modifier: Modifier =
         val kante = minOf(maxWidth / wochen, if (zeitraumTage == 30) HOECHSTE_KANTE_30_TAGE else HOECHSTE_KANTE)
         val breite = kante * wochen
 
-        // TalkBack liest das Gitter nicht aus dem Canvas: der Container traegt die
-        // Zusammenfassung, darueber liegt je Woche eine unsichtbare Box in Spaltenbreite
-        // mit dem Wochentext. Breite und Mittigkeit wie beim Canvas, sonst laegen die
-        // Fokusrahmen neben den Spalten.
-        val zusammenfassung = heatmapZusammenfassung(bilanzen).let {
-            stringResource(R.string.heatmap_vorlesen, it.tage, it.vollstaendig, it.teilweise, it.nichtsErledigt, it.frei)
-        }
+        // TalkBack liest das Gitter nicht aus dem Canvas: ueber dem Canvas liegt je Woche
+        // eine unsichtbare Box in Spaltenbreite mit dem Wochentext. Breite und Mittigkeit
+        // wie beim Canvas, sonst laegen die Fokusrahmen neben den Spalten. Die
+        // Zusammenfassung traegt die Legende darunter ([heatmapVorlesetext]).
         val wochenTexte = heatmapWochen(bilanzen).map { wochenText(it) }
 
         Box(
@@ -105,10 +102,10 @@ fun Heatmap(bilanzen: List<TagesBilanz>, zeitraumTage: Int, modifier: Modifier =
                 .height(kante * 7)
                 .align(Alignment.Center),
         ) {
-            // Die Zusammenfassung sitzt am Canvas-Blatt: ein Container mit fokussierbaren
-            // Kindern ohne mergeDescendants wird von TalkBack nie selbst fokussiert. Das
-            // Canvas steht vor dem Wochen-Overlay und kommt damit zuerst.
-            Canvas(Modifier.fillMaxSize().clearAndSetSemantics { contentDescription = zusammenfassung }) {
+            // Das Canvas bleibt stumm: das Wochen-Overlay verdeckt es vollstaendig, und
+            // Compose laesst vollstaendig verdeckte Knoten aus dem Accessibility-Baum fallen.
+            // Eine Beschreibung hier kaeme also nie bei TalkBack an.
+            Canvas(Modifier.fillMaxSize().clearAndSetSemantics {}) {
                 zeichne(bilanzen, versatz, size.width / wochen, zeitraumTage, farben)
             }
             Row(Modifier.fillMaxSize()) {
@@ -118,6 +115,15 @@ fun Heatmap(bilanzen: List<TagesBilanz>, zeitraumTage: Int, modifier: Modifier =
             }
         }
     }
+}
+
+/**
+ * Vorlesetext der ganzen Heatmap ("30 Tage: …"). Er sitzt an der Legende unter der
+ * Grafik, weil die Grafik selbst vom Wochen-Overlay verdeckt ist.
+ */
+@Composable
+fun heatmapVorlesetext(bilanzen: List<TagesBilanz>): String = heatmapZusammenfassung(bilanzen).let {
+    stringResource(R.string.heatmap_vorlesen, it.tage, it.vollstaendig, it.teilweise, it.nichtsErledigt, it.frei)
 }
 
 private val WOCHENTAG: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE", Locale.GERMAN)

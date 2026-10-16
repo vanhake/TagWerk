@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
@@ -101,7 +102,7 @@ fun StatistikScreen(viewModel: StatistikViewModel = hiltViewModel()) {
                         }
                     }
                     Heatmap(zustand.bilanzen, zustand.zeitraumTage)
-                    HeatmapLegende()
+                    HeatmapLegende(heatmapVorlesetext(zustand.bilanzen))
                 }
             }
         }
@@ -183,10 +184,12 @@ private fun ZeitraumPille(tage: Int, gewaehlt: Boolean, waehlen: () -> Unit) {
 }
 
 @Composable
-private fun HeatmapLegende() {
+private fun HeatmapLegende(zusammenfassung: String) {
     val farben = DayOrganizerTheme.farben
+    // Die Legende traegt die Zusammenfassung der Heatmap: die Grafik selbst ist vom
+    // Wochen-Overlay verdeckt und faellt deshalb aus dem Accessibility-Baum.
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = zusammenfassung },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
     ) {

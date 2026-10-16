@@ -17,9 +17,14 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Haelt einen ungenauen Alarm auf den naechsten Umschaltpunkt des Widgets (Uhrzeit eines
- * offenen Eintrags, sonst Mitternacht). Ohne ihn zeichnet sich das Widget nur bei
+ * Haelt einen nicht weckenden Alarm auf den naechsten Umschaltpunkt des Widgets (Uhrzeit
+ * eines offenen Eintrags, sonst Mitternacht). Ohne ihn zeichnet sich das Widget nur bei
  * Datenaenderungen neu, ein Eintrag wird also nie von selbst "ueberfaellig".
+ *
+ * Darf die App exakte Alarme stellen (die Berechtigung hat sie ohnehin fuer den
+ * AlarmPlaner), ist der Alarm exakt: Android 14 dehnt ein setWindow-Fenster auf
+ * mindestens zehn Minuten, "ueberfaellig" kaeme sonst bis zu zehn Minuten zu spaet.
+ * Ohne die Erlaubnis bleibt es beim Fenster von [FENSTER_MS].
  */
 @Singleton
 class WidgetWecker @Inject constructor(
@@ -36,12 +41,12 @@ class WidgetWecker @Inject constructor(
         val punkt = WidgetTakt.naechsterUmschaltpunkt(heute, LocalDateTime.now(uhr))
         // Der Nachlauf stellt sicher, dass beim Zeichnen die Uhrzeit sicher ueberschritten ist.
         // RTC statt RTC_WAKEUP: bei ausgeschaltetem Bildschirm muss nichts neu gezeichnet werden.
-        manager.setWindow(
-            AlarmManager.RTC,
-            alsEpochMillis(punkt, ZoneId.systemDefault()) + NACHLAUF_MS,
-            FENSTER_MS,
-            alarmIntent(),
-        )
+        val ausloesen = alsEpochMillis(punkt, ZoneId.systemDefault()) + NACHLAUF_MS
+        if (manager.canScheduleExactAlarms()) {
+            manager.setExact(AlarmManager.RTC, ausloesen, alarmIntent())
+        } else {
+            manager.setWindow(AlarmManager.RTC, ausloesen, FENSTER_MS, alarmIntent())
+        }
     }
 
     fun abbestellen() {

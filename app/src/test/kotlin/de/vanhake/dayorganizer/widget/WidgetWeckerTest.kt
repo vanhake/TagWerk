@@ -13,6 +13,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowAlarmManager
 import java.time.Clock
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -53,6 +54,31 @@ class WidgetWeckerTest {
         val alarm = assertNotNull(shadow.nextScheduledAlarm)
         assertEquals(AlarmManager.RTC, alarm.type)
         assertEquals(alsEpochMillis(acht, zone) + WidgetWecker.NACHLAUF_MS, alarm.triggerAtMs)
+    }
+
+    @Test
+    fun `planen stellt den Alarm exakt, wenn exakte Alarme erlaubt sind`() = runTest {
+        ShadowAlarmManager.setCanScheduleExactAlarms(true)
+
+        wecker().planen()
+
+        val alarm = assertNotNull(shadow.nextScheduledAlarm)
+        assertEquals(AlarmManager.RTC, alarm.type)
+        assertEquals(alsEpochMillis(acht, zone) + WidgetWecker.NACHLAUF_MS, alarm.triggerAtMs)
+        // Exakte Alarme haben im Shadow die Fensterlaenge 0 (AlarmManager.WINDOW_EXACT).
+        assertEquals(0L, alarm.windowLengthMs)
+    }
+
+    @Test
+    fun `planen stellt ein Fenster, wenn exakte Alarme verboten sind`() = runTest {
+        ShadowAlarmManager.setCanScheduleExactAlarms(false)
+
+        wecker().planen()
+
+        val alarm = assertNotNull(shadow.nextScheduledAlarm)
+        assertEquals(AlarmManager.RTC, alarm.type)
+        assertEquals(alsEpochMillis(acht, zone) + WidgetWecker.NACHLAUF_MS, alarm.triggerAtMs)
+        assertEquals(WidgetWecker.FENSTER_MS, alarm.windowLengthMs)
     }
 
     @Test
