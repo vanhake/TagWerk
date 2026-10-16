@@ -1,7 +1,7 @@
 # Übergabe — Stand und wie es weitergeht
 
-Letzte Aktualisierung: 2026-10-16, Branch `worktree-redesign-plan8-widget`
-(Plan 8, nach dem Merge von Plan 7).
+Letzte Aktualisierung: 2026-10-16. Plan 8 umgesetzt (Branch
+`worktree-redesign-plan8-widget`, PR folgt), aufbauend auf dem Merge von Plan 7.
 
 Dieses Dokument soll reichen, um in einer neuen Sitzung ohne Vorwissen
 weiterzuarbeiten. Die Wahrheit steht im Code und in `git log`; wo dieses
@@ -22,7 +22,7 @@ Backup; die Pläne 4–8 haben die ganze App an den Redesign-Prototyp
 | 8 | Homescreen-Widget im Prototyp-Stil (Kopf mit Fortschritt und Punkten, Symbolkacheln, Zeilenzahl nach Höhe, Farben nach App-Einstellung) |
 
 Plan 4–7 sind auf `main` gemergt; Plan 8 liegt auf dem Branch
-`worktree-redesign-plan8-widget` und ist nach Review und Merge abgeschlossen.
+`worktree-redesign-plan8-widget` (Review gelaufen, PR folgt).
 Datenbank Version 5, Backup-Schema 3 (Schema 2 bleibt lesbar).
 
 Was nach dem Redesign offen ist, steht unter „Offene Punkte“. Es ist ein
@@ -83,8 +83,9 @@ Der Punktestand ist die Summe eines Buchungsjournals, nie ein Zähler. Es ist zu
 jedem Zeitpunkt genau ein exakter Alarm gesetzt, für die nächste fällige
 Erinnerung überhaupt. Das Widget (Glance) rechnet seinen Zustand in reinen
 Funktionen (`WidgetZustand`, `WidgetMasse`) und liest die Farben über
-`widgetFarben(modus)` aus denselben Objekten wie die App. Jede Klasse, die die Uhrzeit braucht, bekommt eine
-`java.time.Clock` injiziert — daran hängt die gesamte Testbarkeit.
+`widgetFarben(modus)` aus denselben Objekten wie die App. Jede Klasse, die die
+Uhrzeit braucht, bekommt eine `java.time.Clock` injiziert — daran hängt die
+gesamte Testbarkeit.
 
 ## Konventionen, die durchgehalten werden
 
@@ -109,10 +110,13 @@ Funktionen (`WidgetZustand`, `WidgetMasse`) und liest die Farben über
 
 ## Vorgehen, das sich bewährt hat
 
-Beide Pläne liefen subagent-getrieben (`superpowers:subagent-driven-development`):
+Alle Pläne liefen subagent-getrieben (`superpowers:subagent-driven-development`):
 pro Task ein frischer Implementierer, danach ein Reviewer mit Spec- und
 Qualitätsurteil, Fixes bis sauber, Fortschritt im Ledger, am Ende ein Review
 über den gesamten Branch.
+
+Die Funde aus Plan 1 und 2, die diese Arbeitsweise begründet haben (die Pläne
+4–8 stehen im Block darunter):
 
 **Der Befund aus Plan 1 hat sich in Plan 2 bestätigt und verschärft: fast alle
 gefundenen Fehler steckten im Plan, nicht in der Umsetzung.** In Plan 2 unter
@@ -122,7 +126,7 @@ Speichern die App mitriss; ein Doppeltipp, der zweimal abbuchte; ein
 Punkteverlauf, der die Netto-Änderung statt des Kontostands zeigte; ein
 Wochenziel, das in der Heatmap sieben erledigte Tage meldete.
 
-Drei Techniken tragen das und sollten beibehalten werden:
+Vier Techniken tragen das und sollten beibehalten werden:
 
 1. **Mutationsnachweis.** Nach jedem Fix den Produktionscode absichtlich kaputt
    machen, prüfen, dass der neue Test umfällt, und wiederherstellen. In Plan 2
@@ -180,19 +184,43 @@ davon blockiert einen Merge.
 - **Archivieren ohne Rückfrage und Wiederherstellung.** Im Emulator sind dadurch
   vier echte Aktivitäten archiviert (Magnesium, Rücken, Tabletten, Vitamin).
   Außerdem steht aus Plan 6 eine Test-Einlösung über −10 Punkte im Emulator.
-- **Fehlerbehandlung der Editoren.** Das Speichern beider Editoren sollte
-  einheitlich mit Fehlern umgehen; `Repository.speichern` wirft bei fehlendem
-  Datensatz.
+- **Fehlerbehandlung.** Das Speichern beider Editoren sollte einheitlich mit
+  Fehlern umgehen; `Repository.speichern` wirft bei fehlendem Datensatz. Dazu
+  stehen drei Stile nebeneinander (`versuchen{}`, `runCatching` mit Weiterwerfen,
+  ungeschütztes `catch`); zusammen vereinheitlichen.
 - **TalkBack.** Die Heatmap hat keine Semantik. Das „–“ bei Aktivitäten ohne
   Quote hat keinen Vorlesetext.
 - **Dateidialog.** Nach dem Abbrechen des System-Dateidialogs stand die App im
   Emulator wieder auf „Heute“. Eine Ursache im Code ist nicht gefunden.
+- **Widget nach Mitternacht.** `provideGlance` legt `heute` einmal pro Sitzung
+  fest. Zwischen Mitternacht und der nächsten Aktualisierung zeigt das Widget
+  die Fälligkeiten von gestern, und ein Tipp hakt den Eintrag von gestern ab.
+- **Widget ohne Vorschau und Fehlerlayout.** Es gibt kein `previewLayout` und
+  kein Glance-`errorUiLayout`.
+- **`WidgetErledigenAktion`.** Sie ruft `updateAll()` direkt und ohne
+  Fehlerbehandlung auf, statt über `WidgetAktualisierung`.
+- **Kaputter Belohnungsdatensatz.** `error(...)` im Mapper reißt den
+  Heute-Bildschirm mit, weil er den Flow der aktiven Belohnungen sammelt.
+- **`EinstellungenSpeicher` bei E/A-Fehlern.** Er liefert still die Standardwerte;
+  der Tagesbonus wird dann mit dem Standardwert gebucht, nicht mit dem
+  eingestellten.
+- **Statistik und archivierte Aktivitäten.** Sie erscheinen in der Heatmap,
+  fehlen aber bei den Quoten.
 
 ### Neu aus Plan 8
 
 - **„Überfällig“ im Widget kommt verspätet.** Es erscheint erst bei der nächsten
   Neuzeichnung (Datenänderung, Farbmoduswechsel oder spätestens nach 30
   Minuten), nicht genau zur geplanten Uhrzeit.
+- **Leerhinweis im Höhenbudget.** „Alles erledigt für heute“ ist in `WidgetMasse`
+  nicht eingerechnet; bei 200 % Schrift und Mindesthöhe wird es knapp.
+- **`EinstellungenViewModel.uebernehmen()`.** `lesen()` liegt jetzt außerhalb von
+  `versuchen {}`. Praktisch folgenlos, weil `lesen()` IOExceptions selbst fängt.
+- **Doppelte Stilblöcke im Widget.** Fußzeile und „Heute steht nichts an“
+  wiederholen denselben `TextStyle`.
+- **Testhygiene.** `org.junit.Test` ist mit `kotlin.test` gemischt; für Abbruch
+  und `NonCancellable` beim Widget-Anstoß gibt es keinen Test; der Drawable-Test
+  prüft nur die Ladbarkeit; `self_improvement` ist nur über `else` abgedeckt.
 - **Sehr große Systemschrift.** Bei 200 % wachsen Punktepille und Kopfzeile des
   Widgets etwas über die Annahmen in `WidgetMasse` hinaus (ca. 2 dp).
 - **Testbuchung im Emulator.** Aus der Plan-8-Sichtprüfung steht dort eine
@@ -230,7 +258,7 @@ ab.
 ## So geht es weiter
 
 ```
-1. Plan 8 reviewen und mergen (Branch worktree-redesign-plan8-widget).
+1. PR für Plan 8 öffnen und mergen (Branch worktree-redesign-plan8-widget).
 2. Auf einem echten Handy durchspielen.  ./gradlew :app:installDebug
    Was der Emulator nicht zeigen kann: ob die Erinnerung auf einem konkreten
    Gerät um 8:00 ankommt und der Hersteller sie nicht wegoptimiert, wie das
