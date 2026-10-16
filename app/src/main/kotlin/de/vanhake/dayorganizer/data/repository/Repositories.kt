@@ -18,6 +18,8 @@ interface AktivitaetRepository {
     suspend fun speichern(aktivitaet: Aktivitaet): Long
     suspend fun archivieren(id: Long, am: LocalDate)
     fun beobachteArchivierte(): Flow<List<Aktivitaet>>
+    /** Alle Aktivitaeten, auch archivierte und pausierte, nach id. */
+    suspend fun alle(): List<Aktivitaet>
     /** true, wenn gerade wiederhergestellt; false, wenn unbekannt oder nicht archiviert (idempotent). */
     suspend fun wiederherstellen(id: Long): Boolean
 }

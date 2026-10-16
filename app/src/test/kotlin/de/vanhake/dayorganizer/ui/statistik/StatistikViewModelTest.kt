@@ -271,4 +271,51 @@ class StatistikViewModelTest {
             cancelAndIgnoreRemainingEvents()
         }
     }
+
+    private fun fixtureAktivitaeten(): List<Aktivitaet> = listOf(
+        tabletten.copy(id = 1, name = "B"),
+        tabletten.copy(id = 3, name = "A", aktiv = false, archiviertAm = heute.minusDays(2)),
+    )
+
+    private fun faelligVor(tage: Long) = Faelligkeit(
+        id = 100 + tage, aktivitaetId = 3,
+        periodeVon = heute.minusDays(tage), periodeBis = heute.minusDays(tage),
+        geplantFuer = heute.minusDays(tage).atTime(8, 0), sollAnzahl = 1, status = FaelligkeitStatus.ERLEDIGT,
+    )
+
+    private fun statistikVm(faelligkeit: Faelligkeit) = StatistikViewModel(
+        aktivitaeten = FakeAktivitaetRepository(fixtureAktivitaeten()),
+        faelligkeiten = FakeFaelligkeitRepository(listOf(faelligkeit)),
+        buchungen = FakeBuchungRepository(),
+        rechner = StatistikRechner(),
+        uhr = uhr,
+        rechenDispatcher = dispatcher,
+    )
+
+    @Test
+    fun `eine archivierte Aktivitaet mit Faelligkeiten im Zeitraum steht nach den aktiven`() = runTest(dispatcher) {
+        val vm = statistikVm(faelligVor(5))
+
+        vm.zustand.test {
+            skipItems(1)
+            assertEquals(
+                listOf("B" to false, "A" to true),
+                awaitItem().zeilen.map { it.name to it.archiviert },
+            )
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `eine archivierte Aktivitaet ohne Faelligkeit im Zeitraum fehlt`() = runTest(dispatcher) {
+        val vm = statistikVm(faelligVor(40))
+
+        vm.zustand.test {
+            skipItems(1)
+            assertEquals(listOf("B"), awaitItem().zeilen.map { it.name })
+            vm.zeitraumWaehlen(90)
+            assertEquals(listOf("B", "A"), awaitItem().zeilen.map { it.name })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 }

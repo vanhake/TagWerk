@@ -136,6 +136,13 @@
     <string name="punkteverlauf_heute">heute</string>
     <string name="aktivitaet_quote">%1$d%%</string>
     <string name="aktivitaet_quote_leer">–</string>
+    <string name="aktivitaet_quote_leer_vorlesen">noch keine Quote</string>
+    <string name="statistik_meta_archiviert">%1$s · archiviert</string>
+    <string name="heatmap_vorlesen">%1$d Tage: %2$d vollständig, %3$d teilweise, %4$d nichts erledigt, %5$d ohne Aufgaben</string>
+    <string name="heatmap_woche_vorlesen">Woche ab %1$s: %2$s</string>
+    <string name="heatmap_tag_vollstaendig">%1$s alles erledigt</string>
+    <string name="heatmap_tag_teilweise">%1$s %2$d von %3$d</string>
+    <string name="heatmap_tag_frei">%1$s frei</string>
     <string name="statistik_leer">Noch keine Aktivitäten</string>
     <string name="tab_einstellungen">Optionen</string>
     <string name="optionen_abschnitt_punkte">Punkte</string>

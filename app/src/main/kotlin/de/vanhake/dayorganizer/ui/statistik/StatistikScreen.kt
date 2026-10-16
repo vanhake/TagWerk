@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -219,7 +220,8 @@ private fun AktivitaetStatistikKarte(zeile: StatistikZeile) {
                 Surface(
                     shape = DayOrganizerFormen.chip,
                     color = farben.accentSoft,
-                    contentColor = farben.onAccentSoft,
+                    // Archivierte Zeilen zeichnen das Symbol gedaempft in ink2.
+                    contentColor = if (zeile.archiviert) farben.ink2 else farben.onAccentSoft,
                     modifier = Modifier.size(40.dp),
                 ) {
                     Box(contentAlignment = Alignment.Center) {
@@ -228,14 +230,22 @@ private fun AktivitaetStatistikKarte(zeile: StatistikZeile) {
                 }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(zeile.name, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(metaText(statistik.erledigt, statistik.verpasst), fontSize = 12.sp, color = farben.ink2)
+                    val meta = metaText(statistik.erledigt, statistik.verpasst)
+                    Text(
+                        if (zeile.archiviert) stringResource(R.string.statistik_meta_archiviert, meta) else meta,
+                        fontSize = 12.sp,
+                        color = farben.ink2,
+                    )
                 }
+                val leerVorlesen = stringResource(R.string.aktivitaet_quote_leer_vorlesen)
                 Text(
                     if (ohneQuote) {
                         stringResource(R.string.aktivitaet_quote_leer)
                     } else {
                         stringResource(R.string.aktivitaet_quote, (statistik.quote * 100).roundToInt())
                     },
+                    // TalkBack liest "–" sonst als "Strich" oder gar nicht.
+                    modifier = if (ohneQuote) Modifier.semantics { contentDescription = leerVorlesen } else Modifier,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.ExtraBold,
                 )

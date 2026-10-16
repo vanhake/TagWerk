@@ -58,6 +58,9 @@ class FakeAktivitaetRepository(start: List<Aktivitaet> = emptyList()) : Aktivita
     override fun beobachteArchivierte(): Flow<List<Aktivitaet>> =
         stand.map { liste -> liste.filter { it.archiviertAm != null }.sortedBy { it.name } }
 
+    /** Spiegelt AktivitaetDao.alle ("ORDER BY id"). */
+    override suspend fun alle(): List<Aktivitaet> = stand.value.sortedBy { it.id }
+
     /** Spiegelt "SET archiviertAm = NULL, aktiv = 1 WHERE id = :id AND archiviertAm IS NOT NULL". */
     override suspend fun wiederherstellen(id: Long): Boolean {
         val treffer = stand.value.any { it.id == id && it.archiviertAm != null }

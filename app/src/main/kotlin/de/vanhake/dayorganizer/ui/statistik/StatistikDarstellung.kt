@@ -1,6 +1,7 @@
 package de.vanhake.dayorganizer.ui.statistik
 
 import de.vanhake.dayorganizer.domain.rechner.TagesBilanz
+import java.time.DayOfWeek
 import kotlin.math.roundToInt
 
 /** Anzahl der Heatmap-Stufen von 0 (keine Faelligkeit) bis 4 (alles erledigt). */
@@ -36,6 +37,36 @@ fun serieText(aktuell: Int, laengste: Int, inWochen: Boolean): String =
     "Serie ${einheit(aktuell, inWochen)} · längste ${einheit(laengste, inWochen)}"
 
 fun metaText(erledigt: Int, verpasst: Int): String = "$erledigt geschafft · $verpasst verpasst"
+
+/** Wie viele Tage der Heatmap in welche Klasse fallen; jeder Tag in genau einer. */
+data class HeatmapZusammenfassung(
+    val tage: Int,
+    val vollstaendig: Int,
+    val teilweise: Int,
+    val nichtsErledigt: Int,
+    val frei: Int,
+)
+
+fun heatmapZusammenfassung(bilanzen: List<TagesBilanz>): HeatmapZusammenfassung {
+    val frei = bilanzen.count { it.gesamt == 0 }
+    val vollstaendig = bilanzen.count { it.gesamt > 0 && it.erledigt == it.gesamt }
+    val nichtsErledigt = bilanzen.count { it.gesamt > 0 && it.erledigt == 0 }
+    return HeatmapZusammenfassung(
+        tage = bilanzen.size,
+        vollstaendig = vollstaendig,
+        teilweise = bilanzen.size - frei - vollstaendig - nichtsErledigt,
+        nichtsErledigt = nichtsErledigt,
+        frei = frei,
+    )
+}
+
+/** Bilanzen je Kalenderwoche (Montag bis Sonntag), in der Reihenfolge der Heatmap-Spalten. */
+fun heatmapWochen(bilanzen: List<TagesBilanz>): List<List<TagesBilanz>> {
+    if (bilanzen.isEmpty()) return emptyList()
+    val versatz = bilanzen.first().tag.dayOfWeek.value - DayOfWeek.MONDAY.value
+    return bilanzen.withIndex().groupBy { (index, _) -> (index + versatz) / 7 }.values
+        .map { woche -> woche.map { it.value } }
+}
 
 private fun einheit(anzahl: Int, inWochen: Boolean): String = when {
     inWochen -> if (anzahl == 1) "1 Woche" else "$anzahl Wochen"

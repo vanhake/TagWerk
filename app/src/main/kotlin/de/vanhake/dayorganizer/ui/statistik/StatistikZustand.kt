@@ -11,6 +11,7 @@ data class StatistikZeile(
     val symbol: String,
     val serieInWochen: Boolean,
     val statistik: AktivitaetStatistik,
+    val archiviert: Boolean = false,
 )
 
 data class StatistikZustand(

@@ -1,7 +1,11 @@
 package de.vanhake.dayorganizer.ui.statistik
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
@@ -13,11 +17,18 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import de.vanhake.dayorganizer.R
 import de.vanhake.dayorganizer.domain.rechner.TagesBilanz
 import de.vanhake.dayorganizer.ui.theme.DayOrganizerFarben
 import de.vanhake.dayorganizer.ui.theme.DayOrganizerTheme
 import java.time.DayOfWeek
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
  * Obergrenze fuer die Kantenlaenge einer Tageskachel. Ein Kalendergitter mit wenigen
@@ -79,10 +90,48 @@ fun Heatmap(bilanzen: List<TagesBilanz>, zeitraumTage: Int, modifier: Modifier =
         val kante = minOf(maxWidth / wochen, if (zeitraumTage == 30) HOECHSTE_KANTE_30_TAGE else HOECHSTE_KANTE)
         val breite = kante * wochen
 
-        Canvas(Modifier.width(breite).height(kante * 7).align(Alignment.Center)) {
-            zeichne(bilanzen, versatz, size.width / wochen, zeitraumTage, farben)
+        // TalkBack liest das Gitter nicht aus dem Canvas: der Container traegt die
+        // Zusammenfassung, darueber liegt je Woche eine unsichtbare Box in Spaltenbreite
+        // mit dem Wochentext. Breite und Mittigkeit wie beim Canvas, sonst laegen die
+        // Fokusrahmen neben den Spalten.
+        val zusammenfassung = heatmapZusammenfassung(bilanzen).let {
+            stringResource(R.string.heatmap_vorlesen, it.tage, it.vollstaendig, it.teilweise, it.nichtsErledigt, it.frei)
+        }
+        val wochenTexte = heatmapWochen(bilanzen).map { wochenText(it) }
+
+        Box(
+            Modifier
+                .width(breite)
+                .height(kante * 7)
+                .align(Alignment.Center)
+                .semantics { contentDescription = zusammenfassung },
+        ) {
+            Canvas(Modifier.fillMaxSize().clearAndSetSemantics {}) {
+                zeichne(bilanzen, versatz, size.width / wochen, zeitraumTage, farben)
+            }
+            Row(Modifier.fillMaxSize()) {
+                wochenTexte.forEach { text ->
+                    Box(Modifier.width(kante).fillMaxHeight().semantics { contentDescription = text })
+                }
+            }
         }
     }
+}
+
+private val WOCHENTAG: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE", Locale.GERMAN)
+private val DATUM: DateTimeFormatter = DateTimeFormatter.ofPattern("d. MMMM", Locale.GERMAN)
+
+@Composable
+private fun wochenText(woche: List<TagesBilanz>): String {
+    val tage = woche.map { bilanz ->
+        val name = WOCHENTAG.format(bilanz.tag)
+        when {
+            bilanz.gesamt == 0 -> stringResource(R.string.heatmap_tag_frei, name)
+            bilanz.erledigt == bilanz.gesamt -> stringResource(R.string.heatmap_tag_vollstaendig, name)
+            else -> stringResource(R.string.heatmap_tag_teilweise, name, bilanz.erledigt, bilanz.gesamt)
+        }
+    }
+    return stringResource(R.string.heatmap_woche_vorlesen, DATUM.format(woche.first().tag), tage.joinToString(", "))
 }
 
 private fun DrawScope.zeichne(
