@@ -5,6 +5,7 @@ package de.vanhake.dayorganizer.ui.aktivitaeten
 import de.vanhake.dayorganizer.FakeAktivitaetRepository
 import de.vanhake.dayorganizer.FakeErinnerungRepository
 import de.vanhake.dayorganizer.FakeFaelligkeitRepository
+import de.vanhake.dayorganizer.data.repository.AktivitaetRepository
 import de.vanhake.dayorganizer.domain.model.Aktivitaet
 import de.vanhake.dayorganizer.domain.model.Zeitplan
 import de.vanhake.dayorganizer.domain.rechner.SerienRechner
@@ -50,7 +51,7 @@ class AktivitaetenViewModelTest {
 
     private val neuGeplant = mutableListOf<Long>()
 
-    private fun viewModel(aktivitaeten: FakeAktivitaetRepository = FakeAktivitaetRepository()): AktivitaetenViewModel {
+    private fun viewModel(aktivitaeten: AktivitaetRepository = FakeAktivitaetRepository()): AktivitaetenViewModel {
         val faelligkeiten = FakeFaelligkeitRepository()
         val erinnerungen = FakeErinnerungRepository()
         val materialisieren = FaelligkeitenMaterialisieren(
@@ -126,6 +127,19 @@ class AktivitaetenViewModelTest {
 
         assertEquals(heute, repo.stand.value.single().archiviertAm)
         assertEquals(Hinweistoast("Tabletten archiviert", kannRueckgaengig = true), vm.toast.value)
+    }
+
+    @Test
+    fun `ein Datenbankfehler beim Archivieren meldet sich als Toast statt abzustuerzen`() = runTest(dispatcher) {
+        val echt = FakeAktivitaetRepository(listOf(tabletten))
+        val werfend = object : AktivitaetRepository by echt {
+            override suspend fun archivieren(id: Long, am: LocalDate) = throw java.io.IOException("Datenbank nicht erreichbar")
+        }
+        val vm = viewModel(werfend)
+
+        vm.archivieren(1L).join()
+
+        assertEquals(Hinweistoast("Aktion fehlgeschlagen", kannRueckgaengig = false), vm.toast.value)
     }
 
     @Test

@@ -1,5 +1,6 @@
 package de.vanhake.dayorganizer
 
+import de.vanhake.dayorganizer.data.repository.DatensatzFehlt
 import de.vanhake.dayorganizer.domain.model.Aktivitaet
 import de.vanhake.dayorganizer.domain.model.Zeitplan
 import java.time.DayOfWeek
@@ -34,6 +35,13 @@ class FakeAktivitaetRepositoryTest {
         assertFailsWith<IllegalStateException> {
             repository.speichern(tabletten)
         }
+    }
+
+    @Test
+    fun `speichern einer unbekannten id wirft DatensatzFehlt`() = runTest {
+        val fehler = assertFailsWith<DatensatzFehlt> { FakeAktivitaetRepository().speichern(tabletten) }
+
+        assertEquals(7L, fehler.id)
     }
 
     @Test

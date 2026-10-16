@@ -17,7 +17,6 @@ import de.vanhake.dayorganizer.ui.gemeinsam.ToastStapel
 import de.vanhake.dayorganizer.util.versuchen
 import de.vanhake.dayorganizer.widget.WidgetAktualisierung
 import javax.inject.Inject
-import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -175,12 +174,8 @@ class BelohnungenViewModel(
     fun rueckgaengig() = viewModelScope.launch {
         val aktion = stapel.rueckgaengigNehmen() ?: return@launch
         // Wie beim Einloesen darf eine Datenbankausnahme nicht die App mitreissen;
-        // ein Abbruch ist dagegen kein Fehler und wird weitergereicht.
-        try {
-            aktion()
-        } catch (abbruch: CancellationException) {
-            throw abbruch
-        } catch (ausnahme: Exception) {
+        // versuchen reicht einen Abbruch weiter, er ist kein Fehler.
+        versuchen { aktion() }.onFailure { ausnahme ->
             Log.w(TAG, "Rueckgaengig fehlgeschlagen", ausnahme)
             _meldung.value = EinloeseMeldung.RUECKGAENGIG_FEHLGESCHLAGEN
             return@launch
@@ -190,8 +185,13 @@ class BelohnungenViewModel(
 
     // Der Toast bietet Rueckgaengig an (Plan 9).
     fun archivieren(belohnungId: Long) = viewModelScope.launch {
-        val name = belohnungen.nachId(belohnungId)?.name
-        belohnungen.archivieren(belohnungId)
+        // Eine Datenbankausnahme darf nicht bis zum viewModelScope durchschlagen.
+        val name = versuchen {
+            belohnungen.nachId(belohnungId)?.name.also { belohnungen.archivieren(belohnungId) }
+        }.getOrElse {
+            fehlgeschlagen("Archivieren", it)
+            return@launch
+        }
         name?.let {
             stapel.zeigen(
                 BelohnungenToastTexte.archiviert(it),
@@ -206,11 +206,18 @@ class BelohnungenViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun wiederherstellen(belohnungId: Long) = viewModelScope.launch {
-        val name = belohnungen.nachId(belohnungId)?.name
-        // Idempotent: ein zweiter Tipp findet nichts Archiviertes mehr und meldet nichts.
-        if (belohnungen.wiederherstellen(belohnungId)) {
-            name?.let { stapel.zeigen(BelohnungenToastTexte.wiederhergestellt(it)) }
-        }
+        versuchen {
+            val name = belohnungen.nachId(belohnungId)?.name
+            // Idempotent: ein zweiter Tipp findet nichts Archiviertes mehr und meldet nichts.
+            if (belohnungen.wiederherstellen(belohnungId)) {
+                name?.let { stapel.zeigen(BelohnungenToastTexte.wiederhergestellt(it)) }
+            }
+        }.onFailure { fehlgeschlagen("Wiederherstellen", it) }
+    }
+
+    private fun fehlgeschlagen(aktion: String, ausnahme: Throwable) {
+        Log.w(TAG, "$aktion fehlgeschlagen", ausnahme)
+        stapel.zeigen(BelohnungenToastTexte.FEHLGESCHLAGEN)
     }
 
     /** Vom Screen aufgerufen, wenn der Editor mit einem Ergebnis zurueckgekehrt ist. */
@@ -232,6 +239,7 @@ class BelohnungenViewModel(
 private object BelohnungenToastTexte {
     const val ANGELEGT = "Belohnung angelegt"
     const val GEAENDERT = "Änderungen gespeichert"
+    const val FEHLGESCHLAGEN = "Aktion fehlgeschlagen"
     fun archiviert(name: String) = "$name archiviert"
     fun wiederhergestellt(name: String) = "$name wiederhergestellt"
     fun eingeloest(name: String, preis: Int) = "$name eingelöst · −$preis Punkte"

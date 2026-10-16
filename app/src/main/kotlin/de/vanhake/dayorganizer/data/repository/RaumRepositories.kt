@@ -31,10 +31,7 @@ class RaumAktivitaetRepository @Inject constructor(
             dao.einfuegen(aktivitaet.zuEntity())
         } else {
             val betroffeneZeilen = dao.aktualisieren(aktivitaet.zuEntity())
-            check(betroffeneZeilen > 0) {
-                "Aktivitaet mit id=${aktivitaet.id} konnte nicht aktualisiert werden -- " +
-                    "kein passender Datensatz vorhanden"
-            }
+            if (betroffeneZeilen == 0) throw DatensatzFehlt(aktivitaet.id, "Aktivitaet")
             aktivitaet.id
         }
 

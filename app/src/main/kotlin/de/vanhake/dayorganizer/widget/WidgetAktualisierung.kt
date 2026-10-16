@@ -4,7 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.glance.appwidget.updateAll
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.CancellationException
+import de.vanhake.dayorganizer.util.versuchen
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -14,12 +14,12 @@ class WidgetAktualisierung @Inject constructor(
 ) {
     suspend fun anstossen() {
         // Ist kein Widget platziert, wirft updateAll nicht: es iteriert nur ueber eine
-        // leere Liste von Glance-Ids. runCatching faengt hier echte Fehlschlaege ab,
-        // damit ein misslungenes Widget-Update nie den aufrufenden Schreibpfad mitreisst.
-        runCatching {
+        // leere Liste von Glance-Ids. versuchen faengt hier echte Fehlschlaege ab, damit ein
+        // misslungenes Widget-Update nie den aufrufenden Schreibpfad mitreisst; einen Abbruch
+        // reicht es durch.
+        versuchen {
             HeuteWidget().updateAll(kontext)
         }.onFailure { fehler ->
-            if (fehler is CancellationException) throw fehler
             Log.w(TAG, "Widget-Aktualisierung fehlgeschlagen", fehler)
         }
     }

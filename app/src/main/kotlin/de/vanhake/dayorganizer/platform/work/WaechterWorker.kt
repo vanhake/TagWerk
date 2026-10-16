@@ -8,6 +8,7 @@ import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import de.vanhake.dayorganizer.domainuse.WaechterAblauf
+import de.vanhake.dayorganizer.util.versuchen
 
 @HiltWorker
 class WaechterWorker @AssistedInject constructor(
@@ -16,7 +17,7 @@ class WaechterWorker @AssistedInject constructor(
     private val ablauf: WaechterAblauf,
 ) : CoroutineWorker(kontext, parameter) {
 
-    override suspend fun doWork(): Result = runCatching { ablauf() }
+    override suspend fun doWork(): Result = versuchen { ablauf() }
         .fold(
             onSuccess = { Result.success() },
             onFailure = { fehler ->

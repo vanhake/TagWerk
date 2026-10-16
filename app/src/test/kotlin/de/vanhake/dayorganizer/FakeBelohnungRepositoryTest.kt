@@ -1,5 +1,6 @@
 package de.vanhake.dayorganizer
 
+import de.vanhake.dayorganizer.data.repository.DatensatzFehlt
 import de.vanhake.dayorganizer.domain.model.Belohnung
 import de.vanhake.dayorganizer.domain.model.Einloesung
 import kotlinx.coroutines.flow.first
@@ -73,6 +74,13 @@ class FakeBelohnungRepositoryTest {
 
     /** Spiegelt Room's @Update-Verhalten: RaumBelohnungRepository.speichern wirft, wenn kein
      * passender Datensatz existiert, statt heimlich einzufuegen -- der Fake muss dasselbe tun. */
+    @Test
+    fun `speichern einer unbekannten id wirft DatensatzFehlt`() = runTest {
+        val fehler = assertFailsWith<DatensatzFehlt> { FakeBelohnungRepository().speichern(guenstig.copy(id = 5)) }
+
+        assertEquals(5L, fehler.id)
+    }
+
     @Test
     fun `speichern mit unbekannter id schlaegt fehl statt heimlich einzufuegen`() = runTest {
         val repository = FakeBelohnungRepository()

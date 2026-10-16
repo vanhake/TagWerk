@@ -3,6 +3,7 @@ package de.vanhake.dayorganizer
 import de.vanhake.dayorganizer.data.repository.AktivitaetRepository
 import de.vanhake.dayorganizer.data.repository.BelohnungRepository
 import de.vanhake.dayorganizer.data.repository.BuchungRepository
+import de.vanhake.dayorganizer.data.repository.DatensatzFehlt
 import de.vanhake.dayorganizer.data.repository.ErinnerungRepository
 import de.vanhake.dayorganizer.data.repository.FaelligkeitRepository
 import de.vanhake.dayorganizer.data.repository.Transaktionen
@@ -42,10 +43,7 @@ class FakeAktivitaetRepository(start: List<Aktivitaet> = emptyList()) : Aktivita
             return id
         }
         // Spiegelt Room's @Update: ohne passenden Datensatz gibt es keinen stillen Insert.
-        check(stand.value.any { it.id == aktivitaet.id }) {
-            "Aktivitaet mit id=${aktivitaet.id} konnte nicht aktualisiert werden -- " +
-                "kein passender Datensatz vorhanden"
-        }
+        if (stand.value.none { it.id == aktivitaet.id }) throw DatensatzFehlt(aktivitaet.id, "Aktivitaet")
         stand.value = stand.value.map { if (it.id == aktivitaet.id) aktivitaet else it }
         return aktivitaet.id
     }
@@ -250,10 +248,7 @@ class FakeBelohnungRepository(
             return id
         }
         // Spiegelt Room's @Update: ohne passenden Datensatz gibt es keinen stillen Insert.
-        check(stand.value.any { it.id == belohnung.id }) {
-            "Belohnung mit id=${belohnung.id} konnte nicht aktualisiert werden -- " +
-                "kein passender Datensatz vorhanden"
-        }
+        if (stand.value.none { it.id == belohnung.id }) throw DatensatzFehlt(belohnung.id, "Belohnung")
         stand.value = stand.value.map { if (it.id == belohnung.id) belohnung else it }
         return belohnung.id
     }

@@ -397,7 +397,7 @@ class BelohnungenViewModelTest {
     }
 
     @Test
-    fun `Archivieren zeigt einen Toast ohne Rueckgaengig`() = runTest(dispatcher) {
+    fun `Archivieren zeigt einen Toast mit Rueckgaengig`() = runTest(dispatcher) {
         val belohnungen = FakeBelohnungRepository(listOf(Belohnung(1, "Kinoabend", preisPunkte = 200)))
         val vm = viewModel(belohnungen, guthaben(0))
 
@@ -405,6 +405,19 @@ class BelohnungenViewModelTest {
         dispatcher.scheduler.runCurrent()
 
         assertEquals(Hinweistoast("Kinoabend archiviert", kannRueckgaengig = true), vm.toast.value)
+    }
+
+    @Test
+    fun `ein Datenbankfehler beim Archivieren meldet sich als Toast statt abzustuerzen`() = runTest(dispatcher) {
+        val echt = FakeBelohnungRepository(listOf(Belohnung(1, "Kinoabend", preisPunkte = 200)))
+        val werfend = object : BelohnungRepository by echt {
+            override suspend fun archivieren(id: Long) = throw java.io.IOException("Datenbank nicht erreichbar")
+        }
+        val vm = viewModel(werfend, guthaben(0))
+
+        vm.archivieren(1).join()
+
+        assertEquals(Hinweistoast("Aktion fehlgeschlagen", kannRueckgaengig = false), vm.toast.value)
     }
 
     @Test

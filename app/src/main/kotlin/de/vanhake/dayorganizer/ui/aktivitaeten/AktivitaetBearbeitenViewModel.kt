@@ -6,9 +6,11 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import de.vanhake.dayorganizer.data.EinstellungenSpeicher
 import de.vanhake.dayorganizer.data.repository.AktivitaetRepository
+import de.vanhake.dayorganizer.data.repository.DatensatzFehlt
 import de.vanhake.dayorganizer.domainuse.AktivitaetNeuPlanen
 import de.vanhake.dayorganizer.ui.gemeinsam.SpeicherErgebnis
-import kotlinx.coroutines.CancellationException
+import de.vanhake.dayorganizer.ui.gemeinsam.SpeicherFehler
+import de.vanhake.dayorganizer.util.versuchen
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -43,6 +45,9 @@ class AktivitaetBearbeitenViewModel(
 
     private val _fehler = MutableStateFlow<List<EntwurfFehler>>(emptyList())
     val fehler: StateFlow<List<EntwurfFehler>> = _fehler.asStateFlow()
+
+    private val _speicherFehler = MutableStateFlow<SpeicherFehler?>(null)
+    val speicherFehler: StateFlow<SpeicherFehler?> = _speicherFehler.asStateFlow()
 
     private var geladeneId: Long? = null
 
@@ -80,8 +85,14 @@ class AktivitaetBearbeitenViewModel(
         if (speicherVersucht) _fehler.value = _entwurf.value.pruefen()
     }
 
-    /** Speichert und plant neu. Gibt null zurueck, wenn der Entwurf Fehler hat oder schon
-     * ein Speichern laeuft. */
+    /** Vom Screen aufgerufen, nachdem der Hinweis gezeigt wurde. */
+    fun speicherFehlerGezeigt() {
+        _speicherFehler.value = null
+    }
+
+    /** Speichert und plant neu. Gibt null zurueck, wenn der Entwurf Fehler hat, schon ein
+     * Speichern laeuft oder das Speichern scheiterte (dann steht der Grund in [speicherFehler]
+     * und der Entwurf bleibt unveraendert). */
     suspend fun speichern(): SpeicherErgebnis? {
         if (speichertGerade) return null
         speichertGerade = true
@@ -92,7 +103,19 @@ class AktivitaetBearbeitenViewModel(
             if (fehler.isNotEmpty()) return null
 
             val ergebnis = if (_entwurf.value.id == 0L) SpeicherErgebnis.ANGELEGT else SpeicherErgebnis.GEAENDERT
-            val id = aktivitaeten.speichern(_entwurf.value.zuAktivitaet(LocalDate.now(uhr)))
+            // Eine Datenbankausnahme darf im Klick-Handler des Screens nicht die App
+            // mitreissen; der Nutzer bekommt einen Hinweis und behaelt seinen Entwurf.
+            // versuchen reicht einen Abbruch durch.
+            val id = versuchen { aktivitaeten.speichern(_entwurf.value.zuAktivitaet(LocalDate.now(uhr))) }
+                .getOrElse { ausnahme ->
+                    Log.w(TAG, "Speichern fehlgeschlagen", ausnahme)
+                    _speicherFehler.value = if (ausnahme is DatensatzFehlt) {
+                        SpeicherFehler.NICHT_MEHR_VORHANDEN
+                    } else {
+                        SpeicherFehler.FEHLGESCHLAGEN
+                    }
+                    return null
+                }
             // Die neue id uebernehmen: Waehrend der Ausblend-Animation ist der Screen noch
             // klickbar; ein spaeter Tipp wird so zum harmlosen Update statt zu einem
             // zweiten Insert (die Sperre ist dann schon wieder frei).
@@ -103,15 +126,9 @@ class AktivitaetBearbeitenViewModel(
             // mit runterreissen. AktivitaetNeuPlanen raeumt dabei auch noch nicht begonnene
             // kuenftige Faelligkeiten samt Erinnerungen der alten Planung weg, bevor es neu
             // materialisiert -- sonst laeuft der alte Zeitplan neben dem neuen weiter.
-            // CancellationException wird bewusst weitergereicht: sie ist kein Fehlschlag,
-            // sondern der Abbruch des Aufrufers.
-            try {
-                neuPlanen(id)
-            } catch (abbruch: CancellationException) {
-                throw abbruch
-            } catch (ausnahme: Exception) {
-                Log.w(TAG, "Nachbereitung nach dem Speichern fehlgeschlagen", ausnahme)
-            }
+            // versuchen reicht einen Abbruch des Aufrufers weiter: er ist kein Fehlschlag.
+            versuchen { neuPlanen(id) }
+                .onFailure { Log.w(TAG, "Nachbereitung nach dem Speichern fehlgeschlagen", it) }
             return ergebnis
         } finally {
             speichertGerade = false

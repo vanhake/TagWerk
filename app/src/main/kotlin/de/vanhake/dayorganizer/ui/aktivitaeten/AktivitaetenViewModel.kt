@@ -79,8 +79,13 @@ class AktivitaetenViewModel(
     //
     // Der Toast bietet Rueckgaengig an (Plan 9): es holt die Aktivitaet samt Planung zurueck.
     fun archivieren(id: Long) = viewModelScope.launch {
-        val name = aktivitaeten.nachId(id)?.name
-        aktivitaeten.archivieren(id, LocalDate.now(uhr))
+        // Eine Datenbankausnahme darf nicht bis zum viewModelScope durchschlagen.
+        val name = versuchen {
+            aktivitaeten.nachId(id)?.name.also { aktivitaeten.archivieren(id, LocalDate.now(uhr)) }
+        }.getOrElse {
+            fehlgeschlagen("Archivieren", it)
+            return@launch
+        }
         // Archiviert ist die Aktivitaet in jedem Fall; eine Ausnahme der Nachbereitung darf
         // weder den Toast verhindern noch im viewModelScope die App abstuerzen lassen.
         nachbereiten(id, "Nachbereitung nach dem Archivieren fehlgeschlagen")
@@ -95,15 +100,23 @@ class AktivitaetenViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun wiederherstellen(id: Long) = viewModelScope.launch {
-        val name = aktivitaeten.nachId(id)?.name
-        // Ein zweiter Tipp findet nichts Archiviertes mehr: dann weder Toast noch Neuplanen.
-        if (wiederherstellenIntern(id)) {
-            name?.let { stapel.zeigen(AktivitaetenToastTexte.wiederhergestellt(it)) }
-        }
+        versuchen {
+            val name = aktivitaeten.nachId(id)?.name
+            // Ein zweiter Tipp findet nichts Archiviertes mehr: dann weder Toast noch Neuplanen.
+            if (wiederherstellenIntern(id)) {
+                name?.let { stapel.zeigen(AktivitaetenToastTexte.wiederhergestellt(it)) }
+            }
+        }.onFailure { fehlgeschlagen("Wiederherstellen", it) }
     }
 
     fun rueckgaengig() = viewModelScope.launch {
-        stapel.rueckgaengigNehmen()?.invoke()
+        versuchen { stapel.rueckgaengigNehmen()?.invoke() }
+            .onFailure { fehlgeschlagen("Rueckgaengig", it) }
+    }
+
+    private fun fehlgeschlagen(aktion: String, ausnahme: Throwable) {
+        Log.w(TAG, "$aktion fehlgeschlagen", ausnahme)
+        stapel.zeigen(AktivitaetenToastTexte.FEHLGESCHLAGEN)
     }
 
     // Wie nach dem Archivieren muss die Planung folgen: sonst haette die wiederhergestellte
@@ -138,6 +151,7 @@ class AktivitaetenViewModel(
 private object AktivitaetenToastTexte {
     const val ANGELEGT = "Aktivität angelegt"
     const val GEAENDERT = "Änderungen gespeichert"
+    const val FEHLGESCHLAGEN = "Aktion fehlgeschlagen"
     fun archiviert(name: String) = "$name archiviert"
     fun wiederhergestellt(name: String) = "$name wiederhergestellt"
 }

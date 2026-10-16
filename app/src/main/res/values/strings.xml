@@ -59,6 +59,8 @@
     <string name="typ_tagesziel">Mal pro Tag</string>
     <string name="typ_wochenziel">Mal pro Woche</string>
     <string name="speichern">Speichern</string>
+    <string name="speichern_fehlgeschlagen">Speichern fehlgeschlagen. Bitte noch einmal versuchen.</string>
+    <string name="speichern_nicht_mehr_vorhanden">Diesen Eintrag gibt es nicht mehr – vielleicht wurde inzwischen ein Backup eingespielt.</string>
     <string name="aktivitaet_bearbeiten_titel">Aktivität bearbeiten</string>
     <string name="feld_symbol">Symbol</string>
     <string name="name_platzhalter">z. B. Tabletten</string>
