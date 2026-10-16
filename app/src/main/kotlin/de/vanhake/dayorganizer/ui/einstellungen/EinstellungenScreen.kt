@@ -12,7 +12,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -33,6 +32,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.vanhake.dayorganizer.R
 import de.vanhake.dayorganizer.data.ThemeModus
 import de.vanhake.dayorganizer.platform.permission.einstellungsIntent
+import de.vanhake.dayorganizer.ui.gemeinsam.Stepper
+import de.vanhake.dayorganizer.ui.gemeinsam.StepperZeile
 import de.vanhake.dayorganizer.ui.gemeinsam.WarnBanner
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -123,22 +124,22 @@ fun EinstellungenScreen(viewModel: EinstellungenViewModel = hiltViewModel()) {
                 )
             }
 
-            OutlinedTextField(
-                value = zustand.tagesbonusText,
-                onValueChange = viewModel::tagesbonusAendern,
-                label = { Text(stringResource(R.string.feld_tagesbonus)) },
-                modifier = Modifier.fillMaxWidth(),
-            )
+            StepperZeile(titel = stringResource(R.string.feld_tagesbonus)) {
+                Stepper(
+                    wert = zustand.tagesbonusPunkte,
+                    verringern = { viewModel.tagesbonusAendern(-1) },
+                    erhoehen = { viewModel.tagesbonusAendern(+1) },
+                    verringernMoeglich = zustand.tagesbonusPunkte > EinstellungenViewModel.STEPPER_MIN,
+                )
+            }
 
-            OutlinedTextField(
-                value = zustand.standardKulanzText,
-                onValueChange = viewModel::kulanzAendern,
-                label = { Text(stringResource(R.string.feld_standard_kulanz)) },
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            Button(onClick = { viewModel.speichern() }, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.speichern))
+            StepperZeile(titel = stringResource(R.string.feld_standard_kulanz)) {
+                Stepper(
+                    wert = zustand.standardKulanzMinuten,
+                    verringern = { viewModel.kulanzAendern(-1) },
+                    erhoehen = { viewModel.kulanzAendern(+1) },
+                    verringernMoeglich = zustand.standardKulanzMinuten > EinstellungenViewModel.STEPPER_MIN,
+                )
             }
 
             Button(

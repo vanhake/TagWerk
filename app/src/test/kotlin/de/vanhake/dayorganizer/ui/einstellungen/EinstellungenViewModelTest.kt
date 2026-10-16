@@ -26,6 +26,7 @@ import org.junit.Before
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.FileNotFoundException
+import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.time.DayOfWeek
@@ -109,9 +110,17 @@ class EinstellungenViewModelTest {
         // herein, den runTest(dispatcher) auch fuer Dispatchers.Main benutzt.
         ioDispatcher: CoroutineDispatcher = dispatcher,
         heute: () -> LocalDate = { LocalDate.of(2026, 3, 2) },
+        // Verzoegertes Schreiben laesst die Laeufe schneller Tipps in virtueller Zeit
+        // ueberlappen -- nur so zeigt sich, ob ein Schritt verloren ginge.
+        schreibVerzoegerung: Long = 0,
+        schreibFehler: Boolean = false,
     ) = EinstellungenViewModel(
         lesen = { speicher.stand.value },
-        schreiben = { speicher.stand.value = it },
+        schreiben = {
+            if (schreibVerzoegerung > 0) delay(schreibVerzoegerung)
+            if (schreibFehler) throw IOException("Platte voll")
+            speicher.stand.value = it
+        },
         hinweiseLesen = hinweiseLesen,
         backupDienst = backupDienst,
         nachImport = nachImport,
@@ -127,8 +136,8 @@ class EinstellungenViewModelTest {
         vm.zustand.test {
             skipItems(1)
             val zustand = awaitItem()
-            assertEquals("25", zustand.tagesbonusText)
-            assertEquals("45", zustand.standardKulanzText)
+            assertEquals(25, zustand.tagesbonusPunkte)
+            assertEquals(45, zustand.standardKulanzMinuten)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -147,12 +156,12 @@ class EinstellungenViewModelTest {
     }
 
     // Ein Farbmodus ist ein Umschalter, kein Formularfeld: die Aenderung muss sofort
-    // geschrieben werden, ohne auf den "Speichern"-Knopf zu warten (der nur fuer die
-    // Zahlenfelder gilt).
+    // geschrieben werden.
     @Test
     fun `themeModusAendern schreibt sofort, ohne auf Speichern zu warten`() = runTest(dispatcher) {
         val speicher = FakeSpeicher()
         val vm = viewModel(speicher)
+        advanceUntilIdle() // erst das Erstladen abwarten, sonst ueberschreibt es den Tipp
 
         vm.themeModusAendern(ThemeModus.DUNKEL)
         advanceUntilIdle()
@@ -161,114 +170,87 @@ class EinstellungenViewModelTest {
         assertEquals(ThemeModus.DUNKEL, vm.zustand.value.themeModus)
     }
 
-    // Review-Fund (Kritisch): speichern() baute die neue Einstellungen bisher per
-    // Einstellungen(...) mit nur den beiden Zahlenfeldern statt per bisher.copy(...) --
-    // dadurch fiel themeModus stets auf den Klassendefault HELL zurueck, auch wenn zuvor
-    // per themeModusAendern() DUNKEL geschrieben wurde. Dieser Test haette den alten Bug
-    // gefangen: mit Einstellungen(...) waere neu.themeModus == HELL gewesen, unabhaengig
-    // vom zuvor gesetzten DUNKEL, und die Assertion unten waere fehlgeschlagen.
     @Test
-    fun `speichern setzt den zuvor per themeModusAendern gesetzten Farbmodus nicht zurueck`() = runTest(dispatcher) {
+    fun `ein Tipp auf Plus erhoeht den Tagesbonus um 5 und speichert sofort`() = runTest(dispatcher) {
         val speicher = FakeSpeicher()
         val vm = viewModel(speicher)
+        advanceUntilIdle() // Zustand geladen (kein Turbine: Startzustand == Defaults, StateFlow meldet nichts Neues)
+
+        vm.tagesbonusAendern(+1).join()
+
+        assertEquals(20, vm.zustand.value.tagesbonusPunkte)
+        assertEquals(20, speicher.stand.value.tagesbonusPunkte)
+    }
+
+    // Review-Fokus 1: mit verzoegertem Schreiben ueberlappen die Laeufe. Ohne Mutex und
+    // ohne "aktuellen Zustand zum Schreibzeitpunkt" wuerden alle fuenf denselben Ausgangswert
+    // lesen und das Ergebnis waere 20 statt 40.
+    @Test
+    fun `fuenf schnelle Tipps verlieren keinen Schritt`() = runTest(dispatcher) {
+        val speicher = FakeSpeicher()
+        val vm = viewModel(speicher, schreibVerzoegerung = 50)
+        advanceUntilIdle() // Zustand geladen (kein Turbine: Startzustand == Defaults, StateFlow meldet nichts Neues)
+
+        repeat(5) { vm.tagesbonusAendern(+1) }
+        advanceUntilIdle()
+
+        assertEquals(40, vm.zustand.value.tagesbonusPunkte)
+        assertEquals(40, speicher.stand.value.tagesbonusPunkte)
+    }
+
+    // Review-Fokus 2
+    @Test
+    fun `Minus bei 0 bleibt bei 0`() = runTest(dispatcher) {
+        val speicher = FakeSpeicher(Einstellungen(tagesbonusPunkte = 0, standardKulanzMinuten = 0))
+        val vm = viewModel(speicher)
+        advanceUntilIdle() // Zustand geladen (kein Turbine: Startzustand == Defaults, StateFlow meldet nichts Neues)
+
+        vm.tagesbonusAendern(-1).join()
+        vm.kulanzAendern(-1).join()
+
+        assertEquals(0, speicher.stand.value.tagesbonusPunkte)
+        assertEquals(0, speicher.stand.value.standardKulanzMinuten)
+        assertEquals(0, vm.zustand.value.tagesbonusPunkte)
+    }
+
+    @Test
+    fun `Kulanz und Tagesbonus ueberschreiben sich nicht gegenseitig`() = runTest(dispatcher) {
+        val speicher = FakeSpeicher()
+        val vm = viewModel(speicher, schreibVerzoegerung = 50)
+        advanceUntilIdle() // Zustand geladen (kein Turbine: Startzustand == Defaults, StateFlow meldet nichts Neues)
+
+        vm.tagesbonusAendern(+1)
+        vm.kulanzAendern(-1)
+        advanceUntilIdle()
+
+        assertEquals(Einstellungen(tagesbonusPunkte = 20, standardKulanzMinuten = 55), speicher.stand.value)
+    }
+
+    @Test
+    fun `ein Stepper-Tipp setzt den Farbmodus nicht zurueck`() = runTest(dispatcher) {
+        val speicher = FakeSpeicher()
+        val vm = viewModel(speicher, schreibVerzoegerung = 50)
+        advanceUntilIdle() // Zustand geladen (kein Turbine: Startzustand == Defaults, StateFlow meldet nichts Neues)
 
         vm.themeModusAendern(ThemeModus.DUNKEL)
+        vm.tagesbonusAendern(+1)
         advanceUntilIdle()
-        vm.speichern().join()
 
         assertEquals(ThemeModus.DUNKEL, speicher.stand.value.themeModus)
-        assertEquals(ThemeModus.DUNKEL, vm.zustand.value.themeModus)
+        assertEquals(20, speicher.stand.value.tagesbonusPunkte)
     }
 
     @Test
-    fun `Speichern uebernimmt gueltige Werte bei beiden Feldern`() = runTest(dispatcher) {
+    fun `ein gescheitertes Schreiben zeigt wieder den gespeicherten Stand`() = runTest(dispatcher) {
         val speicher = FakeSpeicher()
-        val vm = viewModel(speicher)
+        val vm = viewModel(speicher, schreibFehler = true)
+        advanceUntilIdle() // Zustand geladen (kein Turbine: Startzustand == Defaults, StateFlow meldet nichts Neues)
 
-        vm.zustand.test { skipItems(2); cancelAndIgnoreRemainingEvents() }
-        vm.tagesbonusAendern("30")
-        vm.kulanzAendern("90")
-        vm.speichern().join()
+        vm.tagesbonusAendern(+1)
+        advanceUntilIdle()
 
-        assertEquals(Einstellungen(tagesbonusPunkte = 30, standardKulanzMinuten = 90), speicher.stand.value)
-    }
-
-    @Test
-    fun `Null ist ein gueltiger Wert bei beiden Feldern`() = runTest(dispatcher) {
-        val speicher = FakeSpeicher(Einstellungen(tagesbonusPunkte = 25, standardKulanzMinuten = 45))
-        val vm = viewModel(speicher)
-
-        vm.zustand.test { skipItems(2); cancelAndIgnoreRemainingEvents() }
-        vm.tagesbonusAendern("0")
-        vm.kulanzAendern("0")
-        vm.speichern().join()
-
-        assertEquals(Einstellungen(tagesbonusPunkte = 0, standardKulanzMinuten = 0), speicher.stand.value)
-    }
-
-    @Test
-    fun `ein negativer Tagesbonus wird verworfen, die gueltige Kulanz aber uebernommen`() = runTest(dispatcher) {
-        val speicher = FakeSpeicher(Einstellungen(tagesbonusPunkte = 25, standardKulanzMinuten = 45))
-        val vm = viewModel(speicher)
-
-        vm.zustand.test { skipItems(2); cancelAndIgnoreRemainingEvents() }
-        vm.tagesbonusAendern("-5")
-        vm.kulanzAendern("90")
-        vm.speichern().join()
-
-        assertEquals(Einstellungen(tagesbonusPunkte = 25, standardKulanzMinuten = 90), speicher.stand.value)
-    }
-
-    @Test
-    fun `eine negative Kulanz wird verworfen, der gueltige Tagesbonus aber uebernommen`() = runTest(dispatcher) {
-        val speicher = FakeSpeicher(Einstellungen(tagesbonusPunkte = 25, standardKulanzMinuten = 45))
-        val vm = viewModel(speicher)
-
-        vm.zustand.test { skipItems(2); cancelAndIgnoreRemainingEvents() }
-        vm.tagesbonusAendern("30")
-        vm.kulanzAendern("-5")
-        vm.speichern().join()
-
-        assertEquals(Einstellungen(tagesbonusPunkte = 30, standardKulanzMinuten = 45), speicher.stand.value)
-    }
-
-    @Test
-    fun `ein unlesbarer Tagesbonus wird verworfen, die gueltige Kulanz aber uebernommen`() = runTest(dispatcher) {
-        val speicher = FakeSpeicher(Einstellungen(tagesbonusPunkte = 25, standardKulanzMinuten = 45))
-        val vm = viewModel(speicher)
-
-        vm.zustand.test { skipItems(2); cancelAndIgnoreRemainingEvents() }
-        vm.tagesbonusAendern("viel")
-        vm.kulanzAendern("90")
-        vm.speichern().join()
-
-        assertEquals(Einstellungen(tagesbonusPunkte = 25, standardKulanzMinuten = 90), speicher.stand.value)
-    }
-
-    @Test
-    fun `eine unlesbare Kulanz wird verworfen, der gueltige Tagesbonus aber uebernommen`() = runTest(dispatcher) {
-        val speicher = FakeSpeicher(Einstellungen(tagesbonusPunkte = 25, standardKulanzMinuten = 45))
-        val vm = viewModel(speicher)
-
-        vm.zustand.test { skipItems(2); cancelAndIgnoreRemainingEvents() }
-        vm.tagesbonusAendern("30")
-        vm.kulanzAendern("viel")
-        vm.speichern().join()
-
-        assertEquals(Einstellungen(tagesbonusPunkte = 30, standardKulanzMinuten = 45), speicher.stand.value)
-    }
-
-    @Test
-    fun `ein leeres Feld laesst den bisherigen Wert bei beiden Feldern unveraendert`() = runTest(dispatcher) {
-        val speicher = FakeSpeicher(Einstellungen(tagesbonusPunkte = 25, standardKulanzMinuten = 45))
-        val vm = viewModel(speicher)
-
-        vm.zustand.test { skipItems(2); cancelAndIgnoreRemainingEvents() }
-        vm.tagesbonusAendern("")
-        vm.kulanzAendern("")
-        vm.speichern().join()
-
-        assertEquals(Einstellungen(tagesbonusPunkte = 25, standardKulanzMinuten = 45), speicher.stand.value)
+        assertEquals(15, vm.zustand.value.tagesbonusPunkte)
+        assertEquals(15, speicher.stand.value.tagesbonusPunkte)
     }
 
     @Test
@@ -529,7 +511,7 @@ class EinstellungenViewModelTest {
     }
 
     // Review-Fund W6: Nach einem erfolgreichen Import muss der Zustand die importierten
-    // Einstellungen zeigen -- sonst wuerde ein anschliessendes "Speichern" sie mit den
+    // Einstellungen zeigen -- sonst wuerde ein anschliessender Stepper-Tipp sie mit den
     // alten, noch angezeigten Werten ueberschreiben.
     @Test
     fun `nach einem erfolgreichen Import zeigt der Zustand die importierten Einstellungen`() = runTest(dispatcher) {
@@ -547,8 +529,8 @@ class EinstellungenViewModelTest {
         vm.importVorschauAnfordern { ByteArrayInputStream(text.toByteArray()) }.join()
         vm.importBestaetigen().join()
 
-        assertEquals("99", vm.zustand.value.tagesbonusText)
-        assertEquals("5", vm.zustand.value.standardKulanzText)
+        assertEquals(99, vm.zustand.value.tagesbonusPunkte)
+        assertEquals(5, vm.zustand.value.standardKulanzMinuten)
     }
 
     // Review-Fund W1: Ein Widget-Eintrag kann nach dem Import auf eine ganz andere
