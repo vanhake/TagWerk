@@ -16,6 +16,7 @@ import de.vanhake.dayorganizer.util.versuchen
 import de.vanhake.dayorganizer.widget.WidgetAktualisierung
 import javax.inject.Inject
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -35,6 +36,10 @@ class BelohnungenViewModel(
     private val einloesenUseCase: BelohnungEinloesen,
     private val einloesenRueckgaengig: BelohnungEinloesenRueckgaengig,
     private val widgetAnstossen: suspend () -> Unit,
+    // Injizierbar aus demselben Grund wie in StatistikViewModel: auf einem echten
+    // Default-Thread kam der Zustand auf einem ausgelasteten CI-Runner nicht innerhalb von
+    // Turbines 3-s-Timeout an. Tests geben ihren Test-Dispatcher hinein.
+    private val rechenDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
 
     @Inject
@@ -50,6 +55,7 @@ class BelohnungenViewModel(
         einloesenUseCase,
         einloesenRueckgaengig,
         { widgetAktualisierung.anstossen() },
+        Dispatchers.Default,
     )
 
     // Sperre gegen einen Doppeltipp: die Transaktion im Use Case pruefte zwar Kontostand
@@ -104,7 +110,7 @@ class BelohnungenViewModel(
         // SerienRechner.aktuelleSerie laeuft je Emission und je Kachel mit Serienbedingung
         // ueber die volle Historie -- ohne Dispatcher-Wechsel liefe das auf dem Hauptthread,
         // siehe StatistikViewModel fuer dasselbe Muster.
-        .flowOn(Dispatchers.Default)
+        .flowOn(rechenDispatcher)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BelohnungenZustand())
 
     // Property und Methode heissen bewusst unterschiedlich, siehe HeuteViewModel.

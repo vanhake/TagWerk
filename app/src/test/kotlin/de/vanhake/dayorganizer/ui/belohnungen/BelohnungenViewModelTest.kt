@@ -62,6 +62,7 @@ class BelohnungenViewModelTest {
             ),
             einloesenRueckgaengig = BelohnungEinloesenRueckgaengig(belohnungen, buchungen, transaktionen, uhr),
             widgetAnstossen = widgetAnstossen,
+            rechenDispatcher = dispatcher,
         )
     }
 
