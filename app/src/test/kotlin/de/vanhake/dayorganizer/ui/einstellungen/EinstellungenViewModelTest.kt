@@ -11,6 +11,7 @@ import de.vanhake.dayorganizer.domain.model.Aktivitaet
 import de.vanhake.dayorganizer.domain.model.Belohnung
 import de.vanhake.dayorganizer.domain.model.Zeitplan
 import de.vanhake.dayorganizer.platform.permission.Hinweis
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
@@ -119,11 +120,15 @@ class EinstellungenViewModelTest {
         // solange Eintraege da sind): erlaubt einen langsamen ersten und schnellen zweiten Lauf.
         schreibVerzoegerungen: List<Long> = emptyList(),
         schreibFehler: Boolean = false,
+        // Ersetzt das Standard-Lesen, z. B. um beim n-ten Aufruf zu scheitern.
+        lesenFake: (suspend () -> Einstellungen)? = null,
+        // Ersetzt das Standard-Schreiben, damit Tests Reihenfolge und Tor selbst bestimmen.
+        schreibenFake: (suspend (Einstellungen) -> Unit)? = null,
     ): EinstellungenViewModel {
         var aufruf = 0
         return EinstellungenViewModel(
-            lesen = { speicher.stand.value },
-            schreiben = {
+            lesen = lesenFake ?: { speicher.stand.value },
+            schreiben = schreibenFake ?: {
                 val verzoegerung = schreibVerzoegerungen.getOrNull(aufruf++) ?: schreibVerzoegerung
                 if (verzoegerung > 0) delay(verzoegerung)
                 if (schreibFehler) throw IOException("Platte voll")
@@ -731,5 +736,113 @@ class EinstellungenViewModelTest {
         vm.themeModusAendern(ThemeModus.DUNKEL).join()
 
         assertEquals(0, anstoesse)
+    }
+
+    // Task 5: Import und Stepper teilen sich eine Schreibsperre. Gemeinsames Geruest:
+    // schreiben() haengt beim ersten Aufruf optional an einem Tor und protokolliert die
+    // Bonus-Werte in Schreibreihenfolge; der Backup-Fake schreibt dabei 40 wie der echte
+    // Import (der die Einstellungen aus der Datei uebernimmt).
+    private class ImportAufbau(val speicher: FakeSpeicher = FakeSpeicher()) {
+        val tor = CompletableDeferred<Unit>()
+        val importTor = CompletableDeferred<Unit>()
+        val protokoll = mutableListOf<Int>()
+        var schreibAufrufe = 0
+        var ersterSchreibvorgangHaengtAmTor = false
+
+        val schreiben: suspend (Einstellungen) -> Unit = {
+            if (schreibAufrufe++ == 0 && ersterSchreibvorgangHaengtAmTor) tor.await()
+            protokoll += it.tagesbonusPunkte
+            speicher.stand.value = it
+        }
+        val backup = FakeBackup(
+            importErgebnis = ImportErgebnis.Erfolg(0),
+            beimImportieren = {
+                importTor.await()
+                schreiben(speicher.stand.value.copy(tagesbonusPunkte = 40))
+            },
+        )
+    }
+
+    @Test
+    fun `ein Stepper-Tipp waehrend des Imports wird ignoriert`() = runTest(dispatcher) {
+        val a = ImportAufbau()
+        val vm = viewModel(a.speicher, backupDienst = a.backup, schreibenFake = a.schreiben)
+        advanceUntilIdle()
+        vm.importVorschauAnfordern { ByteArrayInputStream(backupText().toByteArray()) }.join()
+
+        vm.importBestaetigen()
+        runCurrent()
+        assertTrue(vm.zustand.value.importLaeuft)
+
+        vm.tagesbonusAendern(+1).join()
+        vm.kulanzAendern(+1).join()
+        vm.themeModusAendern(ThemeModus.DUNKEL).join()
+        assertEquals(15, vm.zustand.value.tagesbonusPunkte)
+        assertEquals(60, vm.zustand.value.standardKulanzMinuten)
+        assertEquals(ThemeModus.HELL, vm.zustand.value.themeModus)
+        assertTrue(a.protokoll.isEmpty())
+
+        a.importTor.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(40, a.speicher.stand.value.tagesbonusPunkte)
+        assertEquals(40, vm.zustand.value.tagesbonusPunkte)
+        assertFalse(vm.zustand.value.importLaeuft)
+    }
+
+    @Test
+    fun `ein haengender Stepper-Schreibvorgang wird vom Import nicht ueberholt und nicht ueberschrieben`() =
+        runTest(dispatcher) {
+            val a = ImportAufbau().apply { ersterSchreibvorgangHaengtAmTor = true }
+            val vm = viewModel(a.speicher, backupDienst = a.backup, schreibenFake = a.schreiben)
+            advanceUntilIdle()
+            vm.importVorschauAnfordern { ByteArrayInputStream(backupText().toByteArray()) }.join()
+            a.importTor.complete(Unit)
+
+            vm.tagesbonusAendern(+1) // 15 -> 20, haengt im Schreibvorgang am Tor
+            runCurrent()
+            vm.importBestaetigen()
+            runCurrent()
+            a.tor.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals(listOf(20, 40), a.protokoll)
+            assertEquals(40, a.speicher.stand.value.tagesbonusPunkte)
+            assertEquals(40, vm.zustand.value.tagesbonusPunkte)
+        }
+
+    @Test
+    fun `ein fehlgeschlagener Import gibt die Stepper wieder frei`() = runTest(dispatcher) {
+        val backup = FakeBackup(beimImportieren = { throw IOException("Datei weg") })
+        val vm = viewModel(FakeSpeicher(), backupDienst = backup)
+        advanceUntilIdle()
+        vm.importVorschauAnfordern { ByteArrayInputStream(backupText().toByteArray()) }.join()
+
+        vm.importBestaetigen().join()
+
+        assertFalse(vm.zustand.value.importLaeuft)
+        assertEquals(Meldung.IMPORT_UNLESBAR, vm.meldung.value)
+        vm.tagesbonusAendern(+1).join()
+        assertEquals(20, vm.zustand.value.tagesbonusPunkte)
+    }
+
+    @Test
+    fun `ein Lesefehler in uebernehmen laedt neu statt abzustuerzen`() = runTest(dispatcher) {
+        val speicher = FakeSpeicher()
+        var leseAufrufe = 0
+        val vm = viewModel(
+            speicher,
+            lesenFake = {
+                if (++leseAufrufe == 2) throw IOException("Platte weg")
+                speicher.stand.value
+            },
+        )
+        advanceUntilIdle()
+
+        vm.tagesbonusAendern(+1).join()
+
+        // Nichts geschrieben, die Anzeige zeigt wieder den gespeicherten Stand.
+        assertEquals(15, speicher.stand.value.tagesbonusPunkte)
+        assertEquals(15, vm.zustand.value.tagesbonusPunkte)
     }
 }
