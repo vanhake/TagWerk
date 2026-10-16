@@ -378,6 +378,24 @@ class BelohnungenViewModelTest {
     }
 
     @Test
+    fun `ein Speichern-Toast verdraengt das Rueckgaengig einer Einloesung nicht`() = runTest(dispatcher) {
+        val belohnungen = FakeBelohnungRepository(listOf(Belohnung(1, "Kinoabend", preisPunkte = 200)))
+        val buchungen = guthaben(250)
+        val vm = viewModel(belohnungen, buchungen)
+        vm.einloesen(1)
+        dispatcher.scheduler.runCurrent()
+
+        vm.gespeichertMelden(SpeicherErgebnis.GEAENDERT)
+        dispatcher.scheduler.runCurrent()
+        assertEquals(true, vm.toast.value!!.kannRueckgaengig)
+
+        vm.rueckgaengig()
+        dispatcher.scheduler.runCurrent()
+        assertEquals(250, buchungen.kontostand())
+        assertEquals(true, belohnungen.einloesungen.value.single().storniertAm != null)
+    }
+
+    @Test
     fun `Archivieren zeigt einen Toast ohne Rueckgaengig`() = runTest(dispatcher) {
         val belohnungen = FakeBelohnungRepository(listOf(Belohnung(1, "Kinoabend", preisPunkte = 200)))
         val vm = viewModel(belohnungen, guthaben(0))

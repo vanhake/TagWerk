@@ -10,15 +10,12 @@ import de.vanhake.dayorganizer.domain.rechner.SerienRechner
 import de.vanhake.dayorganizer.domainuse.AktivitaetNeuPlanen
 import de.vanhake.dayorganizer.ui.gemeinsam.Hinweistoast
 import de.vanhake.dayorganizer.ui.gemeinsam.SpeicherErgebnis
+import de.vanhake.dayorganizer.ui.gemeinsam.ToastStapel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.mapLatest
@@ -55,9 +52,8 @@ class AktivitaetenViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     // Eigener Flow statt Teil der zeilen-Kette -- gleiches Muster wie HeuteViewModel._toast.
-    private val _toast = MutableStateFlow<Hinweistoast?>(null)
-    val toast: StateFlow<Hinweistoast?> = _toast.asStateFlow()
-    private var toastJob: Job? = null
+    private val stapel = ToastStapel(viewModelScope)
+    val toast: StateFlow<Hinweistoast?> = stapel.sichtbar
 
     // Ohne AktivitaetNeuPlanen liefen die schon materialisierten kuenftigen Faelligkeiten
     // und ihre Erinnerungen der archivierten Aktivitaet einfach weiter (Finding 1 der
@@ -81,13 +77,13 @@ class AktivitaetenViewModel @Inject constructor(
         } catch (ausnahme: Exception) {
             Log.w(TAG, "Nachbereitung nach dem Archivieren fehlgeschlagen", ausnahme)
         }
-        name?.let { zeigeToast(AktivitaetenToastTexte.archiviert(it)) }
+        name?.let { stapel.zeigen(AktivitaetenToastTexte.archiviert(it)) }
     }
 
     /** Vom Screen aufgerufen, wenn der Bearbeiten-Bildschirm mit einem Ergebnis
      * zurueckgekehrt ist (Navigation reicht es ueber den savedStateHandle durch). */
     fun gespeichertMelden(ergebnis: SpeicherErgebnis) {
-        zeigeToast(
+        stapel.zeigen(
             when (ergebnis) {
                 SpeicherErgebnis.ANGELEGT -> AktivitaetenToastTexte.ANGELEGT
                 SpeicherErgebnis.GEAENDERT -> AktivitaetenToastTexte.GEAENDERT
@@ -95,20 +91,8 @@ class AktivitaetenViewModel @Inject constructor(
         )
     }
 
-    private fun zeigeToast(text: String) {
-        toastJob?.cancel()
-        _toast.value = Hinweistoast(text, kannRueckgaengig = false)
-        toastJob = viewModelScope.launch {
-            delay(TOAST_DAUER_MS)
-            _toast.value = null
-        }
-    }
-
     private companion object {
         const val TAG = "Aktivitaeten"
-
-        /** Wie HeuteViewModel. */
-        const val TOAST_DAUER_MS = 3_800L
     }
 }
 

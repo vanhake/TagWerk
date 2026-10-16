@@ -102,9 +102,11 @@ fun BelohnungenScreen(
     }
 
     // Fehlschlag-Meldungen stehen so lange wie ein Toast und werden dann zurueckgesetzt --
-    // sonst erschiene dieselbe Meldung nach jeder Rotation erneut.
-    LaunchedEffect(meldung) {
-        if (meldung == null) return@LaunchedEffect
+    // sonst erschiene dieselbe Meldung nach jeder Rotation erneut. Die Wartezeit beginnt erst,
+    // wenn kein Toast mehr sichtbar ist: der Toast hat Vorrang, die Meldung ginge sonst hinter
+    // ihm ab, ohne je gezeigt worden zu sein.
+    LaunchedEffect(meldung, toast == null) {
+        if (meldung == null || toast != null) return@LaunchedEffect
         delay(MELDUNG_DAUER_MS)
         viewModel.meldungGezeigt()
     }

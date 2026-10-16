@@ -12,18 +12,17 @@ import de.vanhake.dayorganizer.domainuse.BelohnungEinloesenRueckgaengig
 import de.vanhake.dayorganizer.domainuse.EinloeseErgebnis
 import de.vanhake.dayorganizer.ui.gemeinsam.Hinweistoast
 import de.vanhake.dayorganizer.ui.gemeinsam.SpeicherErgebnis
+import de.vanhake.dayorganizer.ui.gemeinsam.ToastStapel
 import de.vanhake.dayorganizer.util.versuchen
 import de.vanhake.dayorganizer.widget.WidgetAktualisierung
 import javax.inject.Inject
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
@@ -80,10 +79,8 @@ class BelohnungenViewModel(
     val meldungFehlendePunkte: StateFlow<Int> = _meldungFehlendePunkte.asStateFlow()
 
     // Eigener Flow wie in HeuteViewModel: synchron gesetzt, im Test deterministisch.
-    private val _toast = MutableStateFlow<Hinweistoast?>(null)
-    val toast: StateFlow<Hinweistoast?> = _toast.asStateFlow()
-    private var ausstehendesRueckgaengig: (suspend () -> Unit)? = null
-    private var toastJob: Job? = null
+    private val stapel = ToastStapel(viewModelScope)
+    val toast: StateFlow<Hinweistoast?> = stapel.sichtbar
 
     val zustand: StateFlow<BelohnungenZustand> = combine(
         belohnungen.beobachteAktive(),
@@ -146,9 +143,9 @@ class BelohnungenViewModel(
      * Rueckgaengig gezeigt. */
     private fun meldungFuer(ergebnis: EinloeseErgebnis) {
         when (ergebnis) {
-            is EinloeseErgebnis.Erfolg -> zeigeToast(
+            is EinloeseErgebnis.Erfolg -> stapel.zeigen(
                 BelohnungenToastTexte.eingeloest(ergebnis.einloesung.name, ergebnis.einloesung.preisPunkte),
-                rueckgaengigAktion = { einloesenRueckgaengig(ergebnis.einloesung) },
+                rueckgaengig = { einloesenRueckgaengig(ergebnis.einloesung) },
             )
 
             is EinloeseErgebnis.Abgelehnt -> when (val hindernis = ergebnis.einloesbarkeit.hindernis) {
@@ -174,10 +171,7 @@ class BelohnungenViewModel(
     }
 
     fun rueckgaengig() = viewModelScope.launch {
-        val aktion = ausstehendesRueckgaengig ?: return@launch
-        toastJob?.cancel()
-        ausstehendesRueckgaengig = null
-        _toast.value = null
+        val aktion = stapel.rueckgaengigNehmen() ?: return@launch
         // Wie beim Einloesen darf eine Datenbankausnahme nicht die App mitreissen;
         // ein Abbruch ist dagegen kein Fehler und wird weitergereicht.
         try {
@@ -196,12 +190,12 @@ class BelohnungenViewModel(
     fun archivieren(belohnungId: Long) = viewModelScope.launch {
         val name = belohnungen.nachId(belohnungId)?.name
         belohnungen.archivieren(belohnungId)
-        name?.let { zeigeToast(BelohnungenToastTexte.archiviert(it)) }
+        name?.let { stapel.zeigen(BelohnungenToastTexte.archiviert(it)) }
     }
 
     /** Vom Screen aufgerufen, wenn der Editor mit einem Ergebnis zurueckgekehrt ist. */
     fun gespeichertMelden(ergebnis: SpeicherErgebnis) {
-        zeigeToast(
+        stapel.zeigen(
             when (ergebnis) {
                 SpeicherErgebnis.ANGELEGT -> BelohnungenToastTexte.ANGELEGT
                 SpeicherErgebnis.GEAENDERT -> BelohnungenToastTexte.GEAENDERT
@@ -209,22 +203,8 @@ class BelohnungenViewModel(
         )
     }
 
-    private fun zeigeToast(text: String, rueckgaengigAktion: (suspend () -> Unit)? = null) {
-        toastJob?.cancel()
-        ausstehendesRueckgaengig = rueckgaengigAktion
-        _toast.value = Hinweistoast(text, kannRueckgaengig = rueckgaengigAktion != null)
-        toastJob = viewModelScope.launch {
-            delay(TOAST_DAUER_MS)
-            _toast.value = null
-            ausstehendesRueckgaengig = null
-        }
-    }
-
     private companion object {
         const val TAG = "BelohnungenViewModel"
-
-        /** Wie HeuteViewModel. */
-        const val TOAST_DAUER_MS = 3_800L
     }
 }
 

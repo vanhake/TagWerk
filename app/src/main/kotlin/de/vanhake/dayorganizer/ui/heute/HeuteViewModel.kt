@@ -21,14 +21,12 @@ import de.vanhake.dayorganizer.platform.permission.BerechtigungsPruefer
 import de.vanhake.dayorganizer.platform.permission.Hinweis
 import de.vanhake.dayorganizer.platform.permission.waechterHaengt
 import de.vanhake.dayorganizer.ui.gemeinsam.Hinweistoast
+import de.vanhake.dayorganizer.ui.gemeinsam.ToastStapel
 import de.vanhake.dayorganizer.widget.WidgetAktualisierung
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
@@ -98,11 +96,8 @@ class HeuteViewModel(
     // Ueberladungen bis fuenf Flows (die zustand-Kette nutzt bereits alle fuenf), und ein
     // gemeinsamer sechster Flow wuerde den DB-getriebenen Update und das Setzen des
     // Toasts ausserdem in zwei getrennte Emissionen auseinanderreissen.
-    private val _toast = MutableStateFlow<Hinweistoast?>(null)
-    val toast: StateFlow<Hinweistoast?> = _toast.asStateFlow()
-
-    private var ausstehendesRueckgaengig: (suspend () -> Unit)? = null
-    private var toastJob: Job? = null
+    private val stapel = ToastStapel(viewModelScope)
+    val toast: StateFlow<Hinweistoast?> = stapel.sichtbar
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val zustand: StateFlow<HeuteZustand> = combine(
@@ -153,7 +148,7 @@ class HeuteViewModel(
                     val name = aktivitaeten.nachId(protokoll.faelligkeitVorher.aktivitaetId)?.name.orEmpty()
                     HeuteToastTexte.erledigtToast(gesamt, name)
                 }
-                zeigeToast(text, kannRueckgaengig = true) { erledigenRueckgaengig(protokoll) }
+                stapel.zeigen(text) { erledigenRueckgaengig(protokoll) }
             }
             ErledigungsProtokoll.NichtOffen, ErledigungsProtokoll.Unbekannt -> Unit
         }
@@ -168,30 +163,16 @@ class HeuteViewModel(
         alarmNeuPlanen()
         widgetAnstossen()
         val name = aktivitaeten.nachId(vorher.aktivitaetId)?.name.orEmpty()
-        zeigeToast(HeuteToastTexte.ausgelassenToast(name), kannRueckgaengig = true) {
+        stapel.zeigen(HeuteToastTexte.ausgelassenToast(name)) {
             auslassenRueckgaengig(vorher)
         }
     }
 
     fun rueckgaengig() = viewModelScope.launch {
-        val aktion = ausstehendesRueckgaengig ?: return@launch
-        toastJob?.cancel()
-        ausstehendesRueckgaengig = null
-        _toast.value = null
+        val aktion = stapel.rueckgaengigNehmen() ?: return@launch
         aktion()
         alarmNeuPlanen()
         widgetAnstossen()
-    }
-
-    private fun zeigeToast(text: String, kannRueckgaengig: Boolean, rueckgaengigAktion: suspend () -> Unit) {
-        toastJob?.cancel()
-        ausstehendesRueckgaengig = rueckgaengigAktion
-        _toast.value = Hinweistoast(text, kannRueckgaengig)
-        toastJob = viewModelScope.launch {
-            delay(3_800)
-            _toast.value = null
-            ausstehendesRueckgaengig = null
-        }
     }
 }
 

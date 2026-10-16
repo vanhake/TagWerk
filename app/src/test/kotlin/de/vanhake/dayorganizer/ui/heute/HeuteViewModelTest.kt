@@ -279,7 +279,7 @@ class HeuteViewModelTest {
     }
 
     @Test
-    fun `eine neue Aktion ersetzt einen noch ausstehenden Toast statt ihn zu stapeln`() = runTest(dispatcher) {
+    fun `eine neue Aktion zeigt ihren Toast oben und jeder Toast laeuft ab seinem eigenen Start ab`() = runTest(dispatcher) {
         val faelligkeiten = FakeFaelligkeitRepository(listOf(morgens, abends))
         val vm = viewModel(faelligkeiten, FakeBuchungRepository())
 
@@ -292,13 +292,12 @@ class HeuteViewModelTest {
         vm.erledigen(11)
         dispatcher.scheduler.runCurrent()
 
-        // Der Toast zeigt jetzt die ZWEITE Aktion -- ueberschrieben statt gestapelt.
+        // Der Toast zeigt jetzt die ZWEITE Aktion (die erste liegt gestapelt darunter).
         assertEquals("+20 Punkte · Sport", vm.toast.value?.text)
 
         // Ab Start der ersten Aktion sind jetzt 3_900ms vergangen -- ihr eigenes 3.8s-Fenster
-        // ist damit ueberschritten. Waere ihr Auto-Dismiss-Job nicht wirklich storniert
-        // worden (toastJob?.cancel() in zeigeToast()), wuerde er hier den laengst durch die
-        // zweite Aktion ersetzten Toast vorzeitig loeschen.
+        // ist damit ueberschritten. Ihr Ablauf darf den oberen Toast der zweiten Aktion nicht
+        // mitnehmen.
         dispatcher.scheduler.advanceTimeBy(1_900)
         dispatcher.scheduler.runCurrent()
         assertEquals("+20 Punkte · Sport", vm.toast.value?.text)
@@ -308,6 +307,25 @@ class HeuteViewModelTest {
         dispatcher.scheduler.advanceTimeBy(2_000)
         dispatcher.scheduler.runCurrent()
         assertEquals(null, vm.toast.value)
+    }
+
+    @Test
+    fun `zwei schnell abgehakte Eintraege lassen sich beide rueckgaengig machen`() = runTest(dispatcher) {
+        val faelligkeiten = FakeFaelligkeitRepository(listOf(morgens, abends))
+        val buchungen = FakeBuchungRepository()
+        val vm = viewModel(faelligkeiten, buchungen)
+
+        vm.erledigen(10)
+        dispatcher.scheduler.runCurrent()
+        vm.erledigen(11)
+        dispatcher.scheduler.runCurrent()
+        vm.rueckgaengig()
+        dispatcher.scheduler.runCurrent()
+        vm.rueckgaengig()
+        dispatcher.scheduler.runCurrent()
+
+        assertEquals(listOf(FaelligkeitStatus.OFFEN, FaelligkeitStatus.OFFEN), faelligkeiten.stand.value.map { it.status })
+        assertEquals(0, buchungen.stand.value.sumOf { it.betrag })
     }
 
     @Test
