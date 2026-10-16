@@ -1,7 +1,12 @@
 package de.vanhake.dayorganizer.widget
 
+import android.app.PendingIntent
+import android.appwidget.AppWidgetManager
 import android.content.Context
+import android.content.Intent
 import android.content.res.Resources
+import android.util.Log
+import android.widget.RemoteViews
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -41,6 +46,7 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import dagger.hilt.android.EntryPointAccessors
+import de.vanhake.dayorganizer.MainActivity
 import de.vanhake.dayorganizer.R
 import de.vanhake.dayorganizer.di.WidgetZugang
 import de.vanhake.dayorganizer.ui.theme.DayOrganizerFarben
@@ -57,11 +63,36 @@ import java.time.LocalDateTime
  * verknuepft: Antippen erledigt die Faelligkeit ueber denselben Use Case wie App
  * und Benachrichtigung.
  */
-class HeuteWidget : GlanceAppWidget() {
+class HeuteWidget : GlanceAppWidget(errorUiLayout = R.layout.widget_fehler) {
 
     // Exact statt Single: nur so kennt LocalSize die tatsaechliche Hoehe, und
     // WidgetMasse kann daraus die Zeilenzahl berechnen.
     override val sizeMode = SizeMode.Exact
+
+    /**
+     * Statt des Standard-Fehlerbilds ein tippbares: Glance zeigt sonst nur den Text aus
+     * errorUiLayout. Der Tipp oeffnet die App, damit der Nutzer nicht vor einer toten
+     * Flaeche steht. Ein Fehler beim Aufbau darf nicht erneut werfen.
+     */
+    override fun onCompositionError(
+        context: Context,
+        glanceId: GlanceId,
+        appWidgetId: Int,
+        throwable: Throwable,
+    ) {
+        Log.w("HeuteWidget", "Widget-Komposition fehlgeschlagen", throwable)
+        versuchen {
+            val ansicht = RemoteViews(context.packageName, R.layout.widget_fehler)
+            val oeffnen = PendingIntent.getActivity(
+                context,
+                0,
+                Intent(context, MainActivity::class.java),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            ansicht.setOnClickPendingIntent(R.id.widget_fehler_wurzel, oeffnen)
+            AppWidgetManager.getInstance(context).updateAppWidget(appWidgetId, ansicht)
+        }.onFailure { Log.w("HeuteWidget", "Fehlerbild konnte nicht gesetzt werden", it) }
+    }
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val zugang = EntryPointAccessors.fromApplication(context, WidgetZugang::class.java)
@@ -155,7 +186,13 @@ class HeuteWidget : GlanceAppWidget() {
                     )
                 }
 
-                when (zustand.leer) {
+                // Bei grosser Schrift und kleiner Hoehe passt der Hinweis nicht mehr unter den
+                // Kopf; dann lieber weglassen als am Rand abschneiden.
+                val leerhinweisPasst = WidgetMasse.leerhinweisPasst(
+                    hoeheDp = LocalSize.current.height.value,
+                    schriftFaktor = res.configuration.fontScale,
+                )
+                when (if (leerhinweisPasst) zustand.leer else null) {
                     WidgetLeer.ALLES_ERLEDIGT -> {
                         Spacer(GlanceModifier.height(10.dp))
                         Text(
@@ -166,8 +203,8 @@ class HeuteWidget : GlanceAppWidget() {
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                             ),
-                            // Nicht im Hoehenbudget von WidgetMasse: einzeilig halten, damit
-                            // bei grosser Schrift nichts mittendrin abgeschnitten wird.
+                            // Einzeilig halten, damit bei grosser Schrift nichts mittendrin
+                            // abgeschnitten wird; das Hoehenbudget prueft leerhinweisPasst.
                             maxLines = 1,
                         )
                     }

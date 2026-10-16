@@ -47,19 +47,19 @@ class WidgetMasseTest {
         assertEquals(0, WidgetMasse.passendeZeilen(500f, 0, 1.0f))
     }
 
-    // kopf 30, zeile 70, Fuss 34
+    // kopf 31,5, zeile 70, Fuss 34: k = 2 -> 257,5, k = 3 -> 337,5 > 334
     @Test
     fun `Schriftfaktor 1,5 zeigt weniger Zeilen`() {
         assertEquals(2, WidgetMasse.passendeZeilen(334f, 6, 1.5f))
     }
 
-    // kopf 40, zeile 88, Fuss 42 -> 32 + 40 + 2 * 98 + 42 = 310
+    // kopf 42, zeile 88, Fuss 42 -> 32 + 42 + 2 * 98 + 42 = 312 (k = 3: 410)
     @Test
     fun `Schriftfaktor 2,0 zeigt weniger Zeilen`() {
         assertEquals(2, WidgetMasse.passendeZeilen(334f, 6, 2.0f))
     }
 
-    // Kopf 40 + Innenabstand 32 = 72 dp, dazu Fusszeile 42: 114 > 110, auch k = 0 passt nicht.
+    // Kopf 42 + Innenabstand 32 = 74 dp, dazu Fusszeile 42: 116 > 110, auch k = 0 passt nicht.
     @Test
     fun `passt nicht einmal der Kopf mit Fusszeile ergibt 0 statt Ausnahme`() {
         assertEquals(0, WidgetMasse.passendeZeilen(110f, 3, 2.0f))
@@ -68,5 +68,18 @@ class WidgetMasseTest {
     @Test
     fun `Hoehe unter dem Kopf ergibt 0 Zeilen`() {
         assertEquals(0, WidgetMasse.passendeZeilen(50f, 3, 1.0f))
+    }
+
+    // 32 + 28 + 10 + 8 + 20 + 8 = 106
+    @Test
+    fun `der Leerhinweis passt bei normaler Schrift in die Mindesthoehe`() {
+        assertEquals(true, WidgetMasse.leerhinweisPasst(110f, 1.0f))
+    }
+
+    // Kopf 42: 32 + 42 + 10 + 8 + 40 + 8 = 140
+    @Test
+    fun `bei doppelter Schrift passt der Leerhinweis nicht in die Mindesthoehe`() {
+        assertEquals(false, WidgetMasse.leerhinweisPasst(110f, 2.0f))
+        assertEquals(true, WidgetMasse.leerhinweisPasst(150f, 2.0f))
     }
 }

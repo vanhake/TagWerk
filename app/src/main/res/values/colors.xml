@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Nur fuer die Widget-Katalogvorschau (RemoteViews-XML); Werte aus HellFarben, geprueft in WidgetRessourcenTest. -->
+<resources>
+    <color name="widget_vorschau_surface">#FFFFFFFF</color>
+    <color name="widget_vorschau_surface2">#FFEFEDF4</color>
+    <color name="widget_vorschau_ink">#FF17151F</color>
+    <color name="widget_vorschau_ink2">#FF5F5B6E</color>
+    <color name="widget_vorschau_accent">#FF6445DF</color>
+    <color name="widget_vorschau_on_accent">#FFFFFFFF</color>
+    <color name="widget_vorschau_coral">#FFD33C33</color>
+    <color name="widget_vorschau_gold_soft">#FFFFF0D0</color>
+    <color name="widget_vorschau_gold_ink">#FF8A5600</color>
+</resources>
