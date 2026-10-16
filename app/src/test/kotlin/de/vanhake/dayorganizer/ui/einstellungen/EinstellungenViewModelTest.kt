@@ -8,6 +8,7 @@ import de.vanhake.dayorganizer.backup.ImportErgebnis
 import de.vanhake.dayorganizer.data.Einstellungen
 import de.vanhake.dayorganizer.data.ThemeModus
 import de.vanhake.dayorganizer.domain.model.Aktivitaet
+import de.vanhake.dayorganizer.domain.model.Belohnung
 import de.vanhake.dayorganizer.domain.model.Zeitplan
 import de.vanhake.dayorganizer.platform.permission.Hinweis
 import kotlinx.coroutines.CoroutineDispatcher
@@ -79,12 +80,13 @@ class EinstellungenViewModelTest {
     private fun backupText(
         erstelltAm: LocalDateTime = LocalDateTime.of(2026, 3, 2, 21, 0),
         aktivitaeten: List<Aktivitaet> = emptyList(),
+        belohnungen: List<Belohnung> = emptyList(),
     ) = BackupUmwandlung.zuText(
         BackupUmwandlung.zuDatei(
             erstelltAm = erstelltAm,
             aktivitaeten = aktivitaeten,
             faelligkeiten = emptyList(), buchungen = emptyList(),
-            belohnungen = emptyList(), einloesungen = emptyList(),
+            belohnungen = belohnungen, einloesungen = emptyList(),
             einstellungen = Einstellungen(),
         ),
     )
@@ -398,6 +400,21 @@ class EinstellungenViewModelTest {
 
         assertEquals(Meldung.IMPORT_UNLESBAR, vm.meldung.value)
         assertNull(vm.importVorschau.value)
+        assertFalse(backup.importiert)
+    }
+
+    // Eine Datei, die lesbar ist, aber fachlich Unmoegliches enthaelt (Preis 0), zeigt keine
+    // Rueckfrage -- sonst wuerde der Bestand durch etwas ersetzt, das die App nie erzeugt.
+    @Test
+    fun `eine fachlich ungueltige Datei zeigt keine Rueckfrage, sondern IMPORT_UNLESBAR`() = runTest(dispatcher) {
+        val text = backupText(belohnungen = listOf(Belohnung(1, "Eis", preisPunkte = 0)))
+        val backup = FakeBackup()
+        val vm = viewModel(FakeSpeicher(), backupDienst = backup)
+
+        vm.importVorschauAnfordern { ByteArrayInputStream(text.toByteArray()) }.join()
+
+        assertNull(vm.importVorschau.value)
+        assertEquals(Meldung.IMPORT_UNLESBAR, vm.meldung.value)
         assertFalse(backup.importiert)
     }
 

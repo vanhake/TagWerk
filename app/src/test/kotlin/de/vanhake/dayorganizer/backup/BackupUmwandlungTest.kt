@@ -73,6 +73,51 @@ class BackupUmwandlungTest {
         einstellungen = Einstellungen(tagesbonusPunkte = 25, standardKulanzMinuten = 45, themeModus = ThemeModus.DUNKEL),
     )
 
+    private fun dateiMit(
+        aktivitaet: Aktivitaet = this.aktivitaet,
+        belohnung: Belohnung = this.belohnung,
+    ) = BackupUmwandlung.zuDatei(
+        erstelltAm = LocalDateTime.of(2026, 3, 2, 21, 0),
+        aktivitaeten = listOf(aktivitaet), faelligkeiten = emptyList(), buchungen = emptyList(),
+        belohnungen = listOf(belohnung), einloesungen = emptyList(),
+        einstellungen = Einstellungen(),
+    )
+
+    @Test
+    fun `eine Belohnung mit Preis 0 wird beim Einlesen abgelehnt`() {
+        val datei = dateiMit(belohnung = belohnung.copy(preisPunkte = 0))
+
+        val fehler = assertFailsWith<IllegalArgumentException> { BackupUmwandlung.ausDatei(datei) }
+        assertTrue("preisPunkte" in fehler.message.orEmpty())
+    }
+
+    @Test
+    fun `eine Serienbedingung ueber 0 Perioden wird beim Einlesen abgelehnt`() {
+        val datei = dateiMit(belohnung = belohnung.copy(bedingung = Belohnungsbedingung.MindestSerie(1, 0)))
+
+        val fehler = assertFailsWith<IllegalArgumentException> { BackupUmwandlung.ausDatei(datei) }
+        assertTrue("bedingungPerioden" in fehler.message.orEmpty())
+    }
+
+    @Test
+    fun `eine Aktivitaet mit 0 Punkten wird beim Einlesen abgelehnt`() {
+        val datei = dateiMit(aktivitaet = aktivitaet.copy(basisPunkte = 0))
+
+        val fehler = assertFailsWith<IllegalArgumentException> { BackupUmwandlung.ausDatei(datei) }
+        assertTrue("basisPunkte" in fehler.message.orEmpty())
+    }
+
+    @Test
+    fun `ein Preis von 1 und eine Serie ueber 1 Periode sind gueltig`() {
+        val grenze = belohnung.copy(preisPunkte = 1, bedingung = Belohnungsbedingung.MindestSerie(1, 1))
+        val datei = dateiMit(aktivitaet = aktivitaet.copy(basisPunkte = 1), belohnung = grenze)
+
+        val zurueck = BackupUmwandlung.ausText(BackupUmwandlung.zuText(datei))
+
+        assertEquals(listOf(grenze), zurueck.belohnungen)
+        assertEquals(1, zurueck.aktivitaeten.single().basisPunkte)
+    }
+
     @Test
     fun `alle Daten ueberstehen den Rundlauf durch JSON`() {
         val json = Json.encodeToString(BackupDatei.serializer(), datei())
