@@ -67,12 +67,20 @@ class StatistikViewModel(
 
         val bilanzen = rechner.tagesBilanzen(imZeitraum, von, heute)
 
+        // Archivierte Aktivitaeten verschwinden nicht aus der Rechenschaft: hatten sie im
+        // Zeitraum Faelligkeiten, zaehlen diese schon in der Heatmap mit und brauchen
+        // deshalb auch eine Zeile. Ohne Faelligkeit im Zeitraum wuerde die Zeile nur leer stehen.
+        val idsImZeitraum = imZeitraum.map { it.aktivitaetId }.toSet()
+        val archivierte = aktivitaeten.alle()
+            .filter { it.archiviertAm != null && it.id in idsImZeitraum }
+            .sortedBy { it.name }
+
         return StatistikZustand(
             zeitraumTage = tage,
             bilanzen = bilanzen,
             gesamtQuote = gesamtQuoteProzent(bilanzen),
             geladen = true,
-            zeilen = liste.map { aktivitaet ->
+            zeilen = (liste.map { it to false } + archivierte.map { it to true }).map { (aktivitaet, archiviert) ->
                 StatistikZeile(
                     aktivitaetId = aktivitaet.id,
                     name = aktivitaet.name,
@@ -83,6 +91,7 @@ class StatistikViewModel(
                         faelligkeiten = faelligkeiten.historie(aktivitaet.id),
                         heute = heute,
                     ),
+                    archiviert = archiviert,
                 )
             },
             // punkteVerlauf bildet den Anfangsbestand aus allen Buchungen VOR "von" (siehe

@@ -46,6 +46,13 @@ class EinstellungenSpeicherTest {
         assertFailsWith<IllegalStateException> { speicher.letzterWaechterErfolg() }
     }
 
+    @Test
+    fun `lesenOderWerfen reicht einen Lesefehler weiter`() = runTest {
+        val speicher = EinstellungenSpeicher(WerfenderDatenSpeicher(IOException("Preferences-Datei kaputt")))
+
+        assertFailsWith<IOException> { speicher.lesenOderWerfen() }
+    }
+
     // Gegen einen echten DataStore mit einer echten kaputten Datei, nicht gegen einen
     // Fake: es geht darum, ob die Datei danach repariert ist. Auf dem Emulator blieb
     // sie ohne Korruptionsbehandlung nach "Speichern" unveraendert kaputt -- das

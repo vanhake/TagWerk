@@ -3,6 +3,7 @@ package de.vanhake.dayorganizer
 import de.vanhake.dayorganizer.data.repository.AktivitaetRepository
 import de.vanhake.dayorganizer.data.repository.BelohnungRepository
 import de.vanhake.dayorganizer.data.repository.BuchungRepository
+import de.vanhake.dayorganizer.data.repository.DatensatzFehlt
 import de.vanhake.dayorganizer.data.repository.ErinnerungRepository
 import de.vanhake.dayorganizer.data.repository.FaelligkeitRepository
 import de.vanhake.dayorganizer.data.repository.Transaktionen
@@ -42,10 +43,7 @@ class FakeAktivitaetRepository(start: List<Aktivitaet> = emptyList()) : Aktivita
             return id
         }
         // Spiegelt Room's @Update: ohne passenden Datensatz gibt es keinen stillen Insert.
-        check(stand.value.any { it.id == aktivitaet.id }) {
-            "Aktivitaet mit id=${aktivitaet.id} konnte nicht aktualisiert werden -- " +
-                "kein passender Datensatz vorhanden"
-        }
+        if (stand.value.none { it.id == aktivitaet.id }) throw DatensatzFehlt(aktivitaet.id, "Aktivitaet")
         stand.value = stand.value.map { if (it.id == aktivitaet.id) aktivitaet else it }
         return aktivitaet.id
     }
@@ -54,6 +52,22 @@ class FakeAktivitaetRepository(start: List<Aktivitaet> = emptyList()) : Aktivita
         stand.value = stand.value.map {
             if (it.id == id) it.copy(aktiv = false, archiviertAm = am) else it
         }
+    }
+
+    /** Spiegelt "WHERE archiviertAm IS NOT NULL ORDER BY name". */
+    override fun beobachteArchivierte(): Flow<List<Aktivitaet>> =
+        stand.map { liste -> liste.filter { it.archiviertAm != null }.sortedBy { it.name } }
+
+    /** Spiegelt AktivitaetDao.alle ("ORDER BY id"). */
+    override suspend fun alle(): List<Aktivitaet> = stand.value.sortedBy { it.id }
+
+    /** Spiegelt "SET archiviertAm = NULL, aktiv = 1 WHERE id = :id AND archiviertAm IS NOT NULL". */
+    override suspend fun wiederherstellen(id: Long): Boolean {
+        val treffer = stand.value.any { it.id == id && it.archiviertAm != null }
+        stand.value = stand.value.map {
+            if (it.id == id && it.archiviertAm != null) it.copy(aktiv = true, archiviertAm = null) else it
+        }
+        return treffer
     }
 }
 
@@ -237,16 +251,24 @@ class FakeBelohnungRepository(
             return id
         }
         // Spiegelt Room's @Update: ohne passenden Datensatz gibt es keinen stillen Insert.
-        check(stand.value.any { it.id == belohnung.id }) {
-            "Belohnung mit id=${belohnung.id} konnte nicht aktualisiert werden -- " +
-                "kein passender Datensatz vorhanden"
-        }
+        if (stand.value.none { it.id == belohnung.id }) throw DatensatzFehlt(belohnung.id, "Belohnung")
         stand.value = stand.value.map { if (it.id == belohnung.id) belohnung else it }
         return belohnung.id
     }
 
     override suspend fun archivieren(id: Long) {
         stand.value = stand.value.map { if (it.id == id) it.copy(archiviert = true) else it }
+    }
+
+    /** Spiegelt "WHERE archiviert = 1 ORDER BY name". */
+    override fun beobachteArchivierte(): Flow<List<Belohnung>> =
+        stand.map { liste -> liste.filter { it.archiviert }.sortedBy { it.name } }
+
+    /** Spiegelt "SET archiviert = 0 WHERE id = :id AND archiviert = 1". */
+    override suspend fun wiederherstellen(id: Long): Boolean {
+        val treffer = stand.value.any { it.id == id && it.archiviert }
+        stand.value = stand.value.map { if (it.id == id && it.archiviert) it.copy(archiviert = false) else it }
+        return treffer
     }
 
     override suspend fun einloesungAnlegen(einloesung: Einloesung): Long {

@@ -3,7 +3,9 @@ package de.vanhake.dayorganizer.ui.belohnungen
 import de.vanhake.dayorganizer.FakeAktivitaetRepository
 import de.vanhake.dayorganizer.FakeBelohnungRepository
 import de.vanhake.dayorganizer.domain.model.Belohnung
+import de.vanhake.dayorganizer.data.repository.BelohnungRepository
 import de.vanhake.dayorganizer.ui.gemeinsam.SpeicherErgebnis
+import de.vanhake.dayorganizer.ui.gemeinsam.SpeicherFehler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -14,6 +16,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Before
+import java.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -39,6 +42,58 @@ class BelohnungBearbeitenViewModelTest {
 
     private fun viewModel(belohnungen: de.vanhake.dayorganizer.data.repository.BelohnungRepository = FakeBelohnungRepository()) =
         BelohnungBearbeitenViewModel(belohnungen, FakeAktivitaetRepository())
+
+    @Test
+    fun `fehlt der Datensatz beim Speichern bleibt der Editor mit Entwurf offen`() = runTest(dispatcher) {
+        val repo = FakeBelohnungRepository(listOf(kino))
+        val vm = viewModel(repo)
+        vm.laden(1L).join()
+        vm.aendern { it.copy(name = "Neu") }
+        val entwurf = vm.entwurf.value
+        repo.stand.value = emptyList()
+
+        assertNull(vm.speichern())
+
+        assertEquals(SpeicherFehler.NICHT_MEHR_VORHANDEN, vm.speicherFehler.value)
+        assertEquals(entwurf, vm.entwurf.value)
+    }
+
+    @Test
+    fun `eine Datenbankausnahme beim Speichern wird als Fehlschlag gemeldet`() = runTest(dispatcher) {
+        val vm = viewModel(werfendesRepository(FakeBelohnungRepository(), werfenBis = Int.MAX_VALUE))
+        vm.laden(0L).join()
+        vm.aendern { it.copy(name = "Eis", symbol = "icecream") }
+
+        assertNull(vm.speichern())
+
+        assertEquals(SpeicherFehler.FEHLGESCHLAGEN, vm.speicherFehler.value)
+    }
+
+    @Test
+    fun `nach einem Fehlschlag laesst sich erneut speichern`() = runTest(dispatcher) {
+        val echt = FakeBelohnungRepository(listOf(kino))
+        val vm = viewModel(werfendesRepository(echt, werfenBis = 1))
+        vm.laden(1L).join()
+        vm.aendern { it.copy(name = "Neu") }
+
+        assertNull(vm.speichern())
+        vm.speicherFehlerGezeigt()
+        assertNull(vm.speicherFehler.value)
+
+        assertEquals(SpeicherErgebnis.GEAENDERT, vm.speichern())
+        assertEquals("Neu", echt.stand.value.single().name)
+    }
+
+    /** Wirft bei den ersten [werfenBis] Aufrufen von speichern() eine IOException. */
+    private fun werfendesRepository(echt: FakeBelohnungRepository, werfenBis: Int): BelohnungRepository {
+        var aufrufe = 0
+        return object : BelohnungRepository by echt {
+            override suspend fun speichern(belohnung: Belohnung): Long {
+                if (++aufrufe <= werfenBis) throw IOException("Datenbank nicht erreichbar")
+                return echt.speichern(belohnung)
+            }
+        }
+    }
 
     @Test
     fun `eine neue gueltige Belohnung wird angelegt`() = runTest(dispatcher) {

@@ -1,5 +1,6 @@
 package de.vanhake.dayorganizer
 
+import de.vanhake.dayorganizer.data.repository.DatensatzFehlt
 import de.vanhake.dayorganizer.domain.model.Belohnung
 import de.vanhake.dayorganizer.domain.model.Einloesung
 import kotlinx.coroutines.flow.first
@@ -74,6 +75,13 @@ class FakeBelohnungRepositoryTest {
     /** Spiegelt Room's @Update-Verhalten: RaumBelohnungRepository.speichern wirft, wenn kein
      * passender Datensatz existiert, statt heimlich einzufuegen -- der Fake muss dasselbe tun. */
     @Test
+    fun `speichern einer unbekannten id wirft DatensatzFehlt`() = runTest {
+        val fehler = assertFailsWith<DatensatzFehlt> { FakeBelohnungRepository().speichern(guenstig.copy(id = 5)) }
+
+        assertEquals(5L, fehler.id)
+    }
+
+    @Test
     fun `speichern mit unbekannter id schlaegt fehl statt heimlich einzufuegen`() = runTest {
         val repository = FakeBelohnungRepository()
 
@@ -94,5 +102,24 @@ class FakeBelohnungRepositoryTest {
         assertEquals(false, repository.einloesungStornieren(id, am.plusMinutes(1)))
         assertEquals(false, repository.einloesungStornieren(id + 99, am))
         assertEquals(am, repository.alleEinloesungen().single().storniertAm)
+    }
+
+    /** Spiegelt BelohnungDao.beobachteArchivierte ("archiviert = 1 ORDER BY name") und
+     * wiederherstellen ("... AND archiviert = 1"): beim zweiten Aufruf false. */
+    @Test
+    fun `Archivierte sortieren nach Name und Wiederherstellen wirkt genau einmal`() = runTest {
+        val repository = FakeBelohnungRepository(
+            listOf(
+                guenstig.copy(id = 1, name = "B", archiviert = true),
+                guenstig.copy(id = 2, name = "A", archiviert = true),
+                teuer,
+            ),
+        )
+
+        assertEquals(listOf("A", "B"), repository.beobachteArchivierte().first().map { it.name })
+        assertEquals(true, repository.wiederherstellen(2))
+        assertEquals(false, repository.wiederherstellen(2))
+        assertEquals(false, repository.wiederherstellen(teuer.id))
+        assertEquals(false, repository.nachId(2)?.archiviert)
     }
 }

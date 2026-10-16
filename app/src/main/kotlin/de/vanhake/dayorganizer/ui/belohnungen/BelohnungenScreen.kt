@@ -34,6 +34,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,6 +58,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.vanhake.dayorganizer.R
 import de.vanhake.dayorganizer.domain.model.Einloesung
 import de.vanhake.dayorganizer.domain.rechner.Hindernis
+import de.vanhake.dayorganizer.ui.gemeinsam.ArchivBereich
+import de.vanhake.dayorganizer.ui.gemeinsam.ArchivierenDialog
 import de.vanhake.dayorganizer.ui.gemeinsam.Hinweistoast
 import de.vanhake.dayorganizer.ui.gemeinsam.HinweistoastLeiste
 import de.vanhake.dayorganizer.ui.gemeinsam.SpeicherErgebnis
@@ -89,6 +94,8 @@ fun BelohnungenScreen(
     val zustand by viewModel.zustand.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
     val meldung by viewModel.meldung.collectAsStateWithLifecycle()
+    val archiviert by viewModel.archiviert.collectAsStateWithLifecycle()
+    var archivierenId by rememberSaveable { mutableStateOf<Long?>(null) }
     val kontext = LocalContext.current
     val farben = DayOrganizerTheme.farben
 
@@ -102,9 +109,11 @@ fun BelohnungenScreen(
     }
 
     // Fehlschlag-Meldungen stehen so lange wie ein Toast und werden dann zurueckgesetzt --
-    // sonst erschiene dieselbe Meldung nach jeder Rotation erneut.
-    LaunchedEffect(meldung) {
-        if (meldung == null) return@LaunchedEffect
+    // sonst erschiene dieselbe Meldung nach jeder Rotation erneut. Die Wartezeit beginnt erst,
+    // wenn kein Toast mehr sichtbar ist: der Toast hat Vorrang, die Meldung ginge sonst hinter
+    // ihm ab, ohne je gezeigt worden zu sein.
+    LaunchedEffect(meldung, toast == null) {
+        if (meldung == null || toast != null) return@LaunchedEffect
         delay(MELDUNG_DAUER_MS)
         viewModel.meldungGezeigt()
     }
@@ -159,7 +168,15 @@ fun BelohnungenScreen(
                     kontostand = zustand.kontostand,
                     bearbeiten = { bearbeiten(kachel.id) },
                     einloesen = { viewModel.einloesen(kachel.id) },
-                    archivieren = { viewModel.archivieren(kachel.id) },
+                    archivieren = { archivierenId = kachel.id },
+                )
+            }
+
+            item(key = "archiv") {
+                ArchivBereich(
+                    eintraege = archiviert,
+                    symbol = { belohnungSymbol(it) },
+                    wiederherstellen = { viewModel.wiederherstellen(it) },
                 )
             }
 
@@ -189,6 +206,18 @@ fun BelohnungenScreen(
                 containerColor = farben.accent,
                 contentColor = farben.onAccent,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+            )
+        }
+
+        zustand.kacheln.firstOrNull { it.id == archivierenId }?.let { kachel ->
+            ArchivierenDialog(
+                name = kachel.name,
+                erklaerung = stringResource(R.string.archivieren_erklaerung_belohnung),
+                bestaetigen = {
+                    viewModel.archivieren(kachel.id)
+                    archivierenId = null
+                },
+                abbrechen = { archivierenId = null },
             )
         }
 

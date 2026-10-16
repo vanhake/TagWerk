@@ -25,6 +25,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,6 +43,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.vanhake.dayorganizer.R
+import de.vanhake.dayorganizer.ui.gemeinsam.ArchivBereich
+import de.vanhake.dayorganizer.ui.gemeinsam.ArchivierenDialog
 import de.vanhake.dayorganizer.ui.gemeinsam.HinweistoastLeiste
 import de.vanhake.dayorganizer.ui.gemeinsam.SpeicherErgebnis
 import de.vanhake.dayorganizer.ui.theme.DayOrganizerFormen
@@ -55,6 +60,9 @@ fun AktivitaetenScreen(
 ) {
     val zeilen by viewModel.zeilen.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
+    val archiviert by viewModel.archiviert.collectAsStateWithLifecycle()
+    // Dialogzustand ueber Rotation hinweg: nur die id, den Namen sucht der Screen neu aus der Liste.
+    var archivierenId by rememberSaveable { mutableStateOf<Long?>(null) }
     val farben = DayOrganizerTheme.farben
 
     // Das Ergebnis kommt einmalig aus dem savedStateHandle des Back-Stack-Eintrags;
@@ -108,7 +116,15 @@ fun AktivitaetenScreen(
                 AktivitaetZeileKarte(
                     zeile = zeile,
                     bearbeiten = { bearbeiten(zeile.id) },
-                    archivieren = { viewModel.archivieren(zeile.id) },
+                    archivieren = { archivierenId = zeile.id },
+                )
+            }
+
+            item(key = "archiv") {
+                ArchivBereich(
+                    eintraege = archiviert,
+                    symbol = { aktivitaetSymbol(it) },
+                    wiederherstellen = { viewModel.wiederherstellen(it) },
                 )
             }
         }
@@ -125,12 +141,22 @@ fun AktivitaetenScreen(
             )
         }
 
+        zeilen.firstOrNull { it.id == archivierenId }?.let { zeile ->
+            ArchivierenDialog(
+                name = zeile.name,
+                erklaerung = stringResource(R.string.archivieren_erklaerung_aktivitaet),
+                bestaetigen = {
+                    viewModel.archivieren(zeile.id)
+                    archivierenId = null
+                },
+                abbrechen = { archivierenId = null },
+            )
+        }
+
         toast?.let { aktuellerToast ->
             HinweistoastLeiste(
                 toast = aktuellerToast,
-                // Listen-Toasts tragen nie Rueckgaengig (kannRueckgaengig = false), der
-                // Knopf wird also gar nicht gezeigt.
-                rueckgaengig = {},
+                rueckgaengig = { viewModel.rueckgaengig() },
                 modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
             )
         }

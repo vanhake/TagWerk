@@ -76,16 +76,22 @@ class EinstellungenSpeicher(
         if (it is IOException) emit(emptyPreferences()) else throw it
     }
 
-    fun beobachten(): Flow<Einstellungen> = gesicherterDatenstrom.map {
-        Einstellungen(
-            tagesbonusPunkte = it[tagesbonus] ?: 15,
-            standardKulanzMinuten = it[kulanz] ?: 60,
-            themeModus = it[themeModus]?.let { name -> runCatching { ThemeModus.valueOf(name) }.getOrNull() }
-                ?: ThemeModus.HELL,
-        )
-    }
+    private fun Preferences.zuEinstellungen() = Einstellungen(
+        tagesbonusPunkte = this[tagesbonus] ?: 15,
+        standardKulanzMinuten = this[kulanz] ?: 60,
+        themeModus = this[themeModus]?.let { name -> runCatching { ThemeModus.valueOf(name) }.getOrNull() }
+            ?: ThemeModus.HELL,
+    )
+
+    fun beobachten(): Flow<Einstellungen> = gesicherterDatenstrom.map { it.zuEinstellungen() }
 
     suspend fun lesen(): Einstellungen = beobachten().first()
+
+    /**
+     * Wie lesen(), faengt aber keine IOException: fuer den Buchungspfad, der lieber scheitert
+     * als mit Vorgabewerten bucht (ein unlesbarer Tagesbonus wuerde sonst still als 15 gebucht).
+     */
+    suspend fun lesenOderWerfen(): Einstellungen = datenStore.data.first().zuEinstellungen()
 
     suspend fun schreiben(einstellungen: Einstellungen) {
         datenStore.edit {

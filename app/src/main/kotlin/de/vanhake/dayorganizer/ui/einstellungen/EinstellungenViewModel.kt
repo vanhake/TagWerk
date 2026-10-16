@@ -34,6 +34,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -46,6 +47,8 @@ data class EinstellungenZustand(
     val hinweise: List<Hinweis> = emptyList(),
     /** Erst nach dem ersten Laden zeigt der Zustand gespeicherte Werte statt Defaults. */
     val geladen: Boolean = false,
+    /** Solange ein Import laeuft, sind Stepper und Farbmodus gesperrt (gleiche Schreibsperre). */
+    val importLaeuft: Boolean = false,
 )
 
 /**
@@ -230,35 +233,55 @@ class EinstellungenViewModel(
      * nachImport() trotzdem zu Ende laufen -- sonst bleibt die Tabelle erinnerung leer und
      * kein Waechter wird angestossen, bis zum naechsten planmaessigen Lauf.
      */
-    fun importBestaetigen() = viewModelScope.launch(ioDispatcher) {
-        val text = gelesenerImportText ?: return@launch
+    fun importBestaetigen(): Job {
+        val text = gelesenerImportText ?: return ignoriert()
         gelesenerImportText = null
         _importVorschau.value = null
+        // Synchron, vor dem launch: ein Tipp in der Luecke bis zum Start der Koroutine
+        // wuerde sonst noch durchgehen und mit dem Import um die Einstellungen streiten.
+        _zustand.update { it.copy(importLaeuft = true) }
 
-        withContext(NonCancellable) {
-            val ergebnis = versuchen {
-                backupDienst.importieren(ByteArrayInputStream(text.toByteArray()))
-            }
-            _meldung.value = ergebnis.fold(
-                onSuccess = { erfolg ->
-                    when (erfolg) {
-                        is ImportErgebnis.Erfolg -> if (erfolg.einstellungenUebernommen) {
-                            Meldung.IMPORT_FERTIG
-                        } else {
-                            Meldung.IMPORT_EINSTELLUNGEN_FEHLGESCHLAGEN
+        return viewModelScope.launch(ioDispatcher) {
+            var ersetzt = false
+            withContext(NonCancellable) {
+                try {
+                    // Dieselbe Sperre wie bei den Steppern: ein haengender Stepper-Schreibvorgang
+                    // wird nicht ueberholt, und ein spaeter Stepper-Lauf ueberschreibt die
+                    // importierten Werte nicht mit dem Stand von vor dem Import.
+                    schreibSperre.withLock {
+                        val ergebnis = versuchen {
+                            backupDienst.importieren(ByteArrayInputStream(text.toByteArray()))
                         }
-                        is ImportErgebnis.FalschesSchema -> Meldung.IMPORT_FALSCHES_SCHEMA
-                        is ImportErgebnis.Unlesbar -> Meldung.IMPORT_UNLESBAR
+                        _meldung.value = ergebnis.fold(
+                            onSuccess = { erfolg ->
+                                when (erfolg) {
+                                    is ImportErgebnis.Erfolg -> if (erfolg.einstellungenUebernommen) {
+                                        Meldung.IMPORT_FERTIG
+                                    } else {
+                                        Meldung.IMPORT_EINSTELLUNGEN_FEHLGESCHLAGEN
+                                    }
+                                    is ImportErgebnis.FalschesSchema -> Meldung.IMPORT_FALSCHES_SCHEMA
+                                    is ImportErgebnis.Unlesbar -> Meldung.IMPORT_UNLESBAR
+                                }
+                            },
+                            onFailure = { Meldung.IMPORT_UNLESBAR },
+                        )
+                        // Nur ein Import, der den Bestand tatsaechlich ersetzt hat, darf den
+                        // Zustand neu laden und Waechter/Benachrichtigungen anstossen -- ein
+                        // abgelehnter Import (falsches Schema, unlesbar) hat nichts veraendert
+                        // (Review-Fund W3/W6).
+                        if (ergebnis.getOrNull() is ImportErgebnis.Erfolg) {
+                            neuLaden()
+                            ersetzt = true
+                        }
                     }
-                },
-                onFailure = { Meldung.IMPORT_UNLESBAR },
-            )
-            // Nur ein Import, der den Bestand tatsaechlich ersetzt hat, darf den Zustand
-            // neu laden und Waechter/Benachrichtigungen anstossen -- ein abgelehnter Import
-            // (falsches Schema, unlesbar) hat nichts veraendert (Review-Fund W3/W6).
-            if (ergebnis.getOrNull() is ImportErgebnis.Erfolg) {
-                neuLaden()
-                nachImport()
+                } finally {
+                    // Auch bei Fehler oder Ablehnung: sonst blieben die Stepper fuer immer gesperrt.
+                    _zustand.update { it.copy(importLaeuft = false) }
+                }
+                // Nach dem Loesen der Sperre: nachImport schreibt keine Einstellungen und
+                // kann lange dauern (Waechter, Benachrichtigungen, Widget).
+                if (ersetzt) nachImport()
             }
         }
     }
@@ -266,7 +289,7 @@ class EinstellungenViewModel(
     /** [schritt] ist +1 oder -1 und wird mit [STEPPER_SCHRITT] multipliziert. */
     fun tagesbonusAendern(schritt: Int): Job {
         val z = _zustand.value
-        if (!z.geladen) return ignoriert()
+        if (!z.geladen || z.importLaeuft) return ignoriert()
         _zustand.value = z.copy(
             tagesbonusPunkte = (z.tagesbonusPunkte + schritt * STEPPER_SCHRITT).coerceAtLeast(STEPPER_MIN),
         )
@@ -275,7 +298,7 @@ class EinstellungenViewModel(
 
     fun kulanzAendern(schritt: Int): Job {
         val z = _zustand.value
-        if (!z.geladen) return ignoriert()
+        if (!z.geladen || z.importLaeuft) return ignoriert()
         _zustand.value = z.copy(
             standardKulanzMinuten = (z.standardKulanzMinuten + schritt * STEPPER_SCHRITT)
                 .coerceAtLeast(STEPPER_MIN),
@@ -285,7 +308,7 @@ class EinstellungenViewModel(
 
     /** Wirkt wie die Stepper sofort: ein Farbmodus ist ein Umschalter, kein Formularfeld. */
     fun themeModusAendern(neu: ThemeModus): Job {
-        if (!_zustand.value.geladen) return ignoriert()
+        if (!_zustand.value.geladen || _zustand.value.importLaeuft) return ignoriert()
         _zustand.value = _zustand.value.copy(themeModus = neu)
         return uebernehmen()
     }
@@ -296,7 +319,12 @@ class EinstellungenViewModel(
      * Banner verschwinden. Gleiches Muster wie HeuteViewModel.beimSichtbarwerden.
      */
     fun beimSichtbarwerden() {
-        viewModelScope.launch { _zustand.value = _zustand.value.copy(hinweise = hinweiseLesen()) }
+        viewModelScope.launch {
+            // Erst lesen, dann atomar einsetzen: hinweiseLesen() suspendiert, und ein vorher
+            // gezogener Schnappschuss wuerde einen zwischenzeitlichen Import ueberschreiben.
+            val h = hinweiseLesen()
+            _zustand.update { it.copy(hinweise = h) }
+        }
     }
 
     /** Vor dem Erstladen zeigt der Zustand nur Defaults; ein Tipp wuerde sie speichern und
@@ -318,11 +346,12 @@ class EinstellungenViewModel(
             var farbmodusGeaendert = false
             val fehler = schreibSperre.withLock {
                 val z = _zustand.value
-                val gespeichert = lesen()
-                // DataStore.edit wirft bei Platten- oder Korruptionsfehlern eine IOException --
-                // unbehandelt reisst sie die App mit. Gleiches Muster wie
+                // DataStore.lesen/edit werfen bei Platten- oder Korruptionsfehlern eine
+                // IOException -- unbehandelt reisst sie die App mit. Gleiches Muster wie
                 // AktivitaetBearbeitenViewModel.speichern(): protokollieren statt abstuerzen.
+                // Auch lesen() gehoert hinein, sonst stuerzt ein Lesefehler ab.
                 versuchen {
+                    val gespeichert = lesen()
                     schreiben(
                         gespeichert.copy(
                             tagesbonusPunkte = z.tagesbonusPunkte,
@@ -330,9 +359,10 @@ class EinstellungenViewModel(
                             themeModus = z.themeModus,
                         ),
                     )
+                    gespeichert.themeModus != z.themeModus
                 }.onFailure { ausnahme ->
                     Log.w(TAG, "Speichern der Einstellungen fehlgeschlagen", ausnahme)
-                }.also { farbmodusGeaendert = it.isSuccess && gespeichert.themeModus != z.themeModus }
+                }.also { farbmodusGeaendert = it.getOrDefault(false) }
                     .isFailure
             }
             // Nach dem Loesen der Sperre, aber noch unter NonCancellable: ein Tab-Wechsel
@@ -345,15 +375,21 @@ class EinstellungenViewModel(
         if (fehlgeschlagen) neuLaden()
     }
 
+    // importLaeuft bleibt unangetastet: scheitert ein Stepper-Schreibvorgang waehrend eines
+    // Imports, gaebe ein frischer Zustand die Bedienung mitten im Import frei. Der Import
+    // setzt die Sperre selbst in seinem finally zurueck.
     private suspend fun neuLaden() {
         val aktuell = lesen()
-        _zustand.value = EinstellungenZustand(
-            tagesbonusPunkte = aktuell.tagesbonusPunkte,
-            standardKulanzMinuten = aktuell.standardKulanzMinuten,
-            themeModus = aktuell.themeModus,
-            hinweise = hinweiseLesen(),
-            geladen = true,
-        )
+        val hinweise = hinweiseLesen()
+        _zustand.update {
+            it.copy(
+                tagesbonusPunkte = aktuell.tagesbonusPunkte,
+                standardKulanzMinuten = aktuell.standardKulanzMinuten,
+                themeModus = aktuell.themeModus,
+                hinweise = hinweise,
+                geladen = true,
+            )
+        }
     }
 
     companion object {

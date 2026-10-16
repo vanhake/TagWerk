@@ -10,6 +10,7 @@ import de.vanhake.dayorganizer.domain.rechner.ZeitplanRechner
 import de.vanhake.dayorganizer.domainuse.AktivitaetNeuPlanen
 import de.vanhake.dayorganizer.domainuse.FaelligkeitenMaterialisieren
 import de.vanhake.dayorganizer.ui.gemeinsam.SpeicherErgebnis
+import de.vanhake.dayorganizer.ui.gemeinsam.SpeicherFehler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -21,6 +22,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Before
+import java.io.IOException
 import java.time.Clock
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -67,6 +69,59 @@ class AktivitaetBearbeitenViewModelTest {
             standardKulanzLesen = { standardKulanz },
             uhr = uhr,
         )
+    }
+
+    @Test
+    fun `fehlt der Datensatz beim Speichern bleibt der Editor mit Entwurf offen`() = runTest(dispatcher) {
+        val repo = FakeAktivitaetRepository(listOf(bestehendeAktivitaet))
+        val vm = viewModel(repo)
+        vm.laden(1L).join()
+        vm.aendern { it.copy(name = "Neu") }
+        val entwurf = vm.entwurf.value
+        repo.stand.value = emptyList()
+
+        assertNull(vm.speichern())
+
+        assertEquals(SpeicherFehler.NICHT_MEHR_VORHANDEN, vm.speicherFehler.value)
+        assertEquals(entwurf, vm.entwurf.value)
+    }
+
+    @Test
+    fun `eine Datenbankausnahme beim Speichern wird als Fehlschlag gemeldet`() = runTest(dispatcher) {
+        val echt = FakeAktivitaetRepository()
+        val vm = viewModel(werfendesRepository(echt, werfenBis = Int.MAX_VALUE))
+        vm.laden(0L).join()
+        vm.aendern { it.copy(name = "Lesen") }
+
+        assertNull(vm.speichern())
+
+        assertEquals(SpeicherFehler.FEHLGESCHLAGEN, vm.speicherFehler.value)
+    }
+
+    @Test
+    fun `nach einem Fehlschlag laesst sich erneut speichern`() = runTest(dispatcher) {
+        val echt = FakeAktivitaetRepository(listOf(bestehendeAktivitaet))
+        val vm = viewModel(werfendesRepository(echt, werfenBis = 1))
+        vm.laden(1L).join()
+        vm.aendern { it.copy(name = "Neu") }
+
+        assertNull(vm.speichern())
+        vm.speicherFehlerGezeigt()
+        assertNull(vm.speicherFehler.value)
+
+        assertEquals(SpeicherErgebnis.GEAENDERT, vm.speichern())
+        assertEquals("Neu", echt.stand.value.single().name)
+    }
+
+    /** Wirft bei den ersten [werfenBis] Aufrufen von speichern() eine IOException. */
+    private fun werfendesRepository(echt: FakeAktivitaetRepository, werfenBis: Int): AktivitaetRepository {
+        var aufrufe = 0
+        return object : AktivitaetRepository by echt {
+            override suspend fun speichern(aktivitaet: Aktivitaet): Long {
+                if (++aufrufe <= werfenBis) throw IOException("Datenbank nicht erreichbar")
+                return echt.speichern(aktivitaet)
+            }
+        }
     }
 
     @Test

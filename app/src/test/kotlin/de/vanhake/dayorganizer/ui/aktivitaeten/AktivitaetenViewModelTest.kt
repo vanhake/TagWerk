@@ -5,15 +5,18 @@ package de.vanhake.dayorganizer.ui.aktivitaeten
 import de.vanhake.dayorganizer.FakeAktivitaetRepository
 import de.vanhake.dayorganizer.FakeErinnerungRepository
 import de.vanhake.dayorganizer.FakeFaelligkeitRepository
+import de.vanhake.dayorganizer.data.repository.AktivitaetRepository
 import de.vanhake.dayorganizer.domain.model.Aktivitaet
 import de.vanhake.dayorganizer.domain.model.Zeitplan
 import de.vanhake.dayorganizer.domain.rechner.SerienRechner
 import de.vanhake.dayorganizer.domain.rechner.ZeitplanRechner
 import de.vanhake.dayorganizer.domainuse.AktivitaetNeuPlanen
 import de.vanhake.dayorganizer.domainuse.FaelligkeitenMaterialisieren
+import de.vanhake.dayorganizer.ui.gemeinsam.ArchivEintrag
 import de.vanhake.dayorganizer.ui.gemeinsam.Hinweistoast
 import de.vanhake.dayorganizer.ui.gemeinsam.SpeicherErgebnis
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -46,7 +49,9 @@ class AktivitaetenViewModelTest {
         erstelltAm = LocalDate.of(2026, 1, 1),
     )
 
-    private fun viewModel(aktivitaeten: FakeAktivitaetRepository = FakeAktivitaetRepository()): AktivitaetenViewModel {
+    private val neuGeplant = mutableListOf<Long>()
+
+    private fun viewModel(aktivitaeten: AktivitaetRepository = FakeAktivitaetRepository()): AktivitaetenViewModel {
         val faelligkeiten = FakeFaelligkeitRepository()
         val erinnerungen = FakeErinnerungRepository()
         val materialisieren = FaelligkeitenMaterialisieren(
@@ -57,7 +62,12 @@ class AktivitaetenViewModelTest {
             alarmNeuPlanen = {},
             widgetAnstossen = {},
         )
-        return AktivitaetenViewModel(aktivitaeten, faelligkeiten, neuPlanen, SerienRechner(), uhr)
+        // Spion vor dem echten Use Case: so sieht der Test, fuer welche id neu geplant wurde.
+        return AktivitaetenViewModel(
+            aktivitaeten, faelligkeiten,
+            { id -> neuGeplant += id; neuPlanen(id) },
+            SerienRechner(), uhr,
+        )
     }
 
     @Test
@@ -116,6 +126,71 @@ class AktivitaetenViewModelTest {
         vm.archivieren(1L).join()
 
         assertEquals(heute, repo.stand.value.single().archiviertAm)
-        assertEquals(Hinweistoast("Tabletten archiviert", kannRueckgaengig = false), vm.toast.value)
+        assertEquals(Hinweistoast("Tabletten archiviert", kannRueckgaengig = true), vm.toast.value)
+    }
+
+    @Test
+    fun `ein Datenbankfehler beim Archivieren meldet sich als Toast statt abzustuerzen`() = runTest(dispatcher) {
+        val echt = FakeAktivitaetRepository(listOf(tabletten))
+        val werfend = object : AktivitaetRepository by echt {
+            override suspend fun archivieren(id: Long, am: LocalDate) = throw java.io.IOException("Datenbank nicht erreichbar")
+        }
+        val vm = viewModel(werfend)
+
+        vm.archivieren(1L).join()
+
+        assertEquals(Hinweistoast("Aktion fehlgeschlagen", kannRueckgaengig = false), vm.toast.value)
+    }
+
+    @Test
+    fun `Archivieren zeigt Rueckgaengig und Rueckgaengig holt die Aktivitaet samt Planung zurueck`() = runTest(dispatcher) {
+        val repo = FakeAktivitaetRepository(listOf(tabletten))
+        val vm = viewModel(repo)
+        vm.archivieren(1L).join()
+        assertEquals(true, vm.toast.value?.kannRueckgaengig)
+
+        vm.rueckgaengig().join()
+
+        val zurueck = repo.nachId(1)!!
+        assertNull(zurueck.archiviertAm)
+        assertEquals(true, zurueck.aktiv)
+        assertEquals(listOf(1L, 1L), neuGeplant)
+    }
+
+    @Test
+    fun `Wiederherstellen aus dem Archivbereich plant neu und meldet es`() = runTest(dispatcher) {
+        val repo = FakeAktivitaetRepository(listOf(tabletten))
+        val vm = viewModel(repo)
+        vm.archivieren(1L).join()
+        neuGeplant.clear()
+        // Das offene Rueckgaengig des Archivierens verdeckt sonst den Info-Toast.
+        testScheduler.advanceTimeBy(3_801)
+        testScheduler.runCurrent()
+        // stateIn(WhileSubscribed) liefert erst mit einem Abonnenten.
+        backgroundScope.launch { vm.archiviert.collect {} }
+        testScheduler.runCurrent()
+        assertEquals(listOf(ArchivEintrag(1, "Tabletten", tabletten.symbol)), vm.archiviert.value)
+
+        vm.wiederherstellen(1L).join()
+        testScheduler.runCurrent()
+
+        assertEquals(emptyList(), vm.archiviert.value)
+
+        assertEquals("Tabletten wiederhergestellt", vm.toast.value?.text)
+        assertEquals(false, vm.toast.value?.kannRueckgaengig)
+        assertEquals(listOf(1L), neuGeplant)
+    }
+
+    @Test
+    fun `doppeltes Wiederherstellen wirft nicht und plant nur einmal`() = runTest(dispatcher) {
+        val repo = FakeAktivitaetRepository(listOf(tabletten))
+        val vm = viewModel(repo)
+        vm.archivieren(1L).join()
+        neuGeplant.clear()
+
+        vm.wiederherstellen(1L).join()
+        vm.wiederherstellen(1L).join()
+
+        assertEquals(listOf(1L), neuGeplant)
     }
 }

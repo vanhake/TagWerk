@@ -49,4 +49,21 @@ class StatistikDarstellungTest {
     fun `metaText nennt geschafft und verpasst`() {
         assertEquals("56 geschafft · 2 verpasst", metaText(56, 2))
     }
+
+    @Test
+    fun `die Zusammenfassung zaehlt jeden Tag genau einmal`() {
+        val bilanzen = listOf(
+            TagesBilanz(t, 0, 0), TagesBilanz(t, 2, 2), TagesBilanz(t, 1, 3), TagesBilanz(t, 0, 2),
+        )
+        assertEquals(HeatmapZusammenfassung(4, 1, 1, 1, 1), heatmapZusammenfassung(bilanzen))
+    }
+
+    @Test
+    fun `die Wochen beginnen am Montag wie die Heatmap-Spalten`() {
+        val erster = LocalDate.of(2026, 10, 7)
+        val bilanzen = (0L until 10L).map { TagesBilanz(erster.plusDays(it), 0, 0) }
+        val wochen = heatmapWochen(bilanzen)
+        assertEquals(listOf(5, 5), wochen.map { it.size })
+        assertEquals(erster, wochen.first().first().tag)
+    }
 }

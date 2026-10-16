@@ -169,9 +169,9 @@ fun EinstellungenScreen(viewModel: EinstellungenViewModel = hiltViewModel()) {
                             erhoehen = { viewModel.tagesbonusAendern(+1) },
                             // Vor dem Erstladen sind es nur Defaults -- ein Tipp wuerde sie
                             // als Basis nehmen und gespeicherte Werte ueberschreiben.
-                            verringernMoeglich = zustand.geladen &&
+                            verringernMoeglich = zustand.geladen && !zustand.importLaeuft &&
                                 zustand.tagesbonusPunkte > EinstellungenViewModel.STEPPER_MIN,
-                            erhoehenMoeglich = zustand.geladen,
+                            erhoehenMoeglich = zustand.geladen && !zustand.importLaeuft,
                         )
                     }
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = farben.line)
@@ -183,9 +183,9 @@ fun EinstellungenScreen(viewModel: EinstellungenViewModel = hiltViewModel()) {
                             wert = zustand.standardKulanzMinuten,
                             verringern = { viewModel.kulanzAendern(-1) },
                             erhoehen = { viewModel.kulanzAendern(+1) },
-                            verringernMoeglich = zustand.geladen &&
+                            verringernMoeglich = zustand.geladen && !zustand.importLaeuft &&
                                 zustand.standardKulanzMinuten > EinstellungenViewModel.STEPPER_MIN,
-                            erhoehenMoeglich = zustand.geladen,
+                            erhoehenMoeglich = zustand.geladen && !zustand.importLaeuft,
                         )
                     }
                 }
@@ -199,7 +199,7 @@ fun EinstellungenScreen(viewModel: EinstellungenViewModel = hiltViewModel()) {
                 ),
                 gewaehlt = zustand.themeModus,
                 waehlen = { viewModel.themeModusAendern(it) },
-                aktiv = zustand.geladen,
+                aktiv = zustand.geladen && !zustand.importLaeuft,
             )
 
             AbschnittsTitel(stringResource(R.string.optionen_abschnitt_backup))

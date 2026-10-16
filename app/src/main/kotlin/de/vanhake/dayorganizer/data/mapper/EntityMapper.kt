@@ -142,23 +142,38 @@ fun Belohnung.zuEntity(): BelohnungEntity = BelohnungEntity(
     symbol = symbol,
 )
 
-fun BelohnungEntity.zuDomaene(): Belohnung = Belohnung(
-    id = id,
-    name = name,
-    beschreibung = beschreibung,
-    preisPunkte = preisPunkte,
-    bedingung = when (bedingungTyp) {
+/**
+ * Strenge Variante fuer das Backup: dort soll ein kaputter Datensatz die Sicherung
+ * scheitern lassen, statt still zu fehlen.
+ */
+fun BelohnungEntity.zuDomaene(): Belohnung =
+    zuDomaeneOderNull() ?: error("Unlesbare Belohnung $id: Bedingung $bedingungTyp")
+
+/**
+ * null bei unbekanntem bedingungTyp oder fehlendem Pflichtfeld der Bedingung. Die
+ * Lesepfade der App ueberspringen so einen Datensatz, statt dass ein einziger kaputter
+ * Eintrag (etwa aus einer neueren App-Version) den ganzen Shop abstuerzen laesst.
+ */
+fun BelohnungEntity.zuDomaeneOderNull(): Belohnung? {
+    val bedingung: Belohnungsbedingung? = when (bedingungTyp) {
         "MINDESTSERIE" -> Belohnungsbedingung.MindestSerie(
-            aktivitaetId = requireNotNull(bedingungAktivitaetId),
-            perioden = requireNotNull(bedingungPerioden),
+            aktivitaetId = bedingungAktivitaetId ?: return null,
+            perioden = bedingungPerioden ?: return null,
         )
-        "FRUEHESTENS_AB" -> Belohnungsbedingung.FruehestensAb(requireNotNull(bedingungDatum))
+        "FRUEHESTENS_AB" -> Belohnungsbedingung.FruehestensAb(bedingungDatum ?: return null)
         null -> null
-        else -> error("Unbekannte Belohnungsbedingung: $bedingungTyp")
-    },
-    archiviert = archiviert,
-    symbol = symbol,
-)
+        else -> return null
+    }
+    return Belohnung(
+        id = id,
+        name = name,
+        beschreibung = beschreibung,
+        preisPunkte = preisPunkte,
+        bedingung = bedingung,
+        archiviert = archiviert,
+        symbol = symbol,
+    )
+}
 
 fun Einloesung.zuEntity(): EinloesungEntity = EinloesungEntity(
     id = id, belohnungId = belohnungId, name = name,

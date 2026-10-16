@@ -31,14 +31,18 @@ class RaumAktivitaetRepository @Inject constructor(
             dao.einfuegen(aktivitaet.zuEntity())
         } else {
             val betroffeneZeilen = dao.aktualisieren(aktivitaet.zuEntity())
-            check(betroffeneZeilen > 0) {
-                "Aktivitaet mit id=${aktivitaet.id} konnte nicht aktualisiert werden -- " +
-                    "kein passender Datensatz vorhanden"
-            }
+            if (betroffeneZeilen == 0) throw DatensatzFehlt(aktivitaet.id, "Aktivitaet")
             aktivitaet.id
         }
 
     override suspend fun archivieren(id: Long, am: LocalDate) = dao.archivieren(id, am)
+
+    override fun beobachteArchivierte(): Flow<List<Aktivitaet>> =
+        dao.beobachteArchivierte().map { liste -> liste.map { it.zuDomaene() } }
+
+    override suspend fun wiederherstellen(id: Long): Boolean = dao.wiederherstellen(id) > 0
+
+    override suspend fun alle(): List<Aktivitaet> = dao.alle().map { it.zuDomaene() }
 }
 
 class RaumFaelligkeitRepository @Inject constructor(

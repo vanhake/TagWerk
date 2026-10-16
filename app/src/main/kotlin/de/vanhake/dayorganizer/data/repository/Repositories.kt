@@ -7,12 +7,21 @@ import kotlinx.coroutines.flow.Flow
 import java.time.LocalDate
 import java.time.LocalDateTime
 
+/** Ein Update traf keine Zeile: der Datensatz ist weg (z. B. durch ein eingespieltes Backup).
+ * Eigener Typ, damit die Editoren das von einem echten Datenbankfehler unterscheiden. */
+class DatensatzFehlt(val id: Long, art: String) : IllegalStateException("$art mit id=$id existiert nicht")
+
 interface AktivitaetRepository {
     fun beobachteAktive(): Flow<List<Aktivitaet>>
     suspend fun alleAktiven(): List<Aktivitaet>
     suspend fun nachId(id: Long): Aktivitaet?
     suspend fun speichern(aktivitaet: Aktivitaet): Long
     suspend fun archivieren(id: Long, am: LocalDate)
+    fun beobachteArchivierte(): Flow<List<Aktivitaet>>
+    /** Alle Aktivitaeten, auch archivierte und pausierte, nach id. */
+    suspend fun alle(): List<Aktivitaet>
+    /** true, wenn gerade wiederhergestellt; false, wenn unbekannt oder nicht archiviert (idempotent). */
+    suspend fun wiederherstellen(id: Long): Boolean
 }
 
 interface FaelligkeitRepository {

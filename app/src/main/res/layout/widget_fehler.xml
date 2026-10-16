@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/widget_vorschau_surface"
+    android:padding="16dp"
+    android:id="@+id/widget_fehler_wurzel">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:text="@string/widget_fehler"
+        android:textColor="@color/widget_vorschau_ink"
+        android:textSize="14sp" />
+</FrameLayout>

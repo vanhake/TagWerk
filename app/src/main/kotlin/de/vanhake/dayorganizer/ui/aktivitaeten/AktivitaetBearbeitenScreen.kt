@@ -52,16 +52,21 @@ import de.vanhake.dayorganizer.ui.gemeinsam.AuswahlKarten
 import de.vanhake.dayorganizer.ui.gemeinsam.FehlerText
 import de.vanhake.dayorganizer.ui.gemeinsam.Kopfzeile
 import de.vanhake.dayorganizer.ui.gemeinsam.NamensFeld
+import de.vanhake.dayorganizer.ui.gemeinsam.Hinweistoast
+import de.vanhake.dayorganizer.ui.gemeinsam.HinweistoastLeiste
 import de.vanhake.dayorganizer.ui.gemeinsam.SpeicherErgebnis
+import de.vanhake.dayorganizer.ui.gemeinsam.SpeicherFehler
 import de.vanhake.dayorganizer.ui.gemeinsam.Stepper
 import de.vanhake.dayorganizer.ui.gemeinsam.StepperZeile
 import de.vanhake.dayorganizer.ui.gemeinsam.StepperZeilenInhalt
 import de.vanhake.dayorganizer.ui.gemeinsam.SymbolRaster
+import de.vanhake.dayorganizer.ui.gemeinsam.ToastStapel
 import de.vanhake.dayorganizer.ui.gemeinsam.UhrzeitDialog
 import de.vanhake.dayorganizer.ui.theme.AKTIVITAET_SYMBOLE
 import de.vanhake.dayorganizer.ui.theme.DayOrganizerFormen
 import de.vanhake.dayorganizer.ui.theme.DayOrganizerTheme
 import de.vanhake.dayorganizer.ui.theme.aktivitaetSymbol
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.LocalTime
@@ -85,115 +90,142 @@ fun AktivitaetBearbeitenScreen(
 ) {
     val entwurf by viewModel.entwurf.collectAsStateWithLifecycle()
     val fehler by viewModel.fehler.collectAsStateWithLifecycle()
+    val speicherFehler by viewModel.speicherFehler.collectAsStateWithLifecycle()
     val bereich = rememberCoroutineScope()
     val farben = DayOrganizerTheme.farben
     var uhrzeitZiel by rememberSaveable { mutableStateOf<UhrzeitZiel?>(null) }
 
     LaunchedEffect(id) { viewModel.laden(id) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(farben.bg)
-            .verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
-    ) {
-        Kopfzeile(
-            titel = stringResource(if (id == 0L) R.string.neue_aktivitaet else R.string.aktivitaet_bearbeiten_titel),
-            zurueck = zurueck,
-        )
+    // Einmalig zeigen, dann zuruecksetzen -- Muster der meldung im EinstellungenScreen.
+    LaunchedEffect(speicherFehler) {
+        if (speicherFehler == null) return@LaunchedEffect
+        delay(ToastStapel.TOAST_DAUER_MS)
+        viewModel.speicherFehlerGezeigt()
+    }
 
-        Abschnitt(R.string.feld_symbol) {
-            SymbolRaster(AKTIVITAET_SYMBOLE, entwurf.symbol, ::aktivitaetSymbol) { neu ->
-                viewModel.aendern { it.copy(symbol = neu) }
-            }
-        }
-
-        Abschnitt(R.string.feld_name) {
-            NamensFeld(
-                wert = entwurf.name,
-                platzhalterId = R.string.name_platzhalter,
-                fehlerhaft = EntwurfFehler.NAME_LEER in fehler,
-                aendern = { neu -> viewModel.aendern { it.copy(name = neu) } },
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(farben.bg)
+                .verticalScroll(rememberScrollState())
+                .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+        ) {
+            Kopfzeile(
+                titel = stringResource(if (id == 0L) R.string.neue_aktivitaet else R.string.aktivitaet_bearbeiten_titel),
+                zurueck = zurueck,
             )
-            FehlerText(EntwurfFehler.NAME_LEER in fehler, R.string.fehler_name_leer)
-        }
 
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            StepperZeile(titel = stringResource(R.string.feld_punkte)) {
-                Stepper(
-                    wert = entwurf.basisPunkte,
-                    verringern = { viewModel.aendern { it.punkteAendern(-1) } },
-                    erhoehen = { viewModel.aendern { it.punkteAendern(+1) } },
-                    verringernMoeglich = entwurf.basisPunkte > AktivitaetEntwurf.PUNKTE_MIN,
+            Abschnitt(R.string.feld_symbol) {
+                SymbolRaster(AKTIVITAET_SYMBOLE, entwurf.symbol, ::aktivitaetSymbol) { neu ->
+                    viewModel.aendern { it.copy(symbol = neu) }
+                }
+            }
+
+            Abschnitt(R.string.feld_name) {
+                NamensFeld(
+                    wert = entwurf.name,
+                    platzhalterId = R.string.name_platzhalter,
+                    fehlerhaft = EntwurfFehler.NAME_LEER in fehler,
+                    aendern = { neu -> viewModel.aendern { it.copy(name = neu) } },
                 )
+                FehlerText(EntwurfFehler.NAME_LEER in fehler, R.string.fehler_name_leer)
             }
-            FehlerText(EntwurfFehler.PUNKTE_NICHT_POSITIV in fehler, R.string.fehler_punkte)
-        }
 
-        Abschnitt(R.string.feld_zeitplan) {
-            AuswahlKarten(TYP_KARTEN, entwurf.typ) { typ -> viewModel.aendern { it.copy(typ = typ) } }
-        }
-
-        if (entwurf.typ != ZeitplanTyp.WOCHENZIEL) {
-            Abschnitt(R.string.feld_wochentage) {
-                WochentagKacheln(entwurf.wochentage) { tag -> viewModel.aendern { it.wochentagUmschalten(tag) } }
-                FehlerText(EntwurfFehler.KEIN_WOCHENTAG in fehler, R.string.fehler_kein_wochentag)
-            }
-        }
-
-        if (entwurf.typ == ZeitplanTyp.FESTE_ZEITEN || entwurf.typ == ZeitplanTyp.TAGESZIEL) {
-            Abschnitt(R.string.feld_uhrzeiten) {
-                UhrzeitChips(
-                    zeiten = entwurf.zeiten,
-                    entfernen = { zeit -> viewModel.aendern { it.zeitEntfernen(zeit) } },
-                    hinzufuegen = { uhrzeitZiel = UhrzeitZiel.NEU },
-                )
-                FehlerText(EntwurfFehler.KEINE_ZEIT in fehler, R.string.fehler_keine_zeit)
-            }
-        }
-
-        if (entwurf.typ == ZeitplanTyp.INTERVALL) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                IntervallKarte(
-                    entwurf = entwurf,
-                    intervallAendern = { schritt -> viewModel.aendern { it.intervallAendern(schritt) } },
-                    vonWaehlen = { uhrzeitZiel = UhrzeitZiel.VON },
-                    bisWaehlen = { uhrzeitZiel = UhrzeitZiel.BIS },
-                )
-                FehlerText(EntwurfFehler.INTERVALL_UNGUELTIG in fehler, R.string.fehler_intervall)
-            }
-        }
-
-        if (entwurf.typ == ZeitplanTyp.TAGESZIEL || entwurf.typ == ZeitplanTyp.WOCHENZIEL) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                StepperZeile(
-                    titel = stringResource(R.string.feld_zielanzahl),
-                    untertitel = stringResource(
-                        if (entwurf.typ == ZeitplanTyp.WOCHENZIEL) R.string.ziel_einheit_woche else R.string.ziel_einheit_tag,
-                    ),
-                ) {
+                StepperZeile(titel = stringResource(R.string.feld_punkte)) {
                     Stepper(
-                        wert = entwurf.zielAnzahl,
-                        verringern = { viewModel.aendern { it.zielAendern(-1) } },
-                        erhoehen = { viewModel.aendern { it.zielAendern(+1) } },
-                        verringernMoeglich = entwurf.zielAnzahl > AktivitaetEntwurf.ZIEL_MIN,
+                        wert = entwurf.basisPunkte,
+                        verringern = { viewModel.aendern { it.punkteAendern(-1) } },
+                        erhoehen = { viewModel.aendern { it.punkteAendern(+1) } },
+                        verringernMoeglich = entwurf.basisPunkte > AktivitaetEntwurf.PUNKTE_MIN,
                     )
                 }
-                FehlerText(EntwurfFehler.ZIEL_NICHT_POSITIV in fehler, R.string.fehler_ziel)
+                FehlerText(EntwurfFehler.PUNKTE_NICHT_POSITIV in fehler, R.string.fehler_punkte)
+            }
+
+            Abschnitt(R.string.feld_zeitplan) {
+                AuswahlKarten(TYP_KARTEN, entwurf.typ) { typ -> viewModel.aendern { it.copy(typ = typ) } }
+            }
+
+            if (entwurf.typ != ZeitplanTyp.WOCHENZIEL) {
+                Abschnitt(R.string.feld_wochentage) {
+                    WochentagKacheln(entwurf.wochentage) { tag -> viewModel.aendern { it.wochentagUmschalten(tag) } }
+                    FehlerText(EntwurfFehler.KEIN_WOCHENTAG in fehler, R.string.fehler_kein_wochentag)
+                }
+            }
+
+            if (entwurf.typ == ZeitplanTyp.FESTE_ZEITEN || entwurf.typ == ZeitplanTyp.TAGESZIEL) {
+                Abschnitt(R.string.feld_uhrzeiten) {
+                    UhrzeitChips(
+                        zeiten = entwurf.zeiten,
+                        entfernen = { zeit -> viewModel.aendern { it.zeitEntfernen(zeit) } },
+                        hinzufuegen = { uhrzeitZiel = UhrzeitZiel.NEU },
+                    )
+                    FehlerText(EntwurfFehler.KEINE_ZEIT in fehler, R.string.fehler_keine_zeit)
+                }
+            }
+
+            if (entwurf.typ == ZeitplanTyp.INTERVALL) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    IntervallKarte(
+                        entwurf = entwurf,
+                        intervallAendern = { schritt -> viewModel.aendern { it.intervallAendern(schritt) } },
+                        vonWaehlen = { uhrzeitZiel = UhrzeitZiel.VON },
+                        bisWaehlen = { uhrzeitZiel = UhrzeitZiel.BIS },
+                    )
+                    FehlerText(EntwurfFehler.INTERVALL_UNGUELTIG in fehler, R.string.fehler_intervall)
+                }
+            }
+
+            if (entwurf.typ == ZeitplanTyp.TAGESZIEL || entwurf.typ == ZeitplanTyp.WOCHENZIEL) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    StepperZeile(
+                        titel = stringResource(R.string.feld_zielanzahl),
+                        untertitel = stringResource(
+                            if (entwurf.typ == ZeitplanTyp.WOCHENZIEL) R.string.ziel_einheit_woche else R.string.ziel_einheit_tag,
+                        ),
+                    ) {
+                        Stepper(
+                            wert = entwurf.zielAnzahl,
+                            verringern = { viewModel.aendern { it.zielAendern(-1) } },
+                            erhoehen = { viewModel.aendern { it.zielAendern(+1) } },
+                            verringernMoeglich = entwurf.zielAnzahl > AktivitaetEntwurf.ZIEL_MIN,
+                        )
+                    }
+                    FehlerText(EntwurfFehler.ZIEL_NICHT_POSITIV in fehler, R.string.fehler_ziel)
+                }
+            }
+
+            PlanZusammenfassung(PlanText.aus(entwurf.zeitplan()))
+
+            Button(
+                onClick = { bereich.launch { viewModel.speichern()?.let(fertig) } },
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = DayOrganizerFormen.feld,
+                colors = ButtonDefaults.buttonColors(containerColor = farben.accent, contentColor = farben.onAccent),
+            ) {
+                Text(stringResource(R.string.speichern), fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
             }
         }
 
-        PlanZusammenfassung(PlanText.aus(entwurf.zeitplan()))
-
-        Button(
-            onClick = { bereich.launch { viewModel.speichern()?.let(fertig) } },
-            modifier = Modifier.fillMaxWidth().height(56.dp),
-            shape = DayOrganizerFormen.feld,
-            colors = ButtonDefaults.buttonColors(containerColor = farben.accent, contentColor = farben.onAccent),
-        ) {
-            Text(stringResource(R.string.speichern), fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+        speicherFehler?.let { grund ->
+            HinweistoastLeiste(
+                toast = Hinweistoast(
+                    stringResource(
+                        if (grund == SpeicherFehler.NICHT_MEHR_VORHANDEN) {
+                            R.string.speichern_nicht_mehr_vorhanden
+                        } else {
+                            R.string.speichern_fehlgeschlagen
+                        },
+                    ),
+                    kannRueckgaengig = false,
+                ),
+                rueckgaengig = {},
+                modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
+            )
         }
     }
 

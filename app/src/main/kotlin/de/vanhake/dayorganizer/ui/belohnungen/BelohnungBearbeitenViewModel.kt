@@ -1,12 +1,16 @@
 package de.vanhake.dayorganizer.ui.belohnungen
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import de.vanhake.dayorganizer.data.repository.AktivitaetRepository
 import de.vanhake.dayorganizer.data.repository.BelohnungRepository
+import de.vanhake.dayorganizer.data.repository.DatensatzFehlt
 import de.vanhake.dayorganizer.domain.model.Aktivitaet
 import de.vanhake.dayorganizer.ui.gemeinsam.SpeicherErgebnis
+import de.vanhake.dayorganizer.ui.gemeinsam.SpeicherFehler
+import de.vanhake.dayorganizer.util.versuchen
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,6 +32,9 @@ class BelohnungBearbeitenViewModel @Inject constructor(
 
     private val _auswahl = MutableStateFlow<List<Aktivitaet>>(emptyList())
     val auswahl: StateFlow<List<Aktivitaet>> = _auswahl.asStateFlow()
+
+    private val _speicherFehler = MutableStateFlow<SpeicherFehler?>(null)
+    val speicherFehler: StateFlow<SpeicherFehler?> = _speicherFehler.asStateFlow()
 
     private var geladeneId: Long? = null
 
@@ -52,7 +59,13 @@ class BelohnungBearbeitenViewModel @Inject constructor(
         if (speicherVersucht) _fehler.value = _entwurf.value.pruefen()
     }
 
-    /** Gibt null zurueck, wenn der Entwurf Fehler hat oder schon ein Speichern laeuft. */
+    /** Vom Screen aufgerufen, nachdem der Hinweis gezeigt wurde. */
+    fun speicherFehlerGezeigt() {
+        _speicherFehler.value = null
+    }
+
+    /** Gibt null zurueck, wenn der Entwurf Fehler hat, schon ein Speichern laeuft oder das
+     * Speichern scheiterte (Grund in [speicherFehler], der Entwurf bleibt unveraendert). */
     suspend fun speichern(): SpeicherErgebnis? {
         if (speichertGerade) return null
         speichertGerade = true
@@ -63,7 +76,18 @@ class BelohnungBearbeitenViewModel @Inject constructor(
             if (fehler.isNotEmpty()) return null
 
             val ergebnis = if (_entwurf.value.id == 0L) SpeicherErgebnis.ANGELEGT else SpeicherErgebnis.GEAENDERT
-            val id = belohnungen.speichern(_entwurf.value.zuBelohnung())
+            // Eine Datenbankausnahme darf nicht in den Klick-Handler durchschlagen; versuchen
+            // reicht einen Abbruch durch.
+            val id = versuchen { belohnungen.speichern(_entwurf.value.zuBelohnung()) }
+                .getOrElse { ausnahme ->
+                    Log.w(TAG, "Speichern fehlgeschlagen", ausnahme)
+                    _speicherFehler.value = if (ausnahme is DatensatzFehlt) {
+                        SpeicherFehler.NICHT_MEHR_VORHANDEN
+                    } else {
+                        SpeicherFehler.FEHLGESCHLAGEN
+                    }
+                    return null
+                }
             // Die neue id uebernehmen: waehrend der Ausblend-Animation ist der Screen noch
             // klickbar; ein spaeter Tipp wird so zum harmlosen Update statt zu einem Insert.
             _entwurf.value = _entwurf.value.copy(id = id)
@@ -71,5 +95,9 @@ class BelohnungBearbeitenViewModel @Inject constructor(
         } finally {
             speichertGerade = false
         }
+    }
+
+    private companion object {
+        const val TAG = "BelohnungBearbeiten"
     }
 }

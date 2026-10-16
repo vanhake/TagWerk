@@ -19,6 +19,7 @@ import de.vanhake.dayorganizer.domainuse.BelohnungEinloesenRueckgaengig
 import de.vanhake.dayorganizer.ui.gemeinsam.Hinweistoast
 import de.vanhake.dayorganizer.ui.gemeinsam.SpeicherErgebnis
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -378,14 +379,81 @@ class BelohnungenViewModelTest {
     }
 
     @Test
-    fun `Archivieren zeigt einen Toast ohne Rueckgaengig`() = runTest(dispatcher) {
+    fun `ein Speichern-Toast verdraengt das Rueckgaengig einer Einloesung nicht`() = runTest(dispatcher) {
+        val belohnungen = FakeBelohnungRepository(listOf(Belohnung(1, "Kinoabend", preisPunkte = 200)))
+        val buchungen = guthaben(250)
+        val vm = viewModel(belohnungen, buchungen)
+        vm.einloesen(1)
+        dispatcher.scheduler.runCurrent()
+
+        vm.gespeichertMelden(SpeicherErgebnis.GEAENDERT)
+        dispatcher.scheduler.runCurrent()
+        assertEquals(true, vm.toast.value!!.kannRueckgaengig)
+
+        vm.rueckgaengig()
+        dispatcher.scheduler.runCurrent()
+        assertEquals(250, buchungen.kontostand())
+        assertEquals(true, belohnungen.einloesungen.value.single().storniertAm != null)
+    }
+
+    @Test
+    fun `Archivieren zeigt einen Toast mit Rueckgaengig`() = runTest(dispatcher) {
         val belohnungen = FakeBelohnungRepository(listOf(Belohnung(1, "Kinoabend", preisPunkte = 200)))
         val vm = viewModel(belohnungen, guthaben(0))
 
         vm.archivieren(1)
         dispatcher.scheduler.runCurrent()
 
-        assertEquals(Hinweistoast("Kinoabend archiviert", kannRueckgaengig = false), vm.toast.value)
+        assertEquals(Hinweistoast("Kinoabend archiviert", kannRueckgaengig = true), vm.toast.value)
+    }
+
+    @Test
+    fun `ein Datenbankfehler beim Archivieren meldet sich als Toast statt abzustuerzen`() = runTest(dispatcher) {
+        val echt = FakeBelohnungRepository(listOf(Belohnung(1, "Kinoabend", preisPunkte = 200)))
+        val werfend = object : BelohnungRepository by echt {
+            override suspend fun archivieren(id: Long) = throw java.io.IOException("Datenbank nicht erreichbar")
+        }
+        val vm = viewModel(werfend, guthaben(0))
+
+        vm.archivieren(1).join()
+
+        assertEquals(Hinweistoast("Aktion fehlgeschlagen", kannRueckgaengig = false), vm.toast.value)
+    }
+
+    @Test
+    fun `Archivieren einer Belohnung laesst sich rueckgaengig machen`() = runTest(dispatcher) {
+        val belohnungen = FakeBelohnungRepository(listOf(Belohnung(1, "Kinoabend", preisPunkte = 200)))
+        val vm = viewModel(belohnungen, guthaben(0))
+
+        vm.archivieren(1).join()
+        assertEquals(Hinweistoast("Kinoabend archiviert", kannRueckgaengig = true), vm.toast.value)
+        assertEquals(true, belohnungen.stand.value.single().archiviert)
+
+        vm.rueckgaengig().join()
+
+        assertEquals(false, belohnungen.stand.value.single().archiviert)
+    }
+
+    @Test
+    fun `Wiederherstellen einer Belohnung zeigt sie wieder im Shop`() = runTest(dispatcher) {
+        val belohnungen = FakeBelohnungRepository(
+            listOf(Belohnung(1, "Kinoabend", preisPunkte = 200, archiviert = true)),
+        )
+        val vm = viewModel(belohnungen, guthaben(0))
+
+        backgroundScope.launch { vm.zustand.collect {} }
+        backgroundScope.launch { vm.archiviert.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(emptyList(), vm.zustand.value.kacheln)
+        assertEquals(listOf("Kinoabend"), vm.archiviert.value.map { it.name })
+
+        vm.wiederherstellen(1).join()
+        dispatcher.scheduler.runCurrent()
+
+        assertEquals(listOf("Kinoabend"), vm.zustand.value.kacheln.map { it.name })
+        assertEquals(emptyList(), vm.archiviert.value)
+        assertEquals("Kinoabend wiederhergestellt", vm.toast.value?.text)
+        assertEquals(false, vm.toast.value?.kannRueckgaengig)
     }
 
     @Test

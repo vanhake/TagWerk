@@ -40,4 +40,12 @@ interface AktivitaetDao {
 
     @Query("UPDATE aktivitaet SET archiviertAm = :am, aktiv = 0 WHERE id = :id")
     suspend fun archivieren(id: Long, am: java.time.LocalDate)
+
+    @Query("SELECT * FROM aktivitaet WHERE archiviertAm IS NOT NULL ORDER BY name")
+    fun beobachteArchivierte(): Flow<List<AktivitaetEntity>>
+
+    /** 1, wenn die Aktivitaet gerade wiederhergestellt wurde; 0, wenn es sie nicht gibt oder
+     * sie nicht archiviert war. Die Bedingung macht das Wiederherstellen idempotent. */
+    @Query("UPDATE aktivitaet SET archiviertAm = NULL, aktiv = 1 WHERE id = :id AND archiviertAm IS NOT NULL")
+    suspend fun wiederherstellen(id: Long): Int
 }

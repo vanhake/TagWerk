@@ -10,6 +10,7 @@ import de.vanhake.dayorganizer.MainActivity
 import de.vanhake.dayorganizer.R
 import de.vanhake.dayorganizer.domain.model.Aktivitaet
 import de.vanhake.dayorganizer.domain.model.Faelligkeit
+import de.vanhake.dayorganizer.util.versuchen
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -55,7 +56,7 @@ class ErinnerungsNotifier @Inject constructor(
             )
             .build()
 
-        runCatching {
+        versuchen {
             NotificationManagerCompat.from(kontext).notify(faelligkeitId.toInt(), benachrichtigung)
         }
         // Fehlt POST_NOTIFICATIONS, wirft notify eine SecurityException. Der Banner

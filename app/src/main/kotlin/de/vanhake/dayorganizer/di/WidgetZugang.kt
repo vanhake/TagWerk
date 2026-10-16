@@ -10,6 +10,8 @@ import de.vanhake.dayorganizer.data.repository.FaelligkeitRepository
 import de.vanhake.dayorganizer.domainuse.FaelligkeitErledigen
 import de.vanhake.dayorganizer.platform.alarm.AlarmPlaner
 import de.vanhake.dayorganizer.platform.notification.Erinnerungsanzeige
+import de.vanhake.dayorganizer.widget.WidgetAktualisierung
+import de.vanhake.dayorganizer.widget.WidgetWecker
 import java.time.Clock
 
 /**
@@ -30,4 +32,6 @@ interface WidgetZugang {
     fun anzeige(): Erinnerungsanzeige
     fun uhr(): Clock
     fun einstellungen(): EinstellungenSpeicher
+    fun widgetWecker(): WidgetWecker
+    fun widgetAktualisierung(): WidgetAktualisierung
 }

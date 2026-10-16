@@ -26,6 +26,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Before
+import java.io.IOException
 import java.time.Clock
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -94,12 +95,14 @@ class HeuteViewModelTest {
         anzeige: Erinnerungsanzeige = FakeAnzeige(),
         belohnungen: FakeBelohnungRepository = FakeBelohnungRepository(),
         widgetAnstossen: suspend () -> Unit = {},
+        alarmNeuPlanen: suspend () -> Unit = {},
+        einstellungenLesen: suspend () -> Einstellungen = { Einstellungen(tagesbonusPunkte = 0) },
     ): HeuteViewModel {
         val aktivitaeten = FakeAktivitaetRepository(listOf(tabletten, sport))
         val transaktionen = FakeTransaktionen()
         val erledigenUseCase = FaelligkeitErledigen(
             aktivitaeten, faelligkeiten, buchungen, PunkteRechner(), SerienRechner(),
-            transaktionen, { Einstellungen(tagesbonusPunkte = 0) }, uhr,
+            transaktionen, einstellungenLesen, uhr,
         )
         return HeuteViewModel(
             aktivitaeten = aktivitaeten,
@@ -111,7 +114,7 @@ class HeuteViewModelTest {
             erledigenRueckgaengig = FaelligkeitErledigenRueckgaengig(faelligkeiten, buchungen, transaktionen, uhr),
             auslassenRueckgaengig = FaelligkeitAuslassenRueckgaengig(faelligkeiten),
             anzeige = anzeige,
-            alarmNeuPlanen = {},
+            alarmNeuPlanen = alarmNeuPlanen,
             hinweiseLesen = { emptyList() },
             uhr = uhr,
             widgetAnstossen = widgetAnstossen,
@@ -249,6 +252,44 @@ class HeuteViewModelTest {
     }
 
     @Test
+    fun `ein Fehler beim Abhaken meldet sich als Toast und laesst die Benachrichtigung stehen`() = runTest(dispatcher) {
+        val anzeige = FakeAnzeige()
+        var alarme = 0
+        var widgets = 0
+        val vm = viewModel(
+            FakeFaelligkeitRepository(listOf(morgens)), FakeBuchungRepository(),
+            anzeige = anzeige,
+            widgetAnstossen = { widgets++ },
+            alarmNeuPlanen = { alarme++ },
+            einstellungenLesen = { throw IOException("Einstellungen unlesbar") },
+        )
+
+        vm.erledigen(10)
+        dispatcher.scheduler.runCurrent()
+
+        assertEquals("Abhaken fehlgeschlagen", vm.toast.value?.text)
+        assertEquals(false, vm.toast.value?.kannRueckgaengig)
+        assertEquals(emptyList(), anzeige.versteckt)
+        assertEquals(0, alarme)
+        assertEquals(0, widgets)
+    }
+
+    @Test
+    fun `scheitert das Neuplanen nach dem Abhaken bleibt die Buchung und der Toast erscheint`() = runTest(dispatcher) {
+        val faelligkeiten = FakeFaelligkeitRepository(listOf(morgens))
+        val vm = viewModel(
+            faelligkeiten, FakeBuchungRepository(),
+            alarmNeuPlanen = { throw IOException("Datenbank nicht erreichbar") },
+        )
+
+        vm.erledigen(10)
+        dispatcher.scheduler.runCurrent()
+
+        assertEquals(FaelligkeitStatus.ERLEDIGT, faelligkeiten.stand.value.single().status)
+        assertEquals(true, vm.toast.value?.kannRueckgaengig)
+    }
+
+    @Test
     fun `Rueckgaengig macht die Erledigung und ihre Buchungen wieder rueckgaengig`() = runTest(dispatcher) {
         val faelligkeiten = FakeFaelligkeitRepository(listOf(morgens))
         val buchungen = FakeBuchungRepository()
@@ -279,7 +320,7 @@ class HeuteViewModelTest {
     }
 
     @Test
-    fun `eine neue Aktion ersetzt einen noch ausstehenden Toast statt ihn zu stapeln`() = runTest(dispatcher) {
+    fun `eine neue Aktion zeigt ihren Toast oben und jeder Toast laeuft ab seinem eigenen Start ab`() = runTest(dispatcher) {
         val faelligkeiten = FakeFaelligkeitRepository(listOf(morgens, abends))
         val vm = viewModel(faelligkeiten, FakeBuchungRepository())
 
@@ -292,13 +333,12 @@ class HeuteViewModelTest {
         vm.erledigen(11)
         dispatcher.scheduler.runCurrent()
 
-        // Der Toast zeigt jetzt die ZWEITE Aktion -- ueberschrieben statt gestapelt.
+        // Der Toast zeigt jetzt die ZWEITE Aktion (die erste liegt gestapelt darunter).
         assertEquals("+20 Punkte · Sport", vm.toast.value?.text)
 
         // Ab Start der ersten Aktion sind jetzt 3_900ms vergangen -- ihr eigenes 3.8s-Fenster
-        // ist damit ueberschritten. Waere ihr Auto-Dismiss-Job nicht wirklich storniert
-        // worden (toastJob?.cancel() in zeigeToast()), wuerde er hier den laengst durch die
-        // zweite Aktion ersetzten Toast vorzeitig loeschen.
+        // ist damit ueberschritten. Ihr Ablauf darf den oberen Toast der zweiten Aktion nicht
+        // mitnehmen.
         dispatcher.scheduler.advanceTimeBy(1_900)
         dispatcher.scheduler.runCurrent()
         assertEquals("+20 Punkte · Sport", vm.toast.value?.text)
@@ -308,6 +348,29 @@ class HeuteViewModelTest {
         dispatcher.scheduler.advanceTimeBy(2_000)
         dispatcher.scheduler.runCurrent()
         assertEquals(null, vm.toast.value)
+    }
+
+    @Test
+    fun `zwei schnell abgehakte Eintraege lassen sich beide rueckgaengig machen`() = runTest(dispatcher) {
+        val faelligkeiten = FakeFaelligkeitRepository(listOf(morgens, abends))
+        val buchungen = FakeBuchungRepository()
+        val vm = viewModel(faelligkeiten, buchungen)
+
+        vm.erledigen(10)
+        dispatcher.scheduler.runCurrent()
+        vm.erledigen(11)
+        dispatcher.scheduler.runCurrent()
+        vm.rueckgaengig()
+        dispatcher.scheduler.runCurrent()
+        // Zweiter Tipp nach der Doppeltipp-Sperre (ToastStapel.DOPPELTIPP_SPERRE_MS), aber
+        // weit innerhalb der 3.8 s beider Toasts.
+        dispatcher.scheduler.advanceTimeBy(400)
+        dispatcher.scheduler.runCurrent()
+        vm.rueckgaengig()
+        dispatcher.scheduler.runCurrent()
+
+        assertEquals(listOf(FaelligkeitStatus.OFFEN, FaelligkeitStatus.OFFEN), faelligkeiten.stand.value.map { it.status })
+        assertEquals(0, buchungen.stand.value.sumOf { it.betrag })
     }
 
     @Test

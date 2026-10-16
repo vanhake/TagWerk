@@ -31,6 +31,11 @@
     <string name="tab_aktivitaeten">Aktivitäten</string>
     <string name="neue_aktivitaet">Neue Aktivität</string>
     <string name="archivieren">Archivieren</string>
+    <string name="archivieren_frage">%1$s archivieren?</string>
+    <string name="archivieren_erklaerung_aktivitaet">Sie verschwindet aus Heute und dem Widget, Erinnerungen hören auf. Die Historie bleibt erhalten, unter „Archiviert“ kannst du sie wiederherstellen.</string>
+    <string name="archivieren_erklaerung_belohnung">Sie verschwindet aus dem Shop. Einlösungen bleiben in der Historie, unter „Archiviert“ kannst du sie wiederherstellen.</string>
+    <string name="archiv_titel">Archiviert (%1$d)</string>
+    <string name="wiederherstellen">Wiederherstellen</string>
     <string name="anzahl_aktiv">%1$d aktiv</string>
     <string name="punkte_kurz">%1$d Pkt</string>
     <string name="aktivitaeten_leer">Noch keine Aktivitäten. Lege mit „Neue Aktivität“ die erste an.</string>
@@ -54,6 +59,8 @@
     <string name="typ_tagesziel">Mal pro Tag</string>
     <string name="typ_wochenziel">Mal pro Woche</string>
     <string name="speichern">Speichern</string>
+    <string name="speichern_fehlgeschlagen">Speichern fehlgeschlagen. Bitte noch einmal versuchen.</string>
+    <string name="speichern_nicht_mehr_vorhanden">Diesen Eintrag gibt es nicht mehr – vielleicht wurde inzwischen ein Backup eingespielt.</string>
     <string name="aktivitaet_bearbeiten_titel">Aktivität bearbeiten</string>
     <string name="feld_symbol">Symbol</string>
     <string name="name_platzhalter">z. B. Tabletten</string>
@@ -129,6 +136,13 @@
     <string name="punkteverlauf_heute">heute</string>
     <string name="aktivitaet_quote">%1$d%%</string>
     <string name="aktivitaet_quote_leer">–</string>
+    <string name="aktivitaet_quote_leer_vorlesen">noch keine Quote</string>
+    <string name="statistik_meta_archiviert">%1$s · archiviert</string>
+    <string name="heatmap_vorlesen">%1$d Tage: %2$d vollständig, %3$d teilweise, %4$d nichts erledigt, %5$d ohne Aufgaben</string>
+    <string name="heatmap_woche_vorlesen">Woche ab %1$s: %2$s</string>
+    <string name="heatmap_tag_vollstaendig">%1$s alles erledigt</string>
+    <string name="heatmap_tag_teilweise">%1$s %2$d von %3$d</string>
+    <string name="heatmap_tag_frei">%1$s frei</string>
     <string name="statistik_leer">Noch keine Aktivitäten</string>
     <string name="tab_einstellungen">Optionen</string>
     <string name="optionen_abschnitt_punkte">Punkte</string>
@@ -167,5 +181,14 @@
     <string name="widget_weitere">+ %1$d weitere</string>
     <string name="widget_ziel_fortschritt">%1$d/%2$d</string>
     <string name="widget_beschreibung">Offene Aufgaben von heute abhaken</string>
+    <string name="widget_fehler">Widget konnte nicht geladen werden. Tippen, um die App zu öffnen.</string>
+    <string name="widget_vorschau_titel">Heute</string>
+    <string name="widget_vorschau_fortschritt">2/5</string>
+    <string name="widget_vorschau_punkte">120</string>
+    <string name="widget_vorschau_name_1">Wasser trinken</string>
+    <string name="widget_vorschau_untertitel_1">08:00 · überfällig</string>
+    <string name="widget_vorschau_name_2">Spaziergang</string>
+    <string name="widget_vorschau_untertitel_2">1 von 3 heute</string>
+    <string name="widget_vorschau_weitere">+ 2 weitere</string>
     <string name="toast_rueckgaengig">Rückgängig</string>
 </resources>

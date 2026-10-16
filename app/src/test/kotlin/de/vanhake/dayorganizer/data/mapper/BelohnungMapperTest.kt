@@ -2,6 +2,7 @@ package de.vanhake.dayorganizer.data.mapper
 
 import de.vanhake.dayorganizer.domain.model.Belohnung
 import de.vanhake.dayorganizer.domain.model.Belohnungsbedingung
+import de.vanhake.dayorganizer.data.db.BelohnungEntity
 import de.vanhake.dayorganizer.domain.model.Einloesung
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -84,5 +85,21 @@ class BelohnungMapperTest {
 
         assertEquals(belohnung, belohnung.zuEntity().zuDomaene())
         assertEquals(einloesung, einloesung.zuEntity().zuDomaene())
+    }
+
+    private fun entity(typ: String?, aktivitaetId: Long? = null) = BelohnungEntity(
+        id = 1, name = "Kaputt", beschreibung = "", preisPunkte = 10,
+        bedingungTyp = typ, bedingungAktivitaetId = aktivitaetId,
+        bedingungPerioden = null, bedingungDatum = null, archiviert = false,
+    )
+
+    @Test
+    fun `eine unbekannte Bedingung ergibt null statt einer Ausnahme`() {
+        assertNull(entity("ZUKUNFT").zuDomaeneOderNull())
+    }
+
+    @Test
+    fun `eine Mindestserie ohne Aktivitaet ergibt null`() {
+        assertNull(entity("MINDESTSERIE", aktivitaetId = null).zuDomaeneOderNull())
     }
 }
