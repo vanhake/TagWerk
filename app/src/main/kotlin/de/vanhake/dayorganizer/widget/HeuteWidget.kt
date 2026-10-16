@@ -44,6 +44,7 @@ import dagger.hilt.android.EntryPointAccessors
 import de.vanhake.dayorganizer.R
 import de.vanhake.dayorganizer.di.WidgetZugang
 import de.vanhake.dayorganizer.ui.theme.DayOrganizerFarben
+import de.vanhake.dayorganizer.util.versuchen
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -81,6 +82,9 @@ class HeuteWidget : GlanceAppWidget() {
         val aktivitaetenAnfangswert = zugang.aktivitaeten().alleAktiven()
         val kontostandAnfangswert = zugang.buchungen().kontostand()
         val modusAnfangswert = zugang.einstellungen().lesen().themeModus
+
+        // Takt-Alarm fuer "ueberfaellig" und Mitternacht; ein Fehler darf das Zeichnen nicht stoppen.
+        versuchen { zugang.widgetWecker().planen() }
 
         provideContent {
             val res = LocalContext.current.resources

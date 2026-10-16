@@ -66,6 +66,14 @@
                 android:resource="@xml/heute_widget_info" />
         </receiver>
 
+        <receiver
+            android:name=".widget.WidgetWeckerEmpfaenger"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="de.vanhake.dayorganizer.WIDGET_TAKT" />
+            </intent-filter>
+        </receiver>
+
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"
