@@ -845,4 +845,41 @@ class EinstellungenViewModelTest {
         assertEquals(15, speicher.stand.value.tagesbonusPunkte)
         assertEquals(15, vm.zustand.value.tagesbonusPunkte)
     }
+
+    // Review-Fund zu Task 5: beimSichtbarwerden darf den Zustand nicht mit einem Schnappschuss
+    // von vor dem (suspendierenden) hinweiseLesen() zurueckschreiben -- sonst bliebe
+    // importLaeuft = true haengen und die Anzeige zeigte die Werte von vor dem Import.
+    @Test
+    fun `ein Sichtbarwerden waehrend des Imports ueberschreibt den importierten Stand nicht`() =
+        runTest(dispatcher) {
+            val a = ImportAufbau()
+            val hinweisTor = CompletableDeferred<Unit>()
+            var hinweiseHaengen = false
+            val vm = viewModel(
+                a.speicher,
+                backupDienst = a.backup,
+                schreibenFake = a.schreiben,
+                hinweiseLesen = {
+                    if (hinweiseHaengen) hinweisTor.await()
+                    emptyList()
+                },
+            )
+            advanceUntilIdle()
+            vm.importVorschauAnfordern { ByteArrayInputStream(backupText().toByteArray()) }.join()
+
+            vm.importBestaetigen()
+            runCurrent()
+            assertTrue(vm.zustand.value.importLaeuft)
+            hinweiseHaengen = true
+            vm.beimSichtbarwerden() // Schnappschuss mit importLaeuft = true, dann haengt es im Lesen
+            runCurrent()
+            hinweiseHaengen = false
+            a.importTor.complete(Unit)
+            runCurrent() // Import und neuLaden fertig, solange das Sichtbarwerden noch haengt
+            hinweisTor.complete(Unit)
+            advanceUntilIdle()
+
+            assertFalse(vm.zustand.value.importLaeuft)
+            assertEquals(40, vm.zustand.value.tagesbonusPunkte)
+        }
 }

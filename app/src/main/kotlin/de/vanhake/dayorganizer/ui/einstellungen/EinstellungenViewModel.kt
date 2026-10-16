@@ -34,6 +34,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -238,7 +239,7 @@ class EinstellungenViewModel(
         _importVorschau.value = null
         // Synchron, vor dem launch: ein Tipp in der Luecke bis zum Start der Koroutine
         // wuerde sonst noch durchgehen und mit dem Import um die Einstellungen streiten.
-        _zustand.value = _zustand.value.copy(importLaeuft = true)
+        _zustand.update { it.copy(importLaeuft = true) }
 
         return viewModelScope.launch(ioDispatcher) {
             var ersetzt = false
@@ -276,7 +277,7 @@ class EinstellungenViewModel(
                     }
                 } finally {
                     // Auch bei Fehler oder Ablehnung: sonst blieben die Stepper fuer immer gesperrt.
-                    _zustand.value = _zustand.value.copy(importLaeuft = false)
+                    _zustand.update { it.copy(importLaeuft = false) }
                 }
                 // Nach dem Loesen der Sperre: nachImport schreibt keine Einstellungen und
                 // kann lange dauern (Waechter, Benachrichtigungen, Widget).
@@ -318,7 +319,12 @@ class EinstellungenViewModel(
      * Banner verschwinden. Gleiches Muster wie HeuteViewModel.beimSichtbarwerden.
      */
     fun beimSichtbarwerden() {
-        viewModelScope.launch { _zustand.value = _zustand.value.copy(hinweise = hinweiseLesen()) }
+        viewModelScope.launch {
+            // Erst lesen, dann atomar einsetzen: hinweiseLesen() suspendiert, und ein vorher
+            // gezogener Schnappschuss wuerde einen zwischenzeitlichen Import ueberschreiben.
+            val h = hinweiseLesen()
+            _zustand.update { it.copy(hinweise = h) }
+        }
     }
 
     /** Vor dem Erstladen zeigt der Zustand nur Defaults; ein Tipp wuerde sie speichern und
