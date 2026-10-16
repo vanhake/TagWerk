@@ -103,10 +103,12 @@ fun Heatmap(bilanzen: List<TagesBilanz>, zeitraumTage: Int, modifier: Modifier =
             Modifier
                 .width(breite)
                 .height(kante * 7)
-                .align(Alignment.Center)
-                .semantics { contentDescription = zusammenfassung },
+                .align(Alignment.Center),
         ) {
-            Canvas(Modifier.fillMaxSize().clearAndSetSemantics {}) {
+            // Die Zusammenfassung sitzt am Canvas-Blatt: ein Container mit fokussierbaren
+            // Kindern ohne mergeDescendants wird von TalkBack nie selbst fokussiert. Das
+            // Canvas steht vor dem Wochen-Overlay und kommt damit zuerst.
+            Canvas(Modifier.fillMaxSize().clearAndSetSemantics { contentDescription = zusammenfassung }) {
                 zeichne(bilanzen, versatz, size.width / wochen, zeitraumTage, farben)
             }
             Row(Modifier.fillMaxSize()) {
