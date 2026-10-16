@@ -58,4 +58,15 @@ class WidgetMasseTest {
     fun `Schriftfaktor 2,0 zeigt weniger Zeilen`() {
         assertEquals(2, WidgetMasse.passendeZeilen(334f, 6, 2.0f))
     }
+
+    // Kopf 40 + Innenabstand 32 = 72 dp, dazu Fusszeile 42: 114 > 110, auch k = 0 passt nicht.
+    @Test
+    fun `passt nicht einmal der Kopf mit Fusszeile ergibt 0 statt Ausnahme`() {
+        assertEquals(0, WidgetMasse.passendeZeilen(110f, 3, 2.0f))
+    }
+
+    @Test
+    fun `Hoehe unter dem Kopf ergibt 0 Zeilen`() {
+        assertEquals(0, WidgetMasse.passendeZeilen(50f, 3, 1.0f))
+    }
 }

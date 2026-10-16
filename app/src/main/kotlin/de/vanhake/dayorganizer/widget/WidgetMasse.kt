@@ -21,14 +21,15 @@ object WidgetMasse {
      * Groesstes k aus 0..min(4, offen), bei dem Kopf, k Zeilen und (falls noch Eintraege
      * uebrig bleiben) die Fusszeile "+ n weitere" in die Hoehe passen. Grosse Systemschrift
      * ([schriftFaktor]) macht Kopf, Zeilen und Fusszeile hoeher, es passen dann weniger --
-     * so wird keine Zeile mittendrin abgeschnitten.
+     * so wird keine Zeile mittendrin abgeschnitten. Passt nicht einmal k = 0 (sehr
+     * kleine Hoehe, grosse Schrift), ist das Ergebnis 0 statt einer Ausnahme.
      */
     fun passendeZeilen(hoeheDp: Float, offen: Int, schriftFaktor: Float): Int {
         val kopf = max(KOPF_MIN_DP, KOPF_SCHRIFT_DP * schriftFaktor)
         val zeile = ZEILE_INNENABSTAND_DP + max(ZEILE_TEXT_MIN_DP, ZEILE_TEXT_DP * schriftFaktor)
-        return (0..minOf(MAX_ZEILEN, offen)).last { k ->
+        return (0..minOf(MAX_ZEILEN, offen)).lastOrNull { k ->
             val fuss = if (offen > k) ABSTAND_DP + FUSS_SCHRIFT_DP * schriftFaktor else 0f
             2 * KARTE_INNENABSTAND_DP + kopf + k * (ABSTAND_DP + zeile) + fuss <= hoeheDp
-        }
+        } ?: 0
     }
 }

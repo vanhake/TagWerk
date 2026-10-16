@@ -162,6 +162,9 @@ class HeuteWidget : GlanceAppWidget() {
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                             ),
+                            // Nicht im Hoehenbudget von WidgetMasse: einzeilig halten, damit
+                            // bei grosser Schrift nichts mittendrin abgeschnitten wird.
+                            maxLines = 1,
                         )
                     }
                     WidgetLeer.NICHTS_GEPLANT -> {
@@ -174,6 +177,7 @@ class HeuteWidget : GlanceAppWidget() {
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                             ),
+                            maxLines = 1,
                         )
                     }
                     null -> Unit
@@ -230,16 +234,20 @@ private fun Kopf(zustand: WidgetZustand, farben: DayOrganizerFarben, res: Resour
         // Radius 12 dp = halbe Hoehe (16 dp Stern + 2 x 4 dp): Glance kennt kein
         // Pillenmass, und ein Radius 999 wird vom Outline-Zuschnitt nicht verlaesslich
         // auf die halbe Hoehe begrenzt.
+        // Der Vorlesetext liegt auf der ganzen Pille, sonst liest TalkBack die Punkte
+        // doppelt (Stern und Zahl).
+        val punkteBeschriftung = res.getString(R.string.punktestand, zustand.kontostand)
         Row(
             modifier = GlanceModifier
                 .cornerRadius(12.dp)
                 .background(ColorProvider(farben.goldSoft))
-                .padding(start = 8.dp, top = 4.dp, end = 10.dp, bottom = 4.dp),
+                .padding(start = 8.dp, top = 4.dp, end = 10.dp, bottom = 4.dp)
+                .semantics { contentDescription = punkteBeschriftung },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Image(
                 provider = ImageProvider(R.drawable.widget_star),
-                contentDescription = res.getString(R.string.punktestand, zustand.kontostand),
+                contentDescription = null,
                 modifier = GlanceModifier.size(16.dp),
                 colorFilter = ColorFilter.tint(ColorProvider(farben.goldInk)),
             )

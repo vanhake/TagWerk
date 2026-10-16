@@ -156,6 +156,7 @@ class WidgetZustandTest {
 
         assertEquals(0, zustand.gesamt)
         assertEquals(0, zustand.erledigt)
+        assertEquals(WidgetLeer.NICHTS_GEPLANT, zustand.leer)
     }
 
     @Test
