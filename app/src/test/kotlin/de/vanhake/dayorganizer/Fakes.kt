@@ -55,6 +55,19 @@ class FakeAktivitaetRepository(start: List<Aktivitaet> = emptyList()) : Aktivita
             if (it.id == id) it.copy(aktiv = false, archiviertAm = am) else it
         }
     }
+
+    /** Spiegelt "WHERE archiviertAm IS NOT NULL ORDER BY name". */
+    override fun beobachteArchivierte(): Flow<List<Aktivitaet>> =
+        stand.map { liste -> liste.filter { it.archiviertAm != null }.sortedBy { it.name } }
+
+    /** Spiegelt "SET archiviertAm = NULL, aktiv = 1 WHERE id = :id AND archiviertAm IS NOT NULL". */
+    override suspend fun wiederherstellen(id: Long): Boolean {
+        val treffer = stand.value.any { it.id == id && it.archiviertAm != null }
+        stand.value = stand.value.map {
+            if (it.id == id && it.archiviertAm != null) it.copy(aktiv = true, archiviertAm = null) else it
+        }
+        return treffer
+    }
 }
 
 class FakeFaelligkeitRepository(start: List<Faelligkeit> = emptyList()) : FaelligkeitRepository {
@@ -247,6 +260,17 @@ class FakeBelohnungRepository(
 
     override suspend fun archivieren(id: Long) {
         stand.value = stand.value.map { if (it.id == id) it.copy(archiviert = true) else it }
+    }
+
+    /** Spiegelt "WHERE archiviert = 1 ORDER BY name". */
+    override fun beobachteArchivierte(): Flow<List<Belohnung>> =
+        stand.map { liste -> liste.filter { it.archiviert }.sortedBy { it.name } }
+
+    /** Spiegelt "SET archiviert = 0 WHERE id = :id AND archiviert = 1". */
+    override suspend fun wiederherstellen(id: Long): Boolean {
+        val treffer = stand.value.any { it.id == id && it.archiviert }
+        stand.value = stand.value.map { if (it.id == id && it.archiviert) it.copy(archiviert = false) else it }
+        return treffer
     }
 
     override suspend fun einloesungAnlegen(einloesung: Einloesung): Long {

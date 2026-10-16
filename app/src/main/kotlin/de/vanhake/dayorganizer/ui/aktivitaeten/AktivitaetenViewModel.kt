@@ -8,16 +8,18 @@ import de.vanhake.dayorganizer.data.repository.AktivitaetRepository
 import de.vanhake.dayorganizer.data.repository.FaelligkeitRepository
 import de.vanhake.dayorganizer.domain.rechner.SerienRechner
 import de.vanhake.dayorganizer.domainuse.AktivitaetNeuPlanen
+import de.vanhake.dayorganizer.ui.gemeinsam.ArchivEintrag
 import de.vanhake.dayorganizer.ui.gemeinsam.Hinweistoast
 import de.vanhake.dayorganizer.ui.gemeinsam.SpeicherErgebnis
 import de.vanhake.dayorganizer.ui.gemeinsam.ToastStapel
-import kotlinx.coroutines.CancellationException
+import de.vanhake.dayorganizer.util.versuchen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -26,13 +28,24 @@ import java.time.LocalDate
 import javax.inject.Inject
 
 @HiltViewModel
-class AktivitaetenViewModel @Inject constructor(
+class AktivitaetenViewModel(
     private val aktivitaeten: AktivitaetRepository,
     private val faelligkeiten: FaelligkeitRepository,
-    private val neuPlanen: AktivitaetNeuPlanen,
+    private val neuPlanen: suspend (Long) -> Unit,
     private val serienRechner: SerienRechner,
     private val uhr: Clock,
 ) : ViewModel() {
+
+    // Zwei-Konstruktoren-Muster wie HeuteViewModel: Tests geben einen Spion statt des
+    // Use Cases hinein.
+    @Inject
+    constructor(
+        aktivitaeten: AktivitaetRepository,
+        faelligkeiten: FaelligkeitRepository,
+        neuPlanen: AktivitaetNeuPlanen,
+        serienRechner: SerienRechner,
+        uhr: Clock,
+    ) : this(aktivitaeten, faelligkeiten, { id -> neuPlanen(id) }, serienRechner, uhr)
 
     // beobachteTag(heute) liefert nur den Ausloeser: wer auf "Heute" abhakt, aendert eine
     // heutige Faelligkeit, und die Serie in der Liste soll mitziehen. Die Historie selbst
@@ -51,7 +64,7 @@ class AktivitaetenViewModel @Inject constructor(
         .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    // Eigener Flow statt Teil der zeilen-Kette -- gleiches Muster wie HeuteViewModel._toast.
+    // Eigener Flow statt Teil der zeilen-Kette -- gleiches Muster wie ToastStapel in HeuteViewModel.
     private val stapel = ToastStapel(viewModelScope)
     val toast: StateFlow<Hinweistoast?> = stapel.sichtbar
 
@@ -64,20 +77,45 @@ class AktivitaetenViewModel @Inject constructor(
     // IS NULL"), darum legt der Aufruf hier fuer die gerade archivierte Aktivitaet
     // nichts Neues an -- er raeumt nur auf.
     //
-    // Kein Rueckgaengig (Entscheidung in Plan 5): der Toast bestaetigt nur.
+    // Der Toast bietet Rueckgaengig an (Plan 9): es holt die Aktivitaet samt Planung zurueck.
     fun archivieren(id: Long) = viewModelScope.launch {
         val name = aktivitaeten.nachId(id)?.name
         aktivitaeten.archivieren(id, LocalDate.now(uhr))
         // Archiviert ist die Aktivitaet in jedem Fall; eine Ausnahme der Nachbereitung darf
         // weder den Toast verhindern noch im viewModelScope die App abstuerzen lassen.
-        try {
-            neuPlanen(id)
-        } catch (abbruch: CancellationException) {
-            throw abbruch
-        } catch (ausnahme: Exception) {
-            Log.w(TAG, "Nachbereitung nach dem Archivieren fehlgeschlagen", ausnahme)
+        nachbereiten(id, "Nachbereitung nach dem Archivieren fehlgeschlagen")
+        name?.let {
+            stapel.zeigen(AktivitaetenToastTexte.archiviert(it), rueckgaengig = { wiederherstellenIntern(id) })
         }
-        name?.let { stapel.zeigen(AktivitaetenToastTexte.archiviert(it)) }
+    }
+
+    /** Archivierte Aktivitaeten fuer den einklappbaren Bereich unter der Liste. */
+    val archiviert: StateFlow<List<ArchivEintrag>> = aktivitaeten.beobachteArchivierte()
+        .map { liste -> liste.map { ArchivEintrag(it.id, it.name, it.symbol) } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun wiederherstellen(id: Long) = viewModelScope.launch {
+        val name = aktivitaeten.nachId(id)?.name
+        // Ein zweiter Tipp findet nichts Archiviertes mehr: dann weder Toast noch Neuplanen.
+        if (wiederherstellenIntern(id)) {
+            name?.let { stapel.zeigen(AktivitaetenToastTexte.wiederhergestellt(it)) }
+        }
+    }
+
+    fun rueckgaengig() = viewModelScope.launch {
+        stapel.rueckgaengigNehmen()?.invoke()
+    }
+
+    // Wie nach dem Archivieren muss die Planung folgen: sonst haette die wiederhergestellte
+    // Aktivitaet keine kuenftigen Faelligkeiten und keine Erinnerungen.
+    private suspend fun wiederherstellenIntern(id: Long): Boolean {
+        val wiederhergestellt = aktivitaeten.wiederherstellen(id)
+        if (wiederhergestellt) nachbereiten(id, "Nachbereitung nach dem Wiederherstellen fehlgeschlagen")
+        return wiederhergestellt
+    }
+
+    private suspend fun nachbereiten(id: Long, fehlertext: String) {
+        versuchen { neuPlanen(id) }.onFailure { Log.w(TAG, fehlertext, it) }
     }
 
     /** Vom Screen aufgerufen, wenn der Bearbeiten-Bildschirm mit einem Ergebnis
@@ -101,4 +139,5 @@ private object AktivitaetenToastTexte {
     const val ANGELEGT = "Aktivität angelegt"
     const val GEAENDERT = "Änderungen gespeichert"
     fun archiviert(name: String) = "$name archiviert"
+    fun wiederhergestellt(name: String) = "$name wiederhergestellt"
 }

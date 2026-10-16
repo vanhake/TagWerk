@@ -16,6 +16,9 @@ interface BelohnungRepository {
     suspend fun nachId(id: Long): Belohnung?
     suspend fun speichern(belohnung: Belohnung): Long
     suspend fun archivieren(id: Long)
+    fun beobachteArchivierte(): Flow<List<Belohnung>>
+    /** true, wenn gerade wiederhergestellt; false, wenn unbekannt oder nicht archiviert (idempotent). */
+    suspend fun wiederherstellen(id: Long): Boolean
     /** Liefert die von der Datenbank vergebene id -- BelohnungEinloesen gibt sie im Erfolg
      * zurueck, damit ein Rueckgaengig genau diese Zeile stornieren kann. */
     suspend fun einloesungAnlegen(einloesung: Einloesung): Long
@@ -49,6 +52,11 @@ class RaumBelohnungRepository @Inject constructor(
         }
 
     override suspend fun archivieren(id: Long) = dao.archivieren(id)
+
+    override fun beobachteArchivierte(): Flow<List<Belohnung>> =
+        dao.beobachteArchivierte().map { liste -> liste.map { it.zuDomaene() } }
+
+    override suspend fun wiederherstellen(id: Long): Boolean = dao.wiederherstellen(id) > 0
 
     override suspend fun einloesungAnlegen(einloesung: Einloesung): Long =
         dao.einloesungEinfuegen(einloesung.zuEntity())

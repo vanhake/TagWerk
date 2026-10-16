@@ -31,6 +31,11 @@
     <string name="tab_aktivitaeten">Aktivitäten</string>
     <string name="neue_aktivitaet">Neue Aktivität</string>
     <string name="archivieren">Archivieren</string>
+    <string name="archivieren_frage">%1$s archivieren?</string>
+    <string name="archivieren_erklaerung_aktivitaet">Sie verschwindet aus Heute und dem Widget, Erinnerungen hören auf. Die Historie bleibt erhalten, unter „Archiviert“ kannst du sie wiederherstellen.</string>
+    <string name="archivieren_erklaerung_belohnung">Sie verschwindet aus dem Shop. Einlösungen bleiben in der Historie, unter „Archiviert“ kannst du sie wiederherstellen.</string>
+    <string name="archiv_titel">Archiviert (%1$d)</string>
+    <string name="wiederherstellen">Wiederherstellen</string>
     <string name="anzahl_aktiv">%1$d aktiv</string>
     <string name="punkte_kurz">%1$d Pkt</string>
     <string name="aktivitaeten_leer">Noch keine Aktivitäten. Lege mit „Neue Aktivität“ die erste an.</string>

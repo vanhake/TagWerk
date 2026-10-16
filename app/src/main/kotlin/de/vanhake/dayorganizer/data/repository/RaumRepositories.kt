@@ -39,6 +39,11 @@ class RaumAktivitaetRepository @Inject constructor(
         }
 
     override suspend fun archivieren(id: Long, am: LocalDate) = dao.archivieren(id, am)
+
+    override fun beobachteArchivierte(): Flow<List<Aktivitaet>> =
+        dao.beobachteArchivierte().map { liste -> liste.map { it.zuDomaene() } }
+
+    override suspend fun wiederherstellen(id: Long): Boolean = dao.wiederherstellen(id) > 0
 }
 
 class RaumFaelligkeitRepository @Inject constructor(

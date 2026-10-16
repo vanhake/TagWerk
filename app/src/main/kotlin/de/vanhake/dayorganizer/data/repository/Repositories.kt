@@ -13,6 +13,9 @@ interface AktivitaetRepository {
     suspend fun nachId(id: Long): Aktivitaet?
     suspend fun speichern(aktivitaet: Aktivitaet): Long
     suspend fun archivieren(id: Long, am: LocalDate)
+    fun beobachteArchivierte(): Flow<List<Aktivitaet>>
+    /** true, wenn gerade wiederhergestellt; false, wenn unbekannt oder nicht archiviert (idempotent). */
+    suspend fun wiederherstellen(id: Long): Boolean
 }
 
 interface FaelligkeitRepository {

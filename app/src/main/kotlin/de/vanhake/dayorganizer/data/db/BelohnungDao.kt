@@ -37,6 +37,14 @@ interface BelohnungDao {
     @Query("UPDATE belohnung SET archiviert = 1 WHERE id = :id")
     suspend fun archivieren(id: Long)
 
+    @Query("SELECT * FROM belohnung WHERE archiviert = 1 ORDER BY name")
+    fun beobachteArchivierte(): Flow<List<BelohnungEntity>>
+
+    /** 1, wenn die Belohnung gerade wiederhergestellt wurde; 0, wenn es sie nicht gibt oder
+     * sie nicht archiviert war. */
+    @Query("UPDATE belohnung SET archiviert = 0 WHERE id = :id AND archiviert = 1")
+    suspend fun wiederherstellen(id: Long): Int
+
     @Insert suspend fun einloesungEinfuegen(eintrag: EinloesungEntity): Long
 
     /** 1, wenn die Einloesung gerade storniert wurde; 0, wenn es sie nicht gibt oder sie schon

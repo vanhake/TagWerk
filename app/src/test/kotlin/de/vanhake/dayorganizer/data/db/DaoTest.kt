@@ -555,4 +555,49 @@ class DaoTest {
         assertEquals(0, db.belohnungDao().einloesungStornieren(id + 99, am))
         assertEquals(am, db.belohnungDao().alleEinloesungen().single().storniertAm)
     }
+
+    @Test
+    fun archivierte_aktivitaeten_nach_name_und_wiederherstellen_setzt_aktiv_zurueck() = runTest {
+        val dao = db.aktivitaetDao()
+        val idA = dao.einfuegen(aktivitaet().copy(name = "A"))
+        val idB = dao.einfuegen(aktivitaet().copy(name = "B"))
+        dao.einfuegen(aktivitaet().copy(name = "Aktiv"))
+        dao.archivieren(idB, LocalDate.of(2026, 3, 1))
+        dao.archivieren(idA, LocalDate.of(2026, 3, 1))
+
+        assertEquals(listOf("A", "B"), dao.beobachteArchivierte().first().map { it.name })
+        assertEquals(1, dao.wiederherstellen(idA))
+
+        val zurueck = dao.nachId(idA)!!
+        assertEquals(null, zurueck.archiviertAm)
+        assertEquals(true, zurueck.aktiv)
+        assertEquals(listOf("B"), dao.beobachteArchivierte().first().map { it.name })
+        assertEquals(0, dao.wiederherstellen(idA))
+    }
+
+    @Test
+    fun wiederherstellen_einer_nicht_archivierten_aktivitaet_aendert_nichts() = runTest {
+        val dao = db.aktivitaetDao()
+        val id = dao.einfuegen(aktivitaet())
+
+        assertEquals(0, dao.wiederherstellen(id))
+        assertEquals(0, dao.wiederherstellen(id + 99))
+        assertEquals(true, dao.nachId(id)?.aktiv)
+    }
+
+    @Test
+    fun archivierte_belohnungen_nach_name_und_wiederherstellen() = runTest {
+        val dao = db.belohnungDao()
+        val idB = dao.einfuegen(belohnung(name = "B"))
+        val idA = dao.einfuegen(belohnung(name = "A"))
+        dao.einfuegen(belohnung(name = "Aktiv"))
+        dao.archivieren(idB)
+        dao.archivieren(idA)
+
+        assertEquals(listOf("A", "B"), dao.beobachteArchivierte().first().map { it.name })
+        assertEquals(1, dao.wiederherstellen(idA))
+        assertEquals(false, dao.nachId(idA)?.archiviert)
+        assertEquals(0, dao.wiederherstellen(idA))
+        assertEquals(listOf("B"), dao.beobachteArchivierte().first().map { it.name })
+    }
 }

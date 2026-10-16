@@ -10,6 +10,7 @@ import de.vanhake.dayorganizer.domain.rechner.Hindernis
 import de.vanhake.dayorganizer.domainuse.BelohnungEinloesen
 import de.vanhake.dayorganizer.domainuse.BelohnungEinloesenRueckgaengig
 import de.vanhake.dayorganizer.domainuse.EinloeseErgebnis
+import de.vanhake.dayorganizer.ui.gemeinsam.ArchivEintrag
 import de.vanhake.dayorganizer.ui.gemeinsam.Hinweistoast
 import de.vanhake.dayorganizer.ui.gemeinsam.SpeicherErgebnis
 import de.vanhake.dayorganizer.ui.gemeinsam.ToastStapel
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -186,11 +188,29 @@ class BelohnungenViewModel(
         widgetAnstossen()
     }
 
-    // Kein Rueckgaengig (Entscheidung in Plan 6, wie bei den Aktivitaeten in Plan 5).
+    // Der Toast bietet Rueckgaengig an (Plan 9).
     fun archivieren(belohnungId: Long) = viewModelScope.launch {
         val name = belohnungen.nachId(belohnungId)?.name
         belohnungen.archivieren(belohnungId)
-        name?.let { stapel.zeigen(BelohnungenToastTexte.archiviert(it)) }
+        name?.let {
+            stapel.zeigen(
+                BelohnungenToastTexte.archiviert(it),
+                rueckgaengig = { belohnungen.wiederherstellen(belohnungId) },
+            )
+        }
+    }
+
+    /** Archivierte Belohnungen fuer den einklappbaren Bereich. */
+    val archiviert: StateFlow<List<ArchivEintrag>> = belohnungen.beobachteArchivierte()
+        .map { liste -> liste.map { ArchivEintrag(it.id, it.name, it.symbol) } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun wiederherstellen(belohnungId: Long) = viewModelScope.launch {
+        val name = belohnungen.nachId(belohnungId)?.name
+        // Idempotent: ein zweiter Tipp findet nichts Archiviertes mehr und meldet nichts.
+        if (belohnungen.wiederherstellen(belohnungId)) {
+            name?.let { stapel.zeigen(BelohnungenToastTexte.wiederhergestellt(it)) }
+        }
     }
 
     /** Vom Screen aufgerufen, wenn der Editor mit einem Ergebnis zurueckgekehrt ist. */
@@ -213,5 +233,6 @@ private object BelohnungenToastTexte {
     const val ANGELEGT = "Belohnung angelegt"
     const val GEAENDERT = "Änderungen gespeichert"
     fun archiviert(name: String) = "$name archiviert"
+    fun wiederhergestellt(name: String) = "$name wiederhergestellt"
     fun eingeloest(name: String, preis: Int) = "$name eingelöst · −$preis Punkte"
 }

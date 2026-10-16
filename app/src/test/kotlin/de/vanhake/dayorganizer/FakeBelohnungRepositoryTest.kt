@@ -95,4 +95,23 @@ class FakeBelohnungRepositoryTest {
         assertEquals(false, repository.einloesungStornieren(id + 99, am))
         assertEquals(am, repository.alleEinloesungen().single().storniertAm)
     }
+
+    /** Spiegelt BelohnungDao.beobachteArchivierte ("archiviert = 1 ORDER BY name") und
+     * wiederherstellen ("... AND archiviert = 1"): beim zweiten Aufruf false. */
+    @Test
+    fun `Archivierte sortieren nach Name und Wiederherstellen wirkt genau einmal`() = runTest {
+        val repository = FakeBelohnungRepository(
+            listOf(
+                guenstig.copy(id = 1, name = "B", archiviert = true),
+                guenstig.copy(id = 2, name = "A", archiviert = true),
+                teuer,
+            ),
+        )
+
+        assertEquals(listOf("A", "B"), repository.beobachteArchivierte().first().map { it.name })
+        assertEquals(true, repository.wiederherstellen(2))
+        assertEquals(false, repository.wiederherstellen(2))
+        assertEquals(false, repository.wiederherstellen(teuer.id))
+        assertEquals(false, repository.nachId(2)?.archiviert)
+    }
 }
