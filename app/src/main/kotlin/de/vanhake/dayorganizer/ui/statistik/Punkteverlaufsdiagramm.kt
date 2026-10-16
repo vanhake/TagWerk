@@ -3,30 +3,36 @@ package de.vanhake.dayorganizer.ui.statistik
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
+import de.vanhake.dayorganizer.ui.theme.DayOrganizerTheme
 import java.time.LocalDate
 
 /**
- * Schlichtes Liniendiagramm des kumulierten Punktestands ueber den gewaehlten
- * Zeitraum. Aufbau und Groesse orientieren sich an Heatmap.kt, das direkt
+ * Flaechendiagramm des kumulierten Punktestands ueber den gewaehlten Zeitraum:
+ * Linie in der Akzentfarbe, darunter eine weiche Flaeche bis zur Grundlinie. Aufbau und Groesse orientieren sich an Heatmap.kt, das direkt
  * darueber in derselben Art von Karte liegt.
  */
 @Composable
 fun Punkteverlaufsdiagramm(verlauf: List<Pair<LocalDate, Int>>, modifier: Modifier = Modifier) {
     if (verlauf.isEmpty()) return
-    val linie = MaterialTheme.colorScheme.primary
+    val farben = DayOrganizerTheme.farben
+    val linie = farben.accent
+    val flaeche = farben.accentSoft
 
     val werte = verlauf.map { it.second }
     val minimum = werte.min()
     val maximum = werte.max()
     val spanne = maximum - minimum
 
-    Canvas(modifier.fillMaxWidth().height((7 * 14).dp)) {
-        val strichbreite = 3.dp.toPx()
+    Canvas(modifier.fillMaxWidth().height(130.dp)) {
+        val strichbreite = 2.5.dp.toPx()
 
         if (werte.size == 1) {
             // Ein einzelner Punkt hat keine Strecke -- als Punkt in der Mitte
@@ -53,13 +59,24 @@ fun Punkteverlaufsdiagramm(verlauf: List<Pair<LocalDate, Int>>, modifier: Modifi
         val breite = size.width / (werte.size - 1)
         val punkte = werte.mapIndexed { index, wert -> Offset(index * breite, hoehe(wert)) }
 
-        for (i in 0 until punkte.size - 1) {
-            drawLine(
-                color = linie,
-                start = punkte[i],
-                end = punkte[i + 1],
-                strokeWidth = strichbreite,
-            )
+        // Flaeche: dieselbe Kurve, an beiden Enden senkrecht zur Grundlinie
+        // heruntergezogen und geschlossen.
+        val flaechenPfad = Path().apply {
+            moveTo(punkte.first().x, size.height)
+            punkte.forEach { lineTo(it.x, it.y) }
+            lineTo(punkte.last().x, size.height)
+            close()
         }
+        drawPath(flaechenPfad, color = flaeche)
+
+        val linienPfad = Path().apply {
+            moveTo(punkte.first().x, punkte.first().y)
+            punkte.drop(1).forEach { lineTo(it.x, it.y) }
+        }
+        drawPath(
+            linienPfad,
+            color = linie,
+            style = Stroke(width = strichbreite, cap = StrokeCap.Round, join = StrokeJoin.Round),
+        )
     }
 }
