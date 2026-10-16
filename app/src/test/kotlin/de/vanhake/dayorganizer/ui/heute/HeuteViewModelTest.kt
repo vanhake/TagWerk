@@ -26,6 +26,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Before
+import java.io.IOException
 import java.time.Clock
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -94,12 +95,14 @@ class HeuteViewModelTest {
         anzeige: Erinnerungsanzeige = FakeAnzeige(),
         belohnungen: FakeBelohnungRepository = FakeBelohnungRepository(),
         widgetAnstossen: suspend () -> Unit = {},
+        alarmNeuPlanen: suspend () -> Unit = {},
+        einstellungenLesen: suspend () -> Einstellungen = { Einstellungen(tagesbonusPunkte = 0) },
     ): HeuteViewModel {
         val aktivitaeten = FakeAktivitaetRepository(listOf(tabletten, sport))
         val transaktionen = FakeTransaktionen()
         val erledigenUseCase = FaelligkeitErledigen(
             aktivitaeten, faelligkeiten, buchungen, PunkteRechner(), SerienRechner(),
-            transaktionen, { Einstellungen(tagesbonusPunkte = 0) }, uhr,
+            transaktionen, einstellungenLesen, uhr,
         )
         return HeuteViewModel(
             aktivitaeten = aktivitaeten,
@@ -111,7 +114,7 @@ class HeuteViewModelTest {
             erledigenRueckgaengig = FaelligkeitErledigenRueckgaengig(faelligkeiten, buchungen, transaktionen, uhr),
             auslassenRueckgaengig = FaelligkeitAuslassenRueckgaengig(faelligkeiten),
             anzeige = anzeige,
-            alarmNeuPlanen = {},
+            alarmNeuPlanen = alarmNeuPlanen,
             hinweiseLesen = { emptyList() },
             uhr = uhr,
             widgetAnstossen = widgetAnstossen,
@@ -246,6 +249,29 @@ class HeuteViewModelTest {
         dispatcher.scheduler.runCurrent()
 
         assertEquals(true, vm.toast.value?.kannRueckgaengig)
+    }
+
+    @Test
+    fun `ein Fehler beim Abhaken meldet sich als Toast und laesst die Benachrichtigung stehen`() = runTest(dispatcher) {
+        val anzeige = FakeAnzeige()
+        var alarme = 0
+        var widgets = 0
+        val vm = viewModel(
+            FakeFaelligkeitRepository(listOf(morgens)), FakeBuchungRepository(),
+            anzeige = anzeige,
+            widgetAnstossen = { widgets++ },
+            alarmNeuPlanen = { alarme++ },
+            einstellungenLesen = { throw IOException("Einstellungen unlesbar") },
+        )
+
+        vm.erledigen(10)
+        dispatcher.scheduler.runCurrent()
+
+        assertEquals("Abhaken fehlgeschlagen", vm.toast.value?.text)
+        assertEquals(false, vm.toast.value?.kannRueckgaengig)
+        assertEquals(emptyList(), anzeige.versteckt)
+        assertEquals(0, alarme)
+        assertEquals(0, widgets)
     }
 
     @Test

@@ -1,7 +1,10 @@
 package de.vanhake.dayorganizer.data.repository
 
+import android.util.Log
 import de.vanhake.dayorganizer.data.db.BelohnungDao
+import de.vanhake.dayorganizer.data.db.BelohnungEntity
 import de.vanhake.dayorganizer.data.mapper.zuDomaene
+import de.vanhake.dayorganizer.data.mapper.zuDomaeneOderNull
 import de.vanhake.dayorganizer.data.mapper.zuEntity
 import de.vanhake.dayorganizer.domain.model.Belohnung
 import de.vanhake.dayorganizer.domain.model.Einloesung
@@ -32,12 +35,17 @@ class RaumBelohnungRepository @Inject constructor(
     private val dao: BelohnungDao,
 ) : BelohnungRepository {
 
+    // Ein unlesbarer Datensatz (z.B. unbekannter bedingungTyp) wird uebersprungen und
+    // protokolliert, statt Shop, Heute und Archiv mit einer Ausnahme abzuschiessen.
+    private fun BelohnungEntity.lesbarOderNull(): Belohnung? =
+        zuDomaeneOderNull().also { if (it == null) Log.w(TAG, "Belohnung $id uebersprungen: unlesbar") }
+
     override fun beobachteAktive(): Flow<List<Belohnung>> =
-        dao.beobachteAktive().map { liste -> liste.map { it.zuDomaene() } }
+        dao.beobachteAktive().map { liste -> liste.mapNotNull { it.lesbarOderNull() } }
 
-    override suspend fun alle(): List<Belohnung> = dao.alle().map { it.zuDomaene() }
+    override suspend fun alle(): List<Belohnung> = dao.alle().mapNotNull { it.lesbarOderNull() }
 
-    override suspend fun nachId(id: Long): Belohnung? = dao.nachId(id)?.zuDomaene()
+    override suspend fun nachId(id: Long): Belohnung? = dao.nachId(id)?.lesbarOderNull()
 
     override suspend fun speichern(belohnung: Belohnung): Long =
         if (belohnung.id == 0L) {
@@ -51,7 +59,7 @@ class RaumBelohnungRepository @Inject constructor(
     override suspend fun archivieren(id: Long) = dao.archivieren(id)
 
     override fun beobachteArchivierte(): Flow<List<Belohnung>> =
-        dao.beobachteArchivierte().map { liste -> liste.map { it.zuDomaene() } }
+        dao.beobachteArchivierte().map { liste -> liste.mapNotNull { it.lesbarOderNull() } }
 
     override suspend fun wiederherstellen(id: Long): Boolean = dao.wiederherstellen(id) > 0
 
@@ -66,4 +74,8 @@ class RaumBelohnungRepository @Inject constructor(
 
     override suspend fun alleEinloesungen(): List<Einloesung> =
         dao.alleEinloesungen().map { it.zuDomaene() }
+
+    private companion object {
+        const val TAG = "BelohnungRepository"
+    }
 }

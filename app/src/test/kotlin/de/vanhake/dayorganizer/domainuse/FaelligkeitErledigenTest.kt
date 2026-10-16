@@ -21,7 +21,9 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
 import kotlin.test.Test
+import java.io.IOException
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /** Spion um den entscheidenden Lesezugriff: schlaegt sofort fehl, wenn der Status ausserhalb
@@ -73,6 +75,7 @@ class FaelligkeitErledigenTest {
         buchungen: FakeBuchungRepository,
         tagesbonus: Int = 0,
         transaktionen: FakeTransaktionen = FakeTransaktionen(),
+        einstellungen: suspend () -> Einstellungen = { Einstellungen(tagesbonusPunkte = tagesbonus) },
     ) = FaelligkeitErledigen(
         aktivitaeten = aktivitaeten,
         faelligkeiten = faelligkeiten,
@@ -80,7 +83,7 @@ class FaelligkeitErledigenTest {
         punkteRechner = PunkteRechner(),
         serienRechner = SerienRechner(),
         transaktionen = transaktionen,
-        einstellungenLesen = { Einstellungen(tagesbonusPunkte = tagesbonus) },
+        einstellungenLesen = einstellungen,
         uhr = uhr,
     )
 
@@ -95,6 +98,22 @@ class FaelligkeitErledigenTest {
         assertEquals(15, b.stand.value.sumOf { it.betrag })
         assertEquals(FaelligkeitStatus.ERLEDIGT, f.stand.value.single().status)
         assertEquals(true, f.stand.value.single().warPuenktlich)
+    }
+
+    @Test
+    fun `scheitert das Lesen der Einstellungen wird weder gebucht noch abgehakt`() = runTest {
+        val f = FakeFaelligkeitRepository(listOf(morgens))
+        val b = FakeBuchungRepository()
+        val use = useCase(
+            uhrUm(8, 10), FakeAktivitaetRepository(listOf(tabletten)), f, b,
+            einstellungen = { throw IOException("Einstellungen unlesbar") },
+        )
+
+        assertFailsWith<IOException> { use(10) }
+
+        assertEquals(FaelligkeitStatus.OFFEN, f.stand.value.single().status)
+        assertEquals(0, f.stand.value.single().istAnzahl)
+        assertEquals(emptyList(), b.stand.value)
     }
 
     @Test

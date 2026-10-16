@@ -65,7 +65,7 @@ class FaelligkeitErledigen(
         uhr: Clock,
     ) : this(
         aktivitaeten, faelligkeiten, buchungen, punkteRechner, serienRechner,
-        transaktionen, { speicher.lesen() }, uhr,
+        transaktionen, { speicher.lesenOderWerfen() }, uhr,
     )
 
     // Lesen, Pruefen, Schreiben und Buchen liegen zusammen in der Transaktion.

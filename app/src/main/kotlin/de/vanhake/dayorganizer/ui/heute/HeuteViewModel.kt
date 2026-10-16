@@ -1,5 +1,6 @@
 package de.vanhake.dayorganizer.ui.heute
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -22,6 +23,7 @@ import de.vanhake.dayorganizer.platform.permission.Hinweis
 import de.vanhake.dayorganizer.platform.permission.waechterHaengt
 import de.vanhake.dayorganizer.ui.gemeinsam.Hinweistoast
 import de.vanhake.dayorganizer.ui.gemeinsam.ToastStapel
+import de.vanhake.dayorganizer.util.versuchen
 import de.vanhake.dayorganizer.widget.WidgetAktualisierung
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -91,11 +93,10 @@ class HeuteViewModel(
     private val hinweise = MutableStateFlow<List<Hinweis>>(emptyList())
     private val tag = MutableStateFlow(LocalDate.now(uhr))
 
-    // Eigener Flow statt Teil der zustand-Kette unten -- exakt das Muster von
-    // EinstellungenViewModel._meldung/meldung. combine(...) hat nur typisierte
-    // Ueberladungen bis fuenf Flows (die zustand-Kette nutzt bereits alle fuenf), und ein
-    // gemeinsamer sechster Flow wuerde den DB-getriebenen Update und das Setzen des
-    // Toasts ausserdem in zwei getrennte Emissionen auseinanderreissen.
+    // Die Toasts liegen bewusst nicht in der zustand-Kette unten: combine(...) hat nur
+    // typisierte Ueberladungen bis fuenf Flows (die Kette nutzt bereits alle fuenf), und ein
+    // Toast soll unabhaengig von DB-Updates kommen und gehen. ToastStapel haelt die offenen
+    // Rueckgaengig-Eintraege und den Info-Eintrag und gibt nur den sichtbaren als Flow heraus.
     private val stapel = ToastStapel(viewModelScope)
     val toast: StateFlow<Hinweistoast?> = stapel.sichtbar
 
@@ -129,7 +130,15 @@ class HeuteViewModel(
     // (der Weg ueber die Benachrichtigungsaktionen) versteckt sie schon, dieser Pfad muss
     // dasselbe tun (Finding 3 der Branch-Review).
     fun erledigen(faelligkeitId: Long) = viewModelScope.launch {
-        val protokoll = erledigenUseCase.mitProtokoll(faelligkeitId)
+        // Scheitert das Buchen (z.B. Einstellungen unlesbar), hat sich nichts geaendert:
+        // Benachrichtigung, Alarm und Widget bleiben deshalb unberuehrt.
+        val protokoll = versuchen { erledigenUseCase.mitProtokoll(faelligkeitId) }
+            .onFailure { Log.w(TAG, "Abhaken fehlgeschlagen", it) }
+            .getOrNull()
+        if (protokoll == null) {
+            stapel.zeigen(HeuteToastTexte.ERLEDIGEN_FEHLGESCHLAGEN)
+            return@launch
+        }
         // anzeige.verstecke() muss bei JEDEM Ausgang laufen, nicht nur bei Gebucht: NichtOffen
         // deckt ERLEDIGT/AUSGELASSEN/VERPASST ab (siehe FaelligkeitErledigen), und in jedem
         // dieser Faelle kann noch eine Systembenachrichtigung fuer diese Faelligkeit stehen
@@ -155,7 +164,13 @@ class HeuteViewModel(
     }
 
     fun auslassen(faelligkeitId: Long) = viewModelScope.launch {
-        val vorher = auslassenUseCase.mitProtokoll(faelligkeitId)
+        val ergebnis = versuchen { auslassenUseCase.mitProtokoll(faelligkeitId) }
+            .onFailure { Log.w(TAG, "Auslassen fehlgeschlagen", it) }
+        if (ergebnis.isFailure) {
+            stapel.zeigen(HeuteToastTexte.AUSLASSEN_FEHLGESCHLAGEN)
+            return@launch
+        }
+        val vorher = ergebnis.getOrNull()
         // Siehe Kommentar in erledigen(): verstecke() muss auch laufen, wenn mitProtokoll()
         // null liefert (Faelligkeit unbekannt oder schon nicht mehr OFFEN).
         anzeige.verstecke(faelligkeitId)
@@ -170,9 +185,19 @@ class HeuteViewModel(
 
     fun rueckgaengig() = viewModelScope.launch {
         val aktion = stapel.rueckgaengigNehmen() ?: return@launch
-        aktion()
+        val geklappt = versuchen { aktion() }
+            .onFailure { Log.w(TAG, "Rueckgaengig fehlgeschlagen", it) }
+            .isSuccess
+        if (!geklappt) {
+            stapel.zeigen(HeuteToastTexte.RUECKGAENGIG_FEHLGESCHLAGEN)
+            return@launch
+        }
         alarmNeuPlanen()
         widgetAnstossen()
+    }
+
+    private companion object {
+        const val TAG = "HeuteViewModel"
     }
 }
 
@@ -182,4 +207,7 @@ private object HeuteToastTexte {
     fun erledigtToast(punkte: Int, name: String) = "+$punkte Punkte · $name"
     fun tagesbonusToast(punkte: Int) = "+$punkte Punkte · inkl. Tagesbonus"
     fun ausgelassenToast(name: String) = "$name ausgelassen"
+    const val ERLEDIGEN_FEHLGESCHLAGEN = "Abhaken fehlgeschlagen"
+    const val AUSLASSEN_FEHLGESCHLAGEN = "Auslassen fehlgeschlagen"
+    const val RUECKGAENGIG_FEHLGESCHLAGEN = "Rückgängig fehlgeschlagen"
 }
