@@ -44,7 +44,7 @@
             android:textColor="@color/widget_vorschau_ink2"
             android:textSize="13sp" />
 
-        <View
+        <FrameLayout
             android:layout_width="0dp"
             android:layout_height="0dp"
             android:layout_weight="1" />

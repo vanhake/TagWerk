@@ -82,4 +82,16 @@ class WidgetMasseTest {
         assertEquals(false, WidgetMasse.leerhinweisPasst(110f, 2.0f))
         assertEquals(true, WidgetMasse.leerhinweisPasst(150f, 2.0f))
     }
+
+    // Bewacht KOPF_SCHRIFT_DP = 21f: 140 > 139; mit 20f waeren es 138 <= 139.
+    @Test
+    fun `der Leerhinweis nutzt die Kopfhoehe von 21 dp je Schriftfaktor`() {
+        assertEquals(false, WidgetMasse.leerhinweisPasst(139f, 2.0f))
+    }
+
+    // Mit 21f: 337,5 > 336; mit 20f waeren es 336 <= 336 (drei Zeilen).
+    @Test
+    fun `Schriftfaktor 1,5 zeigt bei 336 dp nur zwei Zeilen`() {
+        assertEquals(2, WidgetMasse.passendeZeilen(336f, 6, 1.5f))
+    }
 }

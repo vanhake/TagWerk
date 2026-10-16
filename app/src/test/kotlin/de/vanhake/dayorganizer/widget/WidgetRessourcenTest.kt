@@ -1,7 +1,8 @@
 package de.vanhake.dayorganizer.widget
 
 import android.content.Context
-import android.view.LayoutInflater
+import android.widget.FrameLayout
+import android.widget.RemoteViews
 import androidx.compose.ui.graphics.toArgb
 import androidx.test.core.app.ApplicationProvider
 import de.vanhake.dayorganizer.R
@@ -39,8 +40,11 @@ class WidgetRessourcenTest {
 
     @Test
     fun `Vorschau- und Fehlerlayout lassen sich aufblasen`() {
-        val inflater = LayoutInflater.from(kontext)
-        assertNotNull(inflater.inflate(R.layout.widget_vorschau, null))
-        assertNotNull(inflater.inflate(R.layout.widget_fehler, null))
+        // Ueber RemoteViews.apply, nicht ueber LayoutInflater: nur so greift der
+        // Klassenfilter des Frameworks (@RemoteView), der z.B. ein nacktes <View> ablehnt.
+        listOf(R.layout.widget_vorschau, R.layout.widget_fehler).forEach { layout ->
+            val ansicht = RemoteViews(kontext.packageName, layout).apply(kontext, FrameLayout(kontext))
+            assertNotNull(ansicht)
+        }
     }
 }
