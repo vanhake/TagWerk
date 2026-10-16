@@ -35,11 +35,10 @@ class WidgetZustandTest {
             aktivitaeten = listOf(tabletten),
             kontostand = 120,
             jetzt = jetzt,
-            hoechstens = 5,
         )
 
-        assertEquals(listOf(10L, 11L), zustand.eintraege.map { it.faelligkeitId })
-        assertEquals(true, zustand.eintraege.first().ueberfaellig)
+        assertEquals(listOf(10L, 11L), zustand.offen.map { it.faelligkeitId })
+        assertEquals(true, zustand.offen.first().ueberfaellig)
         assertEquals(120, zustand.kontostand)
     }
 
@@ -53,36 +52,16 @@ class WidgetZustandTest {
             aktivitaeten = listOf(tabletten),
             kontostand = 0,
             jetzt = jetzt,
-            hoechstens = 5,
         )
 
-        assertEquals(listOf(11L), zustand.eintraege.map { it.faelligkeitId })
-    }
-
-    @Test
-    fun `was nicht passt wird gezaehlt statt verschwiegen`() {
-        val zustand = WidgetZusammenstellung.aus(
-            faelligkeiten = (1L..6L).map { termin(it, 8 + it.toInt()) },
-            aktivitaeten = listOf(tabletten),
-            kontostand = 0,
-            jetzt = jetzt,
-            hoechstens = 4,
-        )
-
-        assertEquals(4, zustand.eintraege.size)
-        assertEquals(2, zustand.weitere)
-        // Die Anzahl allein beweist nichts: takeLast statt take oder eine verkehrte
-        // Sortierung ergaeben ebenfalls vier Eintraege und zwei weitere -- nur die
-        // falschen. Es muessen die dringendsten bleiben. Um 12:00 sind 09:00 bis
-        // 11:00 ueberfaellig, danach kommt 12:00; 13:00 und 14:00 fallen weg.
-        assertEquals(listOf(1L, 2L, 3L, 4L), zustand.eintraege.map { it.faelligkeitId })
+        assertEquals(listOf(11L), zustand.offen.map { it.faelligkeitId })
     }
 
     // Zaehlziele haben keinen Sollzeitpunkt. Sie gehoeren hinter alles mit Uhrzeit,
-    // auch hinter spaete Termine, und fallen bei Platzmangel als Erste weg -- sie
-    // lassen sich ueber den ganzen Tag erledigen, eine Uhrzeit nicht.
+    // auch hinter spaete Termine -- sie lassen sich ueber den ganzen Tag erledigen,
+    // eine Uhrzeit nicht.
     @Test
-    fun `Zaehlziele stehen hinter allem mit Uhrzeit und fallen zuerst weg`() {
+    fun `Zaehlziele stehen hinter allem mit Uhrzeit`() {
         val ziel = Faelligkeit(
             id = 50, aktivitaetId = 1, periodeVon = tag, periodeBis = tag.plusDays(6),
             geplantFuer = null, sollAnzahl = 3,
@@ -92,11 +71,9 @@ class WidgetZustandTest {
             aktivitaeten = listOf(tabletten),
             kontostand = 0,
             jetzt = jetzt,
-            hoechstens = 2,
         )
 
-        assertEquals(listOf(11L, 10L), zustand.eintraege.map { it.faelligkeitId })
-        assertEquals(1, zustand.weitere)
+        assertEquals(listOf(11L, 10L, 50L), zustand.offen.map { it.faelligkeitId })
     }
 
     @Test
@@ -106,9 +83,9 @@ class WidgetZustandTest {
             geplantFuer = null, sollAnzahl = 3, istAnzahl = 1,
         )
 
-        val zustand = WidgetZusammenstellung.aus(listOf(ziel), listOf(tabletten), 0, jetzt, 5)
+        val zustand = WidgetZusammenstellung.aus(listOf(ziel), listOf(tabletten), 0, jetzt)
 
-        assertEquals(null, zustand.eintraege.single().zeitText)
+        assertEquals(null, zustand.offen.single().zeitText)
     }
 
     // Review-Fund G2: ein Tipp auf ein Zaehlziel aendert am Eintrag heute nichts
@@ -121,10 +98,81 @@ class WidgetZustandTest {
             geplantFuer = null, sollAnzahl = 3, istAnzahl = 1,
         )
 
-        val zustand = WidgetZusammenstellung.aus(listOf(ziel), listOf(tabletten), 0, jetzt, 5)
+        val zustand = WidgetZusammenstellung.aus(listOf(ziel), listOf(tabletten), 0, jetzt)
 
-        val eintrag = zustand.eintraege.single()
+        val eintrag = zustand.offen.single()
         assertEquals(1, eintrag.istAnzahl)
         assertEquals(3, eintrag.sollAnzahl)
+    }
+
+    @Test
+    fun `zaehlt erledigt und gesamt wie der Heute-Tab`() {
+        val zustand = WidgetZusammenstellung.aus(
+            faelligkeiten = listOf(
+                termin(1, 8, FaelligkeitStatus.ERLEDIGT),
+                termin(2, 9, FaelligkeitStatus.AUSGELASSEN),
+                termin(3, 10),
+                termin(4, 18),
+            ),
+            aktivitaeten = listOf(tabletten),
+            kontostand = 0,
+            jetzt = jetzt,
+        )
+
+        assertEquals(1, zustand.erledigt)
+        assertEquals(4, zustand.gesamt)
+        assertEquals(2, zustand.offen.size)
+        assertEquals(null, zustand.leer)
+    }
+
+    @Test
+    fun `ohne Faelligkeiten heisst es nichts geplant`() {
+        val zustand = WidgetZusammenstellung.aus(emptyList(), listOf(tabletten), 0, jetzt)
+
+        assertEquals(WidgetLeer.NICHTS_GEPLANT, zustand.leer)
+        assertEquals(0, zustand.gesamt)
+    }
+
+    @Test
+    fun `alles abgehakt heisst alles erledigt`() {
+        val zustand = WidgetZusammenstellung.aus(
+            faelligkeiten = listOf(
+                termin(1, 8, FaelligkeitStatus.ERLEDIGT),
+                termin(2, 9, FaelligkeitStatus.ERLEDIGT),
+            ),
+            aktivitaeten = listOf(tabletten),
+            kontostand = 0,
+            jetzt = jetzt,
+        )
+
+        assertEquals(WidgetLeer.ALLES_ERLEDIGT, zustand.leer)
+    }
+
+    @Test
+    fun `Faelligkeiten archivierter Aktivitaeten zaehlen nicht`() {
+        val fremd = termin(1, 8).copy(aktivitaetId = 99)
+
+        val zustand = WidgetZusammenstellung.aus(listOf(fremd), listOf(tabletten), 0, jetzt)
+
+        assertEquals(0, zustand.gesamt)
+        assertEquals(0, zustand.erledigt)
+    }
+
+    @Test
+    fun `ein Eintrag traegt Symbol und Wochenziel-Kennung`() {
+        val wasser = tabletten.copy(symbol = "water_drop")
+        val woche = Faelligkeit(
+            id = 60, aktivitaetId = 1, periodeVon = tag, periodeBis = tag.plusDays(6),
+            geplantFuer = null, sollAnzahl = 3,
+        )
+
+        val zustand = WidgetZusammenstellung.aus(
+            listOf(woche, termin(61, 18)), listOf(wasser), 0, jetzt,
+        )
+
+        val wochenEintrag = zustand.offen.single { it.faelligkeitId == 60L }
+        assertEquals("water_drop", wochenEintrag.symbol)
+        assertEquals(true, wochenEintrag.wochenziel)
+        assertEquals(false, zustand.offen.single { it.faelligkeitId == 61L }.wochenziel)
     }
 }

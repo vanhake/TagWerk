@@ -36,6 +36,11 @@ import java.time.LocalDateTime
  */
 class HeuteWidget : GlanceAppWidget() {
 
+    // Nur bis Task 4: dort bestimmt WidgetMasse.passendeZeilen die Zahl.
+    private companion object {
+        const val ZEILEN_VORLAEUFIG = 4
+    }
+
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val zugang = EntryPointAccessors.fromApplication(context, WidgetZugang::class.java)
         val uhr = zugang.uhr()
@@ -76,7 +81,6 @@ class HeuteWidget : GlanceAppWidget() {
                 aktivitaeten = aktivitaeten,
                 kontostand = kontostand,
                 jetzt = LocalDateTime.now(uhr),
-                hoechstens = 5,
             )
 
             // fillMaxSize statt fillMaxWidth: sonst schwimmt die Karte mittig in der
@@ -88,7 +92,7 @@ class HeuteWidget : GlanceAppWidget() {
                     style = TextStyle(color = ColorProvider(Color.Black)),
                 )
 
-                zustand.eintraege.forEach { eintrag ->
+                zustand.offen.take(ZEILEN_VORLAEUFIG).forEach { eintrag ->
                     Row(
                         GlanceModifier
                             .fillMaxWidth()
@@ -101,16 +105,8 @@ class HeuteWidget : GlanceAppWidget() {
                                 ),
                             ),
                     ) {
-                        // Zaehlziele (sollAnzahl > 1) zeigen ihren Stand, genau wie der
-                        // Heute-Bildschirm (HeuteScreen.ziel_fortschritt) -- Review-Fund G2.
-                        val fortschritt = if (eintrag.sollAnzahl > 1) {
-                            res.getString(R.string.widget_ziel_fortschritt, eintrag.istAnzahl, eintrag.sollAnzahl)
-                        } else {
-                            null
-                        }
                         Text(
-                            text = listOfNotNull(eintrag.zeitText, eintrag.name, fortschritt)
-                                .joinToString("  "),
+                            text = "${eintrag.name}  ${widgetUntertitel(eintrag, res.resources)}",
                             style = TextStyle(
                                 color = ColorProvider(
                                     if (eintrag.ueberfaellig) Color(0xFFB00020) else Color.Black,
@@ -120,9 +116,9 @@ class HeuteWidget : GlanceAppWidget() {
                     }
                 }
 
-                if (zustand.weitere > 0) {
+                if (zustand.offen.size > ZEILEN_VORLAEUFIG) {
                     Text(
-                        res.getString(R.string.widget_weitere, zustand.weitere),
+                        res.getString(R.string.widget_weitere, zustand.offen.size - ZEILEN_VORLAEUFIG),
                         style = TextStyle(color = ColorProvider(Color.DarkGray)),
                     )
                 }
