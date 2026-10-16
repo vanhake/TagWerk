@@ -105,6 +105,55 @@ class StatistikViewModelTest {
         }
     }
 
+    @Test
+    fun `der Zustand traegt Symbol, Wochen-Einheit und Gesamtquote`() = runTest(dispatcher) {
+        val vm = StatistikViewModel(
+            aktivitaeten = FakeAktivitaetRepository(
+                listOf(tabletten, sport.copy(symbol = "fitness_center")),
+            ),
+            faelligkeiten = FakeFaelligkeitRepository(
+                listOf(
+                    tag(0, FaelligkeitStatus.ERLEDIGT),
+                    tag(1, FaelligkeitStatus.ERLEDIGT),
+                    tag(2, FaelligkeitStatus.VERPASST),
+                ),
+            ),
+            buchungen = FakeBuchungRepository(),
+            rechner = StatistikRechner(),
+            uhr = uhr,
+            rechenDispatcher = dispatcher,
+        )
+
+        vm.zustand.test {
+            skipItems(1)
+            val zustand = awaitItem()
+            val zeilen = zustand.zeilen.associateBy { it.name }
+            assertEquals(true, zeilen.getValue("Sport").serieInWochen)
+            assertEquals("fitness_center", zeilen.getValue("Sport").symbol)
+            assertEquals(false, zeilen.getValue("Tabletten").serieInWochen)
+            assertEquals(67, zustand.gesamtQuote)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `ohne Faelligkeiten gibt es keine Gesamtquote`() = runTest(dispatcher) {
+        val vm = StatistikViewModel(
+            aktivitaeten = FakeAktivitaetRepository(listOf(tabletten)),
+            faelligkeiten = FakeFaelligkeitRepository(),
+            buchungen = FakeBuchungRepository(),
+            rechner = StatistikRechner(),
+            uhr = uhr,
+            rechenDispatcher = dispatcher,
+        )
+
+        vm.zustand.test {
+            skipItems(1)
+            assertEquals(null, awaitItem().gesamtQuote)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     // Die Quote je Aktivitaet liest bewusst die VOLLE Historie, nicht nur den
     // gewaehlten Zeitraum -- so steht es im Design. Ohne einen Eintrag ausserhalb
     // des Fensters liefern historie() und fuerZeitraum() dieselbe Liste, und die

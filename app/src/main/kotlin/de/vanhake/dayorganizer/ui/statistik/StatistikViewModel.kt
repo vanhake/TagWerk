@@ -6,6 +6,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import de.vanhake.dayorganizer.data.repository.AktivitaetRepository
 import de.vanhake.dayorganizer.data.repository.BuchungRepository
 import de.vanhake.dayorganizer.data.repository.FaelligkeitRepository
+import de.vanhake.dayorganizer.domain.model.Zeitplan
 import de.vanhake.dayorganizer.domain.rechner.StatistikRechner
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -64,13 +65,18 @@ class StatistikViewModel(
         val imZeitraum = faelligkeiten.fuerZeitraum(von, heute)
         val liste = aktivitaeten.alleAktiven()
 
+        val bilanzen = rechner.tagesBilanzen(imZeitraum, von, heute)
+
         return StatistikZustand(
             zeitraumTage = tage,
-            bilanzen = rechner.tagesBilanzen(imZeitraum, von, heute),
+            bilanzen = bilanzen,
+            gesamtQuote = gesamtQuoteProzent(bilanzen),
             zeilen = liste.map { aktivitaet ->
-                AktivitaetZeile(
+                StatistikZeile(
                     aktivitaetId = aktivitaet.id,
                     name = aktivitaet.name,
+                    symbol = aktivitaet.symbol,
+                    serieInWochen = aktivitaet.zeitplan is Zeitplan.Wochenziel,
                     statistik = rechner.fuerAktivitaet(
                         aktivitaetId = aktivitaet.id,
                         faelligkeiten = faelligkeiten.historie(aktivitaet.id),
