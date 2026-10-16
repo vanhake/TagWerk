@@ -1,7 +1,7 @@
 # Übergabe — Stand und wie es weitergeht
 
-Letzte Aktualisierung: 2026-10-16. Plan 8 umgesetzt (Branch
-`worktree-redesign-plan8-widget`, PR folgt), aufbauend auf dem Merge von Plan 7.
+Letzte Aktualisierung: 2026-10-16. Plan 9 umgesetzt (Branch
+`worktree-redesign-plan9-aufraeumen`, PR folgt), aufbauend auf Plan 8.
 
 Dieses Dokument soll reichen, um in einer neuen Sitzung ohne Vorwissen
 weiterzuarbeiten. Die Wahrheit steht im Code und in `git log`; wo dieses
@@ -9,7 +9,7 @@ Dokument davon abweicht, hat der Code recht.
 
 ## Wo wir stehen
 
-**Die Pläne 1–8 sind umgesetzt.** Plan 1–3 lieferten Funktionsumfang und
+**Die Pläne 1–9 sind umgesetzt.** Plan 1–3 lieferten Funktionsumfang und
 Backup; die Pläne 4–8 haben die ganze App an den Redesign-Prototyp
 (`docs/design/prototyp/`) angeglichen:
 
@@ -20,13 +20,15 @@ Backup; die Pläne 4–8 haben die ganze App an den Redesign-Prototyp
 | 6 | Belohnungen und Editor, Belohnungssymbol, Einlösen rückgängig (Migration 4→5, Backup-Schema 3) |
 | 7 | Statistik (Heatmap-Stufen, Flächendiagramm), Optionen mit sofort speichernden Steppern, Navigationsleiste, Import-Validierung |
 | 8 | Homescreen-Widget im Prototyp-Stil (Kopf mit Fortschritt und Punkten, Symbolkacheln, Zeilenzahl nach Höhe, Farben nach App-Einstellung) |
+| 9 | Aufräumen: gestapelte Rückgängig-Toasts, Archivieren mit Rückfrage und Archivbereich zum Wiederherstellen, einheitliche Fehlerbehandlung (`versuchen {}`), Import-Sperre für Stepper, Widget-Wecker, Katalogvorschau und Fehlerlayout, Statistik mit archivierten Aktivitäten und TalkBack-Texten |
 
 Plan 4–7 sind auf `main` gemergt; Plan 8 liegt auf dem Branch
-`worktree-redesign-plan8-widget` (Review gelaufen, PR folgt).
+`worktree-redesign-plan8-widget`, Plan 9 darauf aufbauend auf
+`worktree-redesign-plan9-aufraeumen` (Review gelaufen, PR folgt).
 Datenbank Version 5, Backup-Schema 3 (Schema 2 bleibt lesbar).
 
-Was nach dem Redesign offen ist, steht unter „Offene Punkte“. Es ist ein
-Backlog kleiner Aufräumpunkte für einen eigenen Plan 9, keine fehlende Funktion.
+Was offen ist, steht unter „Offene Punkte“: ein Restbestand kleiner Punkte,
+keine fehlende Funktion.
 
 ## Umgebung
 
@@ -65,12 +67,12 @@ Vollständiger Durchlauf:
 | Datei | Wofür |
 |---|---|
 | `docs/superpowers/specs/2026-09-18-dayorganizer-design.md` | Der Vertrag. Fachliches Modell, alle Regeln, Architektur. Kurz. |
-| `docs/superpowers/plans/2026-09-26-dayorganizer-04-designsystem-heute.md` bis `2026-10-16-dayorganizer-08-widget.md` | Pläne 04–08, das Redesign. Plan 8 ist der jüngste; jeder Plan nennt oben seine Design-Quelle und Global Constraints. |
+| `docs/superpowers/plans/2026-09-26-dayorganizer-04-designsystem-heute.md` bis `2026-10-16-dayorganizer-09-aufraeumen.md` | Pläne 04–09: das Redesign und der Aufräumplan. Plan 9 ist der jüngste; jeder Plan nennt oben seine Design-Quelle und Global Constraints. |
 | `docs/design/prototyp/` | Die visuelle Vorlage (`DayOrganizer App.dc.html`) mit eigener README. |
 | `docs/superpowers/plans/2026-09-18-dayorganizer-0{1,2,3}-*.md` | Pläne 1–3 (Fundament, Belohnungen, Widget und Backup), umgesetzt. |
 | `.superpowers/sdd/plan-N/` | Ledger, Aufträge und Berichte je Plan. Nicht eingecheckt. |
 
-## Architektur in fünf Sätzen
+## Architektur in sieben Sätzen
 
 `:domain` ist reines Kotlin ohne Android und enthält das Modell plus vier
 zustandslose Regelmaschinen: `ZeitplanRechner` (Zeitplan → Fälligkeiten),
@@ -83,7 +85,12 @@ Der Punktestand ist die Summe eines Buchungsjournals, nie ein Zähler. Es ist zu
 jedem Zeitpunkt genau ein exakter Alarm gesetzt, für die nächste fällige
 Erinnerung überhaupt. Das Widget (Glance) rechnet seinen Zustand in reinen
 Funktionen (`WidgetZustand`, `WidgetMasse`) und liest die Farben über
-`widgetFarben(modus)` aus denselben Objekten wie die App. Jede Klasse, die die
+`widgetFarben(modus)` aus denselben Objekten wie die App. `ToastStapel` hält den
+Toast-Zustand der Screens: Rückgängig-Einträge stapeln sich und laufen je nach
+3 800 ms ab, Info-Einträge warten, bis kein Rückgängig mehr offen ist.
+`WidgetWecker` stellt einen ungenauen `RTC`-Alarm auf den nächsten Umschaltpunkt
+des Widgets (Uhrzeit eines offenen Eintrags, sonst Mitternacht), damit
+„überfällig“ und der Tageswechsel ohne Datenänderung erscheinen. Jede Klasse, die die
 Uhrzeit braucht, bekommt eine `java.time.Clock` injiziert — daran hängt die
 gesamte Testbarkeit.
 
@@ -174,60 +181,62 @@ Berichte von Plan 1. Die Artefakte liegen jetzt getrennt unter
 
 ## Offene Punkte
 
-Backlog nach Plan 8, gedacht für einen eigenen Aufräumplan (Plan 9). Nichts
-davon blockiert einen Merge.
+Restbestand nach Plan 9. Nichts davon blockiert einen Merge.
 
-- **Toasts verdrängen sich.** Ein neuer Toast ersetzt ein noch offenes
-  Rückgängig (Heute, Belohnungen).
-- **Stepper und Import.** Ein Stepper-Tipp in Optionen während eines laufenden
-  Imports kann importierte Werte überschreiben.
-- **Archivieren ohne Rückfrage und Wiederherstellung.** Im Emulator sind dadurch
-  vier echte Aktivitäten archiviert (Magnesium, Rücken, Tabletten, Vitamin).
-  Außerdem steht aus Plan 6 eine Test-Einlösung über −10 Punkte im Emulator.
-- **Fehlerbehandlung.** Das Speichern beider Editoren sollte einheitlich mit
-  Fehlern umgehen; `Repository.speichern` wirft bei fehlendem Datensatz. Dazu
-  stehen drei Stile nebeneinander (`versuchen{}`, `runCatching` mit Weiterwerfen,
-  ungeschütztes `catch`); zusammen vereinheitlichen.
-- **TalkBack.** Die Heatmap hat keine Semantik. Das „–“ bei Aktivitäten ohne
-  Quote hat keinen Vorlesetext.
 - **Dateidialog.** Nach dem Abbrechen des System-Dateidialogs stand die App im
   Emulator wieder auf „Heute“. Eine Ursache im Code ist nicht gefunden.
-- **Widget nach Mitternacht.** `provideGlance` legt `heute` einmal pro Sitzung
-  fest. Zwischen Mitternacht und der nächsten Aktualisierung zeigt das Widget
-  die Fälligkeiten von gestern, und ein Tipp hakt den Eintrag von gestern ab.
-- **Widget ohne Vorschau und Fehlerlayout.** Es gibt kein `previewLayout` und
-  kein Glance-`errorUiLayout`.
-- **`WidgetErledigenAktion`.** Sie ruft `updateAll()` direkt und ohne
-  Fehlerbehandlung auf, statt über `WidgetAktualisierung`.
-- **Kaputter Belohnungsdatensatz.** `error(...)` im Mapper reißt den
-  Heute-Bildschirm mit, weil er den Flow der aktiven Belohnungen sammelt.
-- **`EinstellungenSpeicher` bei E/A-Fehlern.** Er liefert still die Standardwerte;
-  der Tagesbonus wird dann mit dem Standardwert gebucht, nicht mit dem
-  eingestellten.
-- **Statistik und archivierte Aktivitäten.** Sie erscheinen in der Heatmap,
-  fehlen aber bei den Quoten.
-
-### Neu aus Plan 8
-
-- **„Überfällig“ im Widget kommt verspätet.** Es erscheint erst bei der nächsten
-  Neuzeichnung (Datenänderung, Farbmoduswechsel oder spätestens nach 30
-  Minuten), nicht genau zur geplanten Uhrzeit.
-- **Leerhinweis im Höhenbudget.** „Alles erledigt für heute“ ist in `WidgetMasse`
-  nicht eingerechnet; bei 200 % Schrift und Mindesthöhe wird es knapp.
-- **`EinstellungenViewModel.uebernehmen()`.** `lesen()` liegt jetzt außerhalb von
-  `versuchen {}`. Praktisch folgenlos, weil `lesen()` IOExceptions selbst fängt.
-- **Doppelte Stilblöcke im Widget.** Fußzeile und „Heute steht nichts an“
-  wiederholen denselben `TextStyle`.
-- **Testhygiene.** `org.junit.Test` ist mit `kotlin.test` gemischt; für Abbruch
-  und `NonCancellable` beim Widget-Anstoß gibt es keinen Test; der Drawable-Test
-  prüft nur die Ladbarkeit; `self_improvement` ist nur über `else` abgedeckt.
-- **Sehr große Systemschrift.** Bei 200 % wachsen Punktepille und Kopfzeile des
-  Widgets etwas über die Annahmen in `WidgetMasse` hinaus (ca. 2 dp).
-- **Testbuchung im Emulator.** Aus der Plan-8-Sichtprüfung steht dort eine
-  Testbuchung über +1 Punkt.
 - **Feste Uhrzeit, die schon vorbei ist.** Wird eine Aktivität mit fester
   Uhrzeit angelegt, die heute bereits vorbei ist, entsteht für heute keine
   Fälligkeit. Beobachtet, nicht geprüft, ob das gewollt ist.
+- **Testhygiene.** `org.junit.Test` ist mit `kotlin.test` gemischt; für Abbruch
+  und `NonCancellable` beim Widget-Anstoß gibt es keinen Test; der Drawable-Test
+  prüft nur die Ladbarkeit; `self_improvement` ist nur über `else` abgedeckt.
+- **Doppelte Stilblöcke im Widget.** Fußzeile und „Heute steht nichts an“
+  wiederholen denselben `TextStyle`.
+- **Testbuchungen im Emulator.** Dort stehen aus Plan 6 eine Test-Einlösung über
+  −10 Punkte und aus Plan 8 eine Testbuchung über +1 Punkt. Aus der
+  Plan-9-Sichtprüfung kommen +30 Punkte auf inzwischen archivierten
+  „Plan9-Test“-Aktivitäten dazu.
+
+### Neu aus Plan 9
+
+- **Heatmap-Zusammenfassung fehlt im Bedienungshilfen-Baum.** Im Emulator
+  erscheinen nur die Wochentexte; das Canvas-Blatt mit der Zusammenfassung wird
+  vollständig vom Wochen-Overlay verdeckt, und Compose lässt verdeckte Knoten weg.
+  TalkBack kann die Zusammenfassung so nicht vorlesen.
+- **Widget-Wecker auf Android 14.** Das System dehnt das Alarmfenster
+  (`min_window` 10 Minuten); „überfällig“ kam im Emulator gut 2 Minuten nach der
+  Uhrzeit, um Mitternacht sind bis zu 10 Minuten möglich.
+- **Doppeltipp auf Rückgängig** nimmt bei gestapelten Einträgen zwei verschiedene
+  Aktionen zurück.
+- **Fehlermeldung in Belohnungen** wartet bis zu 3,8 s hinter einem offenen
+  Rückgängig-Toast.
+- **Leerer Archivbereich** erzeugt in Aktivitäten und Belohnungen einen
+  Abstand am Listenende.
+- **Editor-Fehlertoast.** Derselbe Speicherfehler zweimal hintereinander startet
+  die Anzeigedauer nicht neu.
+- **Ausnahmen nach erfolgreicher Buchung** (Alarm, Widget, Benachrichtigung) in
+  Heute und im Aktionsempfänger werden nicht gefangen.
+- **Stepper und Import.** Ein fehlgeschlagener Stepper-Schreibvorgang lädt
+  außerhalb der Sperre neu und kann die Import-Anzeige mitten im Import
+  freigeben; ein zweiter Import während eines laufenden lässt sie flackern.
+- **Widget-Abhaken.** Das Lesen der Fälligkeit in `WidgetAbhaken` ist
+  ungeschützt; ein Datenbankfehler entkommt dem `ActionCallback`.
+- **Widget über Mitternacht.** Eine offene Glance-Sitzung zeigt nach Mitternacht
+  bis zur nächsten Neuzeichnung die Liste von gestern (ein Tipp bucht nicht mehr);
+  `WidgetWecker` mischt die Zeitzone der Uhr mit `systemDefault`.
+- **Widget-Vorschau.** Kartenradius 28 dp statt des Systemradius, ohne
+  Medium-Schriftgewicht.
+- **Statistik.** Die Tagesklassifikation steht doppelt (`Heatmap.kt` und
+  `StatistikDarstellung.kt`), Wochenspalten werden bei 365 Tagen sehr schmal
+  (ca. 6 dp), ein Kommentar in `Heatmap.kt` nennt noch den Container als Träger
+  der Zusammenfassung.
+- **Testlücken.** Unter anderem: kein Test sichert `setWindow` (`FENSTER_MS`),
+  Fehlerpfade von Wiederherstellen/Rückgängig/Auslassen und der Abbruch im
+  Editor sind ungetestet, Statistik-Fixtures sind schmal.
+- **Kleinkram.** Stepper-Handler nutzen `value = copy` statt `update {}`;
+  `versuchen` um das Nachbereiten im Widget loggt nicht; ein Testname in
+  `BelohnungenViewModelTest` widerspricht seiner Zusicherung.
 
 ## Datenbank
 
@@ -237,7 +246,7 @@ Stornierung von Einlösungen) sind vorhanden und werden im Test gegen die
 exportierten Schemata validiert. `app/schemas/.../1.json` bis `5.json` sind
 eingecheckt und müssen es bleiben — der Migrationstest liest sie. Es ist
 **kein** `fallbackToDestructiveMigration` gesetzt, und das muss so bleiben: die
-Daten liegen ausschließlich lokal. Plan 7 und 8 haben weder Datenbank noch
+Daten liegen ausschließlich lokal. Plan 7 bis 9 haben weder Datenbank noch
 Backup-Schema geändert.
 
 **Eine Falle bei der nächsten Versionshebung:** Der erste Lauf, in dem Room eine
@@ -258,11 +267,12 @@ ab.
 ## So geht es weiter
 
 ```
-1. PR für Plan 8 öffnen und mergen (Branch worktree-redesign-plan8-widget).
+1. PRs für Plan 8 und Plan 9 öffnen und mergen (Branches
+   worktree-redesign-plan8-widget, dann worktree-redesign-plan9-aufraeumen).
 2. Auf einem echten Handy durchspielen.  ./gradlew :app:installDebug
    Was der Emulator nicht zeigen kann: ob die Erinnerung auf einem konkreten
    Gerät um 8:00 ankommt und der Hersteller sie nicht wegoptimiert, wie das
    Widget auf dem Launcher des Geräts aussieht und ob der Dateidialog bei
    Google Drive die .json-Datei anbietet (ungeprüft).
-3. Plan 9 schreiben: den Backlog unter „Offene Punkte“ abarbeiten.
+3. Den Restbestand unter „Offene Punkte“ sichten, zuerst die Heatmap-Zusammenfassung.
 ```
