@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocalFireDepartment
@@ -68,7 +69,7 @@ fun StatistikScreen(viewModel: StatistikViewModel = hiltViewModel()) {
         }
 
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(modifier = Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(30, 90, 365).forEach { tage ->
                     ZeitraumPille(
                         tage = tage,
@@ -88,13 +89,15 @@ fun StatistikScreen(viewModel: StatistikViewModel = hiltViewModel()) {
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Text(stringResource(R.string.heatmap_titel), fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        Text(
-                            text = zustand.gesamtQuote?.let { stringResource(R.string.statistik_quote, it) }
-                                ?: stringResource(R.string.statistik_keine_faelligkeiten),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = farben.accent,
-                        )
+                        if (zustand.geladen) {
+                            Text(
+                                text = zustand.gesamtQuote?.let { stringResource(R.string.statistik_quote, it) }
+                                    ?: stringResource(R.string.statistik_keine_faelligkeiten),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = farben.accent,
+                            )
+                        }
                     }
                     Heatmap(zustand.bilanzen, zustand.zeitraumTage)
                     HeatmapLegende()
@@ -111,27 +114,31 @@ fun StatistikScreen(viewModel: StatistikViewModel = hiltViewModel()) {
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Text(stringResource(R.string.punkteverlauf_titel), fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        Text(
-                            stringResource(R.string.punkteverlauf_max, zustand.punkteVerlauf.maxOfOrNull { it.second } ?: 0),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = farben.ink2,
-                        )
+                        if (zustand.geladen) {
+                            Text(
+                                stringResource(R.string.punkteverlauf_max, zustand.punkteVerlauf.maxOfOrNull { it.second } ?: 0),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = farben.ink2,
+                            )
+                        }
                     }
                     Punkteverlaufsdiagramm(zustand.punkteVerlauf)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(
-                            stringResource(R.string.punkteverlauf_von, zustand.zeitraumTage),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = farben.ink2,
-                        )
-                        Text(
-                            stringResource(R.string.punkteverlauf_heute),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = farben.ink2,
-                        )
+                    if (zustand.geladen) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(
+                                stringResource(R.string.punkteverlauf_von, zustand.zeitraumTage),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = farben.ink2,
+                            )
+                            Text(
+                                stringResource(R.string.punkteverlauf_heute),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = farben.ink2,
+                            )
+                        }
                     }
                 }
             }
@@ -141,7 +148,7 @@ fun StatistikScreen(viewModel: StatistikViewModel = hiltViewModel()) {
             AktivitaetStatistikKarte(zeile)
         }
 
-        if (zustand.zeilen.isEmpty()) {
+        if (zustand.geladen && zustand.zeilen.isEmpty()) {
             item {
                 Text(
                     stringResource(R.string.statistik_leer),
@@ -158,7 +165,11 @@ fun StatistikScreen(viewModel: StatistikViewModel = hiltViewModel()) {
 private fun ZeitraumPille(tage: Int, gewaehlt: Boolean, waehlen: () -> Unit) {
     val farben = DayOrganizerTheme.farben
     Surface(
-        modifier = Modifier.height(40.dp).selectable(selected = gewaehlt, role = Role.Tab, onClick = waehlen),
+        // Auf die Pillenform beschneiden, sonst zeichnet der Ripple ein Rechteck.
+        modifier = Modifier
+            .height(40.dp)
+            .clip(DayOrganizerFormen.pille)
+            .selectable(selected = gewaehlt, role = Role.Tab, onClick = waehlen),
         shape = DayOrganizerFormen.pille,
         color = if (gewaehlt) farben.accentSoft else Color.Transparent,
         contentColor = if (gewaehlt) farben.onAccentSoft else farben.ink2,
@@ -195,7 +206,9 @@ private fun HeatmapLegende() {
 private fun AktivitaetStatistikKarte(zeile: StatistikZeile) {
     val farben = DayOrganizerTheme.farben
     val statistik = zeile.statistik
-    val anteil = statistik.quote.coerceIn(0f, 1f)
+    // Eine neue Aktivitaet ohne erledigte/verpasste Faelligkeit hat keine Quote: "–" statt "0%".
+    val ohneQuote = statistik.erledigt + statistik.verpasst == 0
+    val anteil = if (ohneQuote) 0f else statistik.quote.coerceIn(0f, 1f)
 
     Surface(shape = DayOrganizerFormen.listenKarte, color = farben.surface, contentColor = farben.ink) {
         Column(
@@ -218,7 +231,11 @@ private fun AktivitaetStatistikKarte(zeile: StatistikZeile) {
                     Text(metaText(statistik.erledigt, statistik.verpasst), fontSize = 12.sp, color = farben.ink2)
                 }
                 Text(
-                    stringResource(R.string.aktivitaet_quote, (statistik.quote * 100).roundToInt()),
+                    if (ohneQuote) {
+                        stringResource(R.string.aktivitaet_quote_leer)
+                    } else {
+                        stringResource(R.string.aktivitaet_quote, (statistik.quote * 100).roundToInt())
+                    },
                     fontSize = 22.sp,
                     fontWeight = FontWeight.ExtraBold,
                 )

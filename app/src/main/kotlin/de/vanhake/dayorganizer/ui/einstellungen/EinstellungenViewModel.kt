@@ -48,7 +48,10 @@ data class EinstellungenZustand(
     val geladen: Boolean = false,
 )
 
-/** Ergebnis von Export oder Import, vom Screen einmalig als Snackbar gezeigt. */
+/**
+ * Ergebnis von Export oder Import, vom Screen einmalig als Toast gezeigt. Der Screen
+ * startet beim Eintreffen einen Timer (3 800 ms) und ruft danach [EinstellungenViewModel.meldungGezeigt].
+ */
 enum class Meldung {
     EXPORT_FERTIG,
     EXPORT_FEHLGESCHLAGEN,
@@ -146,8 +149,8 @@ class EinstellungenViewModel(
         viewModelScope.launch { neuLaden() }
     }
 
-    /** Vom Screen aufgerufen, nachdem die Snackbar gezeigt wurde -- sonst erschiene
-     * dieselbe Meldung bei jeder Rekomposition erneut. */
+    /** Vom Screen aufgerufen, wenn der Toast-Timer (MELDUNG_DAUER_MS) abgelaufen ist --
+     * sonst erschiene dieselbe Meldung bei jeder Rekomposition erneut. */
     fun meldungGezeigt() {
         _meldung.value = null
     }
@@ -306,22 +309,27 @@ class EinstellungenViewModel(
      * Kein neuLaden() nach Erfolg, sonst spraenge die Anzeige bei schnellen Tipps zurueck.
      */
     private fun uebernehmen(): Job = viewModelScope.launch {
-        val fehlgeschlagen = schreibSperre.withLock {
-            val z = _zustand.value
-            // DataStore.edit wirft bei Platten- oder Korruptionsfehlern eine IOException --
-            // unbehandelt reisst sie die App mit. Gleiches Muster wie
-            // AktivitaetBearbeitenViewModel.speichern(): protokollieren statt abstuerzen.
-            versuchen {
-                schreiben(
-                    lesen().copy(
-                        tagesbonusPunkte = z.tagesbonusPunkte,
-                        standardKulanzMinuten = z.standardKulanzMinuten,
-                        themeModus = z.themeModus,
-                    ),
-                )
-            }.onFailure { ausnahme ->
-                Log.w(TAG, "Speichern der Einstellungen fehlgeschlagen", ausnahme)
-            }.isFailure
+        // NonCancellable (wie bei importBestaetigen, Review-Fund W1): ein Tab-Wechsel direkt
+        // nach dem Tipp bricht viewModelScope ab; der Tipp ist aber schon angezeigt und darf
+        // nicht verloren gehen.
+        val fehlgeschlagen = withContext(NonCancellable) {
+            schreibSperre.withLock {
+                val z = _zustand.value
+                // DataStore.edit wirft bei Platten- oder Korruptionsfehlern eine IOException --
+                // unbehandelt reisst sie die App mit. Gleiches Muster wie
+                // AktivitaetBearbeitenViewModel.speichern(): protokollieren statt abstuerzen.
+                versuchen {
+                    schreiben(
+                        lesen().copy(
+                            tagesbonusPunkte = z.tagesbonusPunkte,
+                            standardKulanzMinuten = z.standardKulanzMinuten,
+                            themeModus = z.themeModus,
+                        ),
+                    )
+                }.onFailure { ausnahme ->
+                    Log.w(TAG, "Speichern der Einstellungen fehlgeschlagen", ausnahme)
+                }.isFailure
+            }
         }
         // Nur im Fehlerfall: die Anzeige zeigt wieder den tatsaechlich gespeicherten Stand.
         if (fehlgeschlagen) neuLaden()

@@ -16,8 +16,9 @@ import java.time.LocalDate
 
 /**
  * Flaechendiagramm des kumulierten Punktestands ueber den gewaehlten Zeitraum:
- * Linie in der Akzentfarbe, darunter eine weiche Flaeche bis zur Grundlinie. Aufbau und Groesse orientieren sich an Heatmap.kt, das direkt
- * darueber in derselben Art von Karte liegt.
+ * Linie in der Akzentfarbe, darunter eine weiche Flaeche bis zur Grundlinie. Aufbau und
+ * Groesse orientieren sich an Heatmap.kt, das direkt darueber in derselben Art von Karte
+ * liegt.
  */
 @Composable
 fun Punkteverlaufsdiagramm(verlauf: List<Pair<LocalDate, Int>>, modifier: Modifier = Modifier) {

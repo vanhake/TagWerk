@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -48,6 +49,7 @@ fun Navigationsleiste(
         Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(farben.line))
         Row(
             modifier = Modifier
+                .selectableGroup()
                 .fillMaxWidth()
                 .navigationBarsPadding()
                 .padding(start = 4.dp, top = 10.dp, end = 4.dp, bottom = 6.dp),

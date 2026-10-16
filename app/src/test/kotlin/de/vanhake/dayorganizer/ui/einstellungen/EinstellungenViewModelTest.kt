@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -113,20 +114,27 @@ class EinstellungenViewModelTest {
         // Verzoegertes Schreiben laesst die Laeufe schneller Tipps in virtueller Zeit
         // ueberlappen -- nur so zeigt sich, ob ein Schritt verloren ginge.
         schreibVerzoegerung: Long = 0,
+        // Verzoegerung je Aufruf in Aufrufreihenfolge (ueberschreibt schreibVerzoegerung,
+        // solange Eintraege da sind): erlaubt einen langsamen ersten und schnellen zweiten Lauf.
+        schreibVerzoegerungen: List<Long> = emptyList(),
         schreibFehler: Boolean = false,
-    ) = EinstellungenViewModel(
-        lesen = { speicher.stand.value },
-        schreiben = {
-            if (schreibVerzoegerung > 0) delay(schreibVerzoegerung)
-            if (schreibFehler) throw IOException("Platte voll")
-            speicher.stand.value = it
-        },
-        hinweiseLesen = hinweiseLesen,
-        backupDienst = backupDienst,
-        nachImport = nachImport,
-        ioDispatcher = ioDispatcher,
-        heute = heute,
-    )
+    ): EinstellungenViewModel {
+        var aufruf = 0
+        return EinstellungenViewModel(
+            lesen = { speicher.stand.value },
+            schreiben = {
+                val verzoegerung = schreibVerzoegerungen.getOrNull(aufruf++) ?: schreibVerzoegerung
+                if (verzoegerung > 0) delay(verzoegerung)
+                if (schreibFehler) throw IOException("Platte voll")
+                speicher.stand.value = it
+            },
+            hinweiseLesen = hinweiseLesen,
+            backupDienst = backupDienst,
+            nachImport = nachImport,
+            ioDispatcher = ioDispatcher,
+            heute = heute,
+        )
+    }
 
     @Test
     fun `die gespeicherten Werte erscheinen im Zustand`() = runTest(dispatcher) {
@@ -196,6 +204,23 @@ class EinstellungenViewModelTest {
 
         assertEquals(40, vm.zustand.value.tagesbonusPunkte)
         assertEquals(40, speicher.stand.value.tagesbonusPunkte)
+    }
+
+    // Beweist die Mutex: der erste Lauf ist langsam, der zweite schnell. Ohne Sperre
+    // schriebe der zweite 25 bei t=0 und der erste ueberholte ihn bei t=100 mit 20.
+    @Test
+    fun `ein langsamer frueherer Schreibvorgang ueberholt keinen spaeteren`() = runTest(dispatcher) {
+        val speicher = FakeSpeicher() // Start: Tagesbonus 15
+        val vm = viewModel(speicher, schreibVerzoegerungen = listOf(100, 0))
+        advanceUntilIdle() // Erstladen abwarten
+
+        vm.tagesbonusAendern(+1)
+        runCurrent()
+        vm.tagesbonusAendern(+1)
+        runCurrent()
+        advanceUntilIdle()
+
+        assertEquals(25, speicher.stand.value.tagesbonusPunkte)
     }
 
     // Review-Fokus 2

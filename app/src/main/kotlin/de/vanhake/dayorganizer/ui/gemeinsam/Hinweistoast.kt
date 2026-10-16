@@ -11,6 +11,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import de.vanhake.dayorganizer.R
 import de.vanhake.dayorganizer.ui.theme.DayOrganizerFesteFarben
@@ -21,7 +24,9 @@ data class Hinweistoast(val text: String, val kannRueckgaengig: Boolean)
 @Composable
 fun HinweistoastLeiste(toast: Hinweistoast, rueckgaengig: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        // Live-Region wie bei der frueheren Snackbar: ohne sie sagt TalkBack den Toast
+        // ("Backup gespeichert") nicht an.
+        modifier = modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
         shape = RoundedCornerShape(16.dp),
         color = DayOrganizerTheme.farben.inverse,
         contentColor = DayOrganizerTheme.farben.onInverse,

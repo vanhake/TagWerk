@@ -128,6 +128,7 @@
     <string name="punkteverlauf_von">vor %1$d Tagen</string>
     <string name="punkteverlauf_heute">heute</string>
     <string name="aktivitaet_quote">%1$d%%</string>
+    <string name="aktivitaet_quote_leer">–</string>
     <string name="statistik_leer">Noch keine Aktivitäten</string>
     <string name="tab_einstellungen">Optionen</string>
     <string name="optionen_abschnitt_punkte">Punkte</string>

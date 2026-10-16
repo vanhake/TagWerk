@@ -136,6 +136,26 @@ class StatistikViewModelTest {
         }
     }
 
+    // Vor der ersten Berechnung darf der Screen keine Leertexte zeigen ("Noch keine
+    // Aktivitaeten", "0 max."): der Anfangswert ist deshalb als ungeladen markiert.
+    @Test
+    fun `der Anfangszustand ist ungeladen, der berechnete geladen`() = runTest(dispatcher) {
+        val vm = StatistikViewModel(
+            aktivitaeten = FakeAktivitaetRepository(listOf(tabletten)),
+            faelligkeiten = FakeFaelligkeitRepository(),
+            buchungen = FakeBuchungRepository(),
+            rechner = StatistikRechner(),
+            uhr = uhr,
+            rechenDispatcher = dispatcher,
+        )
+
+        vm.zustand.test {
+            assertEquals(false, awaitItem().geladen)
+            assertEquals(true, awaitItem().geladen)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     @Test
     fun `ohne Faelligkeiten gibt es keine Gesamtquote`() = runTest(dispatcher) {
         val vm = StatistikViewModel(

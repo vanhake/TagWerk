@@ -71,6 +71,7 @@ class StatistikViewModel(
             zeitraumTage = tage,
             bilanzen = bilanzen,
             gesamtQuote = gesamtQuoteProzent(bilanzen),
+            geladen = true,
             zeilen = liste.map { aktivitaet ->
                 StatistikZeile(
                     aktivitaetId = aktivitaet.id,

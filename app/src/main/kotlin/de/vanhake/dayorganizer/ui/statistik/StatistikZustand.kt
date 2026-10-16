@@ -19,4 +19,6 @@ data class StatistikZustand(
     val zeilen: List<StatistikZeile> = emptyList(),
     val punkteVerlauf: List<Pair<LocalDate, Int>> = emptyList(),
     val gesamtQuote: Int? = null,
+    /** Erst nach der ersten Berechnung; davor zeigt der Screen keine Leertexte. */
+    val geladen: Boolean = false,
 )
