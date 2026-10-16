@@ -882,4 +882,42 @@ class EinstellungenViewModelTest {
             assertFalse(vm.zustand.value.importLaeuft)
             assertEquals(40, vm.zustand.value.tagesbonusPunkte)
         }
+
+    // Abschlussreview Plan 9: neuLaden() im Fehlerzweig von uebernehmen() baute einen frischen
+    // Zustand und gab damit die Stepper mitten im Import wieder frei.
+    @Test
+    fun `ein fehlgeschlagener Stepper-Schreibvorgang gibt die Bedienung waehrend eines Imports nicht frei`() =
+        runTest(dispatcher) {
+            val speicher = FakeSpeicher()
+            val tor = CompletableDeferred<Unit>()
+            val importTor = CompletableDeferred<Unit>()
+            var schreibAufrufe = 0
+            val vm = viewModel(
+                speicher,
+                backupDienst = FakeBackup(beimImportieren = { importTor.await() }),
+                schreibenFake = {
+                    if (schreibAufrufe++ == 0) {
+                        tor.await()
+                        throw IOException("Platte voll")
+                    }
+                    speicher.stand.value = it
+                },
+            )
+            advanceUntilIdle()
+            vm.importVorschauAnfordern { ByteArrayInputStream(backupText().toByteArray()) }.join()
+
+            vm.tagesbonusAendern(+1) // haengt im Schreibvorgang am Tor und scheitert danach
+            runCurrent()
+            vm.importBestaetigen() // wartet auf die Sperre, dann haengt der Import am importTor
+            runCurrent()
+            assertTrue(vm.zustand.value.importLaeuft)
+
+            tor.complete(Unit)
+            runCurrent() // Stepper scheitert und laedt neu, der Import haengt noch
+            assertTrue(vm.zustand.value.importLaeuft)
+
+            importTor.complete(Unit)
+            advanceUntilIdle()
+            assertFalse(vm.zustand.value.importLaeuft)
+        }
 }

@@ -31,6 +31,8 @@ class ToastStapelTest {
 
         assertSame(b, stapel.rueckgaengigNehmen())
         assertEquals("A", stapel.sichtbar.value?.text)
+        // Der zweite Tipp kommt nach der Doppeltipp-Sperre (siehe Tests unten).
+        bis(1_400)
         assertSame(a, stapel.rueckgaengigNehmen())
         assertNull(stapel.sichtbar.value)
     }
@@ -47,6 +49,8 @@ class ToastStapelTest {
 
         assertSame(b, stapel.rueckgaengigNehmen())
         assertNull(stapel.sichtbar.value)
+        // Nach der Doppeltipp-Sperre, damit das null wirklich vom Ablauf von A kommt.
+        bis(4_400)
         assertNull(stapel.rueckgaengigNehmen())
     }
 
@@ -100,5 +104,34 @@ class ToastStapelTest {
         bis(1_000)
         stapel.rueckgaengigNehmen()
         assertEquals("I", stapel.sichtbar.value?.text)
+    }
+
+    @Test
+    fun `ein Doppeltipp nimmt nur die juengste Aktion zurueck`() = runTest {
+        val stapel = ToastStapel(backgroundScope)
+        val a: suspend () -> Unit = {}
+        val b: suspend () -> Unit = {}
+        stapel.zeigen("A", a)
+        stapel.zeigen("B", b)
+
+        assertSame(b, stapel.rueckgaengigNehmen())
+        assertNull(stapel.rueckgaengigNehmen())
+        assertEquals("A", stapel.sichtbar.value?.text)
+    }
+
+    @Test
+    fun `nach der Sperre laesst sich der naechste Eintrag zuruecknehmen`() = runTest {
+        val stapel = ToastStapel(backgroundScope)
+        val a: suspend () -> Unit = {}
+        val b: suspend () -> Unit = {}
+        stapel.zeigen("A", a)
+        stapel.zeigen("B", b)
+
+        assertSame(b, stapel.rueckgaengigNehmen())
+        assertNull(stapel.rueckgaengigNehmen())
+        assertEquals("A", stapel.sichtbar.value?.text)
+        advanceTimeBy(400)
+        runCurrent()
+        assertSame(a, stapel.rueckgaengigNehmen())
     }
 }

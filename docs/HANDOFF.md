@@ -87,10 +87,13 @@ Erinnerung überhaupt. Das Widget (Glance) rechnet seinen Zustand in reinen
 Funktionen (`WidgetZustand`, `WidgetMasse`) und liest die Farben über
 `widgetFarben(modus)` aus denselben Objekten wie die App. `ToastStapel` hält den
 Toast-Zustand der Screens: Rückgängig-Einträge stapeln sich und laufen je nach
-3 800 ms ab, Info-Einträge warten, bis kein Rückgängig mehr offen ist.
-`WidgetWecker` stellt einen ungenauen `RTC`-Alarm auf den nächsten Umschaltpunkt
+3 800 ms ab, Info-Einträge warten, bis kein Rückgängig mehr offen ist; ein
+Doppeltipp binnen 400 ms nimmt nur einen Eintrag zurück.
+`WidgetWecker` stellt einen `RTC`-Alarm auf den nächsten Umschaltpunkt
 des Widgets (Uhrzeit eines offenen Eintrags, sonst Mitternacht), damit
-„überfällig“ und der Tageswechsel ohne Datenänderung erscheinen. Jede Klasse, die die
+„überfällig“ und der Tageswechsel ohne Datenänderung erscheinen. Der Alarm ist
+exakt (`USE_EXACT_ALARM`, nicht weckend), wenn exakte Alarme erlaubt sind, sonst
+`setWindow`. Jede Klasse, die die
 Uhrzeit braucht, bekommt eine `java.time.Clock` injiziert — daran hängt die
 gesamte Testbarkeit.
 
@@ -200,28 +203,25 @@ Restbestand nach Plan 9. Nichts davon blockiert einen Merge.
 
 ### Neu aus Plan 9
 
-- **Heatmap-Zusammenfassung fehlt im Bedienungshilfen-Baum.** Im Emulator
-  erscheinen nur die Wochentexte; das Canvas-Blatt mit der Zusammenfassung wird
-  vollständig vom Wochen-Overlay verdeckt, und Compose lässt verdeckte Knoten weg.
-  TalkBack kann die Zusammenfassung so nicht vorlesen.
-- **Widget-Wecker auf Android 14.** Das System dehnt das Alarmfenster
-  (`min_window` 10 Minuten); „überfällig“ kam im Emulator gut 2 Minuten nach der
-  Uhrzeit, um Mitternacht sind bis zu 10 Minuten möglich.
-- **Doppeltipp auf Rückgängig** nimmt bei gestapelten Einträgen zwei verschiedene
-  Aktionen zurück.
 - **Fehlermeldung in Belohnungen** wartet bis zu 3,8 s hinter einem offenen
   Rückgängig-Toast.
 - **Leerer Archivbereich** erzeugt in Aktivitäten und Belohnungen einen
   Abstand am Listenende.
 - **Editor-Fehlertoast.** Derselbe Speicherfehler zweimal hintereinander startet
   die Anzeigedauer nicht neu.
-- **Ausnahmen nach erfolgreicher Buchung** (Alarm, Widget, Benachrichtigung) in
-  Heute und im Aktionsempfänger werden nicht gefangen.
-- **Stepper und Import.** Ein fehlgeschlagener Stepper-Schreibvorgang lädt
-  außerhalb der Sperre neu und kann die Import-Anzeige mitten im Import
-  freigeben; ein zweiter Import während eines laufenden lässt sie flackern.
+- **Fehler-Toast hinter Rückgängig.** Ein Fehler-Toast wartet hinter einem offenen
+  Rückgängig im selben Platz; wer dort noch einmal tippt, nimmt womöglich ein
+  zweites Rückgängig zurück.
+- **Doppeltipp auf „Archivieren“** im Rückfragedialog erzeugt zwei Toasts.
+- **Stepper und Import.** Ein zweiter Import während eines laufenden lässt die
+  Import-Anzeige flackern.
 - **Widget-Abhaken.** Das Lesen der Fälligkeit in `WidgetAbhaken` ist
-  ungeschützt; ein Datenbankfehler entkommt dem `ActionCallback`.
+  ungeschützt; Glance fängt einen Datenbankfehler im `ActionCallback` und
+  protokolliert ihn, Folge ist nur, dass das Widget nicht neu zeichnet.
+- **Widget-Wecker pro Sitzung.** Das Widget plant den Wecker nur einmal pro
+  Glance-Sitzung neu.
+- **Widgethöhe.** Die minimale Widgethöhe ist auf dem Gerät nicht geprüft; das
+  Höhenbudget ist per Unit-Test abgedeckt.
 - **Widget über Mitternacht.** Eine offene Glance-Sitzung zeigt nach Mitternacht
   bis zur nächsten Neuzeichnung die Liste von gestern (ein Tipp bucht nicht mehr);
   `WidgetWecker` mischt die Zeitzone der Uhr mit `systemDefault`.
@@ -229,10 +229,8 @@ Restbestand nach Plan 9. Nichts davon blockiert einen Merge.
   Medium-Schriftgewicht.
 - **Statistik.** Die Tagesklassifikation steht doppelt (`Heatmap.kt` und
   `StatistikDarstellung.kt`), Wochenspalten werden bei 365 Tagen sehr schmal
-  (ca. 6 dp), ein Kommentar in `Heatmap.kt` nennt noch den Container als Träger
-  der Zusammenfassung.
-- **Testlücken.** Unter anderem: kein Test sichert `setWindow` (`FENSTER_MS`),
-  Fehlerpfade von Wiederherstellen/Rückgängig/Auslassen und der Abbruch im
+  (ca. 6 dp).
+- **Testlücken.** Unter anderem: Fehlerpfade von Wiederherstellen/Rückgängig/Auslassen und der Abbruch im
   Editor sind ungetestet, Statistik-Fixtures sind schmal.
 - **Kleinkram.** Stepper-Handler nutzen `value = copy` statt `update {}`;
   `versuchen` um das Nachbereiten im Widget loggt nicht; ein Testname in
@@ -274,5 +272,5 @@ ab.
    Gerät um 8:00 ankommt und der Hersteller sie nicht wegoptimiert, wie das
    Widget auf dem Launcher des Geräts aussieht und ob der Dateidialog bei
    Google Drive die .json-Datei anbietet (ungeprüft).
-3. Den Restbestand unter „Offene Punkte“ sichten, zuerst die Heatmap-Zusammenfassung.
+3. Den Restbestand unter „Offene Punkte“ sichten.
 ```

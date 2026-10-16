@@ -28,6 +28,11 @@ class ToastStapel(
     private var infoText: String? = null
     private var infoJob: Job? = null
 
+    // Laeuft nach jedem erfolgreichen Nehmen DOPPELTIPP_SPERRE_MS lang: ein schneller
+    // Doppeltipp auf Rueckgaengig nimmt sonst zwei verschiedene gestapelte Aktionen zurueck.
+    // Ein Job im scope statt einer Uhr, damit in Tests die virtuelle Zeit gilt.
+    private var sperre: Job? = null
+
     private val _sichtbar = MutableStateFlow<Hinweistoast?>(null)
     val sichtbar: StateFlow<Hinweistoast?> = _sichtbar.asStateFlow()
 
@@ -52,10 +57,13 @@ class ToastStapel(
     }
 
     /** Nimmt den obersten noch laufenden Rueckgaengig-Eintrag vom Stapel und liefert seine
-     * Aktion; null, wenn keiner offen ist. Fuehrt die Aktion NICHT aus. */
+     * Aktion; null, wenn keiner offen ist oder das letzte Nehmen weniger als
+     * [DOPPELTIPP_SPERRE_MS] her ist. Fuehrt die Aktion NICHT aus. */
     fun rueckgaengigNehmen(): (suspend () -> Unit)? {
+        if (sperre?.isActive == true) return null
         val eintrag = offene.removeLastOrNull() ?: return null
         eintrag.ablauf?.cancel()
+        sperre = scope.launch { delay(DOPPELTIPP_SPERRE_MS) }
         aktualisieren()
         return eintrag.aktion
     }
@@ -87,5 +95,6 @@ class ToastStapel(
 
     companion object {
         const val TOAST_DAUER_MS = 3_800L
+        const val DOPPELTIPP_SPERRE_MS = 400L
     }
 }

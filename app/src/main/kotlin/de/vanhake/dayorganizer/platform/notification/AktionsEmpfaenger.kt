@@ -44,9 +44,13 @@ class AktionsEmpfaenger : BroadcastReceiver() {
                 }.onFailure { Log.w(TAG, "Benachrichtigungsaktion fehlgeschlagen", it) }.isSuccess
                 // Bei einem Fehlschlag bleibt die Benachrichtigung stehen: der Nutzer sieht,
                 // dass nichts passiert ist, und kann es erneut versuchen. Alarm und Widget
-                // werden trotzdem angestossen, sie sind harmlos und halten den Rest aktuell.
+                // werden trotzdem angestossen, damit der Rest aktuell bleibt.
                 if (geklappt) notifier.verstecke(aktion.faelligkeitId)
-                alarmPlaner.neuPlanen()
+                // neuPlanen() liest die Datenbank: derselbe E/A-Fehler, an dem die Aktion
+                // gescheitert ist, trifft sehr wahrscheinlich auch hier -- ungefangen risse
+                // er den Prozess aus einem Benachrichtigungstipp heraus mit.
+                versuchen { alarmPlaner.neuPlanen() }
+                    .onFailure { Log.w(TAG, "Neuplanen der Alarme fehlgeschlagen", it) }
                 widgetAktualisierung.anstossen()
             } finally {
                 fertig.finish()

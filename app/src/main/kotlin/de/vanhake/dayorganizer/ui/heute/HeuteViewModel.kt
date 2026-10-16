@@ -148,14 +148,13 @@ class HeuteViewModel(
         anzeige.verstecke(faelligkeitId)
         when (protokoll) {
             is ErledigungsProtokoll.Gebucht -> {
-                alarmNeuPlanen()
+                folgeschritt { alarmNeuPlanen() }
                 widgetAnstossen()
                 val gesamt = protokoll.buchungen.sumOf { it.betrag }
                 val text = if (protokoll.buchungen.any { it.art == BuchungsArt.TAGESBONUS }) {
                     HeuteToastTexte.tagesbonusToast(gesamt)
                 } else {
-                    val name = aktivitaeten.nachId(protokoll.faelligkeitVorher.aktivitaetId)?.name.orEmpty()
-                    HeuteToastTexte.erledigtToast(gesamt, name)
+                    HeuteToastTexte.erledigtToast(gesamt, nameVon(protokoll.faelligkeitVorher.aktivitaetId))
                 }
                 stapel.zeigen(text) { erledigenRueckgaengig(protokoll) }
             }
@@ -175,10 +174,9 @@ class HeuteViewModel(
         // null liefert (Faelligkeit unbekannt oder schon nicht mehr OFFEN).
         anzeige.verstecke(faelligkeitId)
         vorher ?: return@launch
-        alarmNeuPlanen()
+        folgeschritt { alarmNeuPlanen() }
         widgetAnstossen()
-        val name = aktivitaeten.nachId(vorher.aktivitaetId)?.name.orEmpty()
-        stapel.zeigen(HeuteToastTexte.ausgelassenToast(name)) {
+        stapel.zeigen(HeuteToastTexte.ausgelassenToast(nameVon(vorher.aktivitaetId))) {
             auslassenRueckgaengig(vorher)
         }
     }
@@ -192,9 +190,24 @@ class HeuteViewModel(
             stapel.zeigen(HeuteToastTexte.RUECKGAENGIG_FEHLGESCHLAGEN)
             return@launch
         }
-        alarmNeuPlanen()
+        folgeschritt { alarmNeuPlanen() }
         widgetAnstossen()
     }
+
+    // Die Folgeschritte laufen erst nach erfolgreicher Buchung bzw. erfolgreichem
+    // Rueckgaengig: ein Fehlschlag hier wird nur protokolliert und zeigt keinen
+    // "fehlgeschlagen"-Toast, denn die eigentliche Aktion ist ja erfolgt. Ungefangen
+    // risse er dagegen viewModelScope und damit den Toast mit Rueckgaengig mit.
+    private suspend fun folgeschritt(schritt: suspend () -> Unit) {
+        versuchen { schritt() }.onFailure { Log.w(TAG, "Folgeschritt fehlgeschlagen", it) }
+    }
+
+    /** Leerer Name, wenn die Aktivitaet fehlt oder nicht lesbar ist -- wie bisher bei orEmpty(). */
+    private suspend fun nameVon(aktivitaetId: Long): String =
+        versuchen { aktivitaeten.nachId(aktivitaetId)?.name }
+            .onFailure { Log.w(TAG, "Name der Aktivitaet nicht lesbar", it) }
+            .getOrNull()
+            .orEmpty()
 
     private companion object {
         const val TAG = "HeuteViewModel"

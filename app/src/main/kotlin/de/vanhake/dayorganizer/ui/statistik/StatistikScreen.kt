@@ -34,8 +34,10 @@ import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.traversalIndex
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -101,8 +103,17 @@ fun StatistikScreen(viewModel: StatistikViewModel = hiltViewModel()) {
                             )
                         }
                     }
-                    Heatmap(zustand.bilanzen, zustand.zeitraumTage)
-                    HeatmapLegende(heatmapVorlesetext(zustand.bilanzen))
+                    // Eigene Traversal-Gruppe: nur darin wirkt der traversalIndex der Legende,
+                    // und TalkBack liest die Zusammenfassung vor den einzelnen Wochen, ohne
+                    // dass die Legende auch vor den Kartentitel rutscht.
+                    Column(
+                        modifier = Modifier.semantics { isTraversalGroup = true },
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                    ) {
+                        Heatmap(zustand.bilanzen, zustand.zeitraumTage)
+                        // Vor dem Laden gaebe es nur "0 Tage: 0 vollständig, ..." zu hoeren.
+                        HeatmapLegende(if (zustand.geladen) heatmapVorlesetext(zustand.bilanzen) else null)
+                    }
                 }
             }
         }
@@ -184,12 +195,19 @@ private fun ZeitraumPille(tage: Int, gewaehlt: Boolean, waehlen: () -> Unit) {
 }
 
 @Composable
-private fun HeatmapLegende(zusammenfassung: String) {
+private fun HeatmapLegende(zusammenfassung: String?) {
     val farben = DayOrganizerTheme.farben
     // Die Legende traegt die Zusammenfassung der Heatmap: die Grafik selbst ist vom
-    // Wochen-Overlay verdeckt und faellt deshalb aus dem Accessibility-Baum.
+    // Wochen-Overlay verdeckt und faellt deshalb aus dem Accessibility-Baum. Ohne
+    // Zusammenfassung (vor dem Laden) bleibt sie stumm. traversalIndex -1 stellt sie
+    // in ihrer Gruppe vor die Wochen.
     Row(
-        modifier = Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = zusammenfassung },
+        modifier = Modifier
+            .fillMaxWidth()
+            .clearAndSetSemantics {
+                traversalIndex = -1f
+                if (zusammenfassung != null) contentDescription = zusammenfassung
+            },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
     ) {

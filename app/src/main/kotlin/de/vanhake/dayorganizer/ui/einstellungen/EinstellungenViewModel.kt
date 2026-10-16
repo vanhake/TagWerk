@@ -375,15 +375,21 @@ class EinstellungenViewModel(
         if (fehlgeschlagen) neuLaden()
     }
 
+    // importLaeuft bleibt unangetastet: scheitert ein Stepper-Schreibvorgang waehrend eines
+    // Imports, gaebe ein frischer Zustand die Bedienung mitten im Import frei. Der Import
+    // setzt die Sperre selbst in seinem finally zurueck.
     private suspend fun neuLaden() {
         val aktuell = lesen()
-        _zustand.value = EinstellungenZustand(
-            tagesbonusPunkte = aktuell.tagesbonusPunkte,
-            standardKulanzMinuten = aktuell.standardKulanzMinuten,
-            themeModus = aktuell.themeModus,
-            hinweise = hinweiseLesen(),
-            geladen = true,
-        )
+        val hinweise = hinweiseLesen()
+        _zustand.update {
+            it.copy(
+                tagesbonusPunkte = aktuell.tagesbonusPunkte,
+                standardKulanzMinuten = aktuell.standardKulanzMinuten,
+                themeModus = aktuell.themeModus,
+                hinweise = hinweise,
+                geladen = true,
+            )
+        }
     }
 
     companion object {

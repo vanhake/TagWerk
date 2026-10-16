@@ -275,6 +275,21 @@ class HeuteViewModelTest {
     }
 
     @Test
+    fun `scheitert das Neuplanen nach dem Abhaken bleibt die Buchung und der Toast erscheint`() = runTest(dispatcher) {
+        val faelligkeiten = FakeFaelligkeitRepository(listOf(morgens))
+        val vm = viewModel(
+            faelligkeiten, FakeBuchungRepository(),
+            alarmNeuPlanen = { throw IOException("Datenbank nicht erreichbar") },
+        )
+
+        vm.erledigen(10)
+        dispatcher.scheduler.runCurrent()
+
+        assertEquals(FaelligkeitStatus.ERLEDIGT, faelligkeiten.stand.value.single().status)
+        assertEquals(true, vm.toast.value?.kannRueckgaengig)
+    }
+
+    @Test
     fun `Rueckgaengig macht die Erledigung und ihre Buchungen wieder rueckgaengig`() = runTest(dispatcher) {
         val faelligkeiten = FakeFaelligkeitRepository(listOf(morgens))
         val buchungen = FakeBuchungRepository()
@@ -346,6 +361,10 @@ class HeuteViewModelTest {
         vm.erledigen(11)
         dispatcher.scheduler.runCurrent()
         vm.rueckgaengig()
+        dispatcher.scheduler.runCurrent()
+        // Zweiter Tipp nach der Doppeltipp-Sperre (ToastStapel.DOPPELTIPP_SPERRE_MS), aber
+        // weit innerhalb der 3.8 s beider Toasts.
+        dispatcher.scheduler.advanceTimeBy(400)
         dispatcher.scheduler.runCurrent()
         vm.rueckgaengig()
         dispatcher.scheduler.runCurrent()
