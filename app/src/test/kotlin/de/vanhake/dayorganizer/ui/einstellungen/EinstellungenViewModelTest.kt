@@ -253,6 +253,28 @@ class EinstellungenViewModelTest {
         assertEquals(15, speicher.stand.value.tagesbonusPunkte)
     }
 
+    // Vor dem Erstladen zeigt der Zustand nur Defaults: ein Tipp wuerde diese Defaults
+    // (plus Schritt) speichern und die echten gespeicherten Werte still ueberschreiben.
+    @Test
+    fun `Eingaben vor dem Erstladen werden ignoriert und ueberschreiben nichts`() = runTest(dispatcher) {
+        val gespeichert = Einstellungen(tagesbonusPunkte = 30, standardKulanzMinuten = 45, themeModus = ThemeModus.DUNKEL)
+        val speicher = FakeSpeicher(gespeichert)
+        // Das Erstladen suspendiert (wie echtes Hinweis-Lesen), damit der Schreibvorgang
+        // des Tipps dazwischen laufen koennte.
+        val vm = viewModel(speicher, hinweiseLesen = { delay(100); emptyList() })
+
+        vm.tagesbonusAendern(+1)
+        vm.themeModusAendern(ThemeModus.HELL)
+        advanceUntilIdle()
+
+        assertEquals(gespeichert, speicher.stand.value)
+        val zustand = vm.zustand.value
+        assertEquals(30, zustand.tagesbonusPunkte)
+        assertEquals(45, zustand.standardKulanzMinuten)
+        assertEquals(ThemeModus.DUNKEL, zustand.themeModus)
+        assertTrue(zustand.geladen)
+    }
+
     @Test
     fun `ein erfolgreicher Export meldet EXPORT_FERTIG`() = runTest(dispatcher) {
         val backup = FakeBackup()

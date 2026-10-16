@@ -44,6 +44,8 @@ data class EinstellungenZustand(
     val standardKulanzMinuten: Int = 60,
     val themeModus: ThemeModus = ThemeModus.HELL,
     val hinweise: List<Hinweis> = emptyList(),
+    /** Erst nach dem ersten Laden zeigt der Zustand gespeicherte Werte statt Defaults. */
+    val geladen: Boolean = false,
 )
 
 /** Ergebnis von Export oder Import, vom Screen einmalig als Snackbar gezeigt. */
@@ -259,6 +261,7 @@ class EinstellungenViewModel(
     /** [schritt] ist +1 oder -1 und wird mit [STEPPER_SCHRITT] multipliziert. */
     fun tagesbonusAendern(schritt: Int): Job {
         val z = _zustand.value
+        if (!z.geladen) return ignoriert()
         _zustand.value = z.copy(
             tagesbonusPunkte = (z.tagesbonusPunkte + schritt * STEPPER_SCHRITT).coerceAtLeast(STEPPER_MIN),
         )
@@ -267,6 +270,7 @@ class EinstellungenViewModel(
 
     fun kulanzAendern(schritt: Int): Job {
         val z = _zustand.value
+        if (!z.geladen) return ignoriert()
         _zustand.value = z.copy(
             standardKulanzMinuten = (z.standardKulanzMinuten + schritt * STEPPER_SCHRITT)
                 .coerceAtLeast(STEPPER_MIN),
@@ -276,6 +280,7 @@ class EinstellungenViewModel(
 
     /** Wirkt wie die Stepper sofort: ein Farbmodus ist ein Umschalter, kein Formularfeld. */
     fun themeModusAendern(neu: ThemeModus): Job {
+        if (!_zustand.value.geladen) return ignoriert()
         _zustand.value = _zustand.value.copy(themeModus = neu)
         return uebernehmen()
     }
@@ -288,6 +293,10 @@ class EinstellungenViewModel(
     fun beimSichtbarwerden() {
         viewModelScope.launch { _zustand.value = _zustand.value.copy(hinweise = hinweiseLesen()) }
     }
+
+    /** Vor dem Erstladen zeigt der Zustand nur Defaults; ein Tipp wuerde sie speichern und
+     * die echten Werte still ueberschreiben. Deshalb zaehlt er nicht (kein Schreibvorgang). */
+    private fun ignoriert(): Job = Job().apply { complete() }
 
     /**
      * Schreibt den *aktuellen* Zustand, nicht den zum Tipp-Zeitpunkt: Die Anzeige wurde
@@ -325,6 +334,7 @@ class EinstellungenViewModel(
             standardKulanzMinuten = aktuell.standardKulanzMinuten,
             themeModus = aktuell.themeModus,
             hinweise = hinweiseLesen(),
+            geladen = true,
         )
     }
 
