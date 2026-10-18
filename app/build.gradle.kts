@@ -7,6 +7,16 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+// Versionsnummer je Build: in der CI ist es die fortlaufende Run-Nummer von
+// GitHub Actions, lokal die Zahl der Commits. Beides steigt nur, darum laesst
+// sich jede neuere APK ueber die vorige installieren. Lokale Builds tragen den
+// Zusatz "-lokal", damit sie sich nicht mit einem CI-Build verwechseln lassen.
+val ciBuildNummer = providers.environmentVariable("GITHUB_RUN_NUMBER").orNull?.toIntOrNull()
+val buildNummer = ciBuildNummer ?: runCatching {
+    providers.exec { commandLine("git", "rev-list", "--count", "HEAD") }
+        .standardOutput.asText.get().trim().toInt()
+}.getOrDefault(1)
+
 android {
     namespace = "de.vanhake.dayorganizer"
     compileSdk = 35
@@ -15,8 +25,8 @@ android {
         applicationId = "de.vanhake.dayorganizer"
         minSdk = 33
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = buildNummer
+        versionName = "0.1.$buildNummer" + if (ciBuildNummer == null) "-lokal" else ""
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ksp { arg("room.schemaLocation", "$projectDir/schemas") }
     }
@@ -38,7 +48,10 @@ android {
         }
     }
 
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
 
     sourceSets {
         getByName("main").java.srcDirs("src/main/kotlin")

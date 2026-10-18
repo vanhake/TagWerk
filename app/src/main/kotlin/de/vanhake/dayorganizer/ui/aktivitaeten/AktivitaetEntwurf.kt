@@ -58,8 +58,17 @@ data class AktivitaetEntwurf(
     val erstelltAm: LocalDate? = null,
 ) {
 
-    fun punkteAendern(schritt: Int): AktivitaetEntwurf =
-        copy(basisPunkte = (basisPunkte + schritt).coerceAtLeast(PUNKTE_MIN))
+    /** Fuenferschritte, nie unter [PUNKTE_MIN]. Ein geladener Altwert ausserhalb des Rasters
+     * (etwa 7) springt beim ersten Schritt auf den naechsten Fuenfer in Schrittrichtung (10
+     * bzw. 5), statt das krumme Raster mitzuschleppen. */
+    fun punkteAendern(schritt: Int): AktivitaetEntwurf {
+        val raster = if (schritt > 0) {
+            Math.floorDiv(basisPunkte, PUNKTE_SCHRITT) * PUNKTE_SCHRITT
+        } else {
+            -Math.floorDiv(-basisPunkte, PUNKTE_SCHRITT) * PUNKTE_SCHRITT
+        }
+        return copy(basisPunkte = (raster + schritt * PUNKTE_SCHRITT).coerceAtLeast(PUNKTE_MIN))
+    }
 
     /** coerceIn statt nur einer Untergrenze: der Prototyp begrenzt auf 12 Stunden. Ein
      * geladener Altwert darueber bleibt stehen, bis der Stepper bedient wird. */
@@ -141,7 +150,8 @@ data class AktivitaetEntwurf(
     )
 
     companion object {
-        const val PUNKTE_MIN = 1
+        const val PUNKTE_SCHRITT = 5
+        const val PUNKTE_MIN = 5
         const val INTERVALL_MIN = 1
         const val INTERVALL_MAX = 12
         const val ZIEL_MIN = 1

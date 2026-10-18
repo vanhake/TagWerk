@@ -89,11 +89,22 @@ class AktivitaetEntwurfTest {
     }
 
     @Test
-    fun `Punkte bleiben beim Verringern mindestens 1`() {
-        val entwurf = gueltig.copy(basisPunkte = 1)
+    fun `Punkte aendern sich in Fuenferschritten und bleiben mindestens 5`() {
+        val entwurf = gueltig.copy(basisPunkte = 10)
 
-        assertEquals(1, entwurf.punkteAendern(-1).basisPunkte)
-        assertEquals(2, entwurf.punkteAendern(+1).basisPunkte)
+        assertEquals(15, entwurf.punkteAendern(+1).basisPunkte)
+        assertEquals(5, entwurf.punkteAendern(-1).basisPunkte)
+        assertEquals(5, entwurf.copy(basisPunkte = 5).punkteAendern(-1).basisPunkte)
+    }
+
+    @Test
+    fun `krumme Altwerte springen aufs Fuenferraster`() {
+        val krumm = gueltig.copy(basisPunkte = 7)
+
+        assertEquals(10, krumm.punkteAendern(+1).basisPunkte)
+        assertEquals(5, krumm.punkteAendern(-1).basisPunkte)
+        assertEquals(5, gueltig.copy(basisPunkte = 3).punkteAendern(+1).basisPunkte)
+        assertEquals(5, gueltig.copy(basisPunkte = 3).punkteAendern(-1).basisPunkte)
     }
 
     @Test

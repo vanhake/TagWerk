@@ -49,6 +49,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.vanhake.dayorganizer.BuildConfig
 import de.vanhake.dayorganizer.R
 import de.vanhake.dayorganizer.data.ThemeModus
 import de.vanhake.dayorganizer.platform.permission.einstellungsIntent
@@ -233,6 +234,13 @@ fun EinstellungenScreen(viewModel: EinstellungenViewModel = hiltViewModel()) {
             Text(
                 stringResource(R.string.optionen_fusszeile),
                 modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                textAlign = TextAlign.Center,
+                fontSize = 12.sp,
+                color = farben.ink2,
+            )
+            Text(
+                stringResource(R.string.optionen_version, BuildConfig.VERSION_NAME),
+                modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center,
                 fontSize = 12.sp,
                 color = farben.ink2,
