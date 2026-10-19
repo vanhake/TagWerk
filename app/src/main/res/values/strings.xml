@@ -153,6 +153,7 @@
     <string name="kulanz_titel">Kulanzfenster</string>
     <string name="kulanz_hinweis">Standard in Minuten</string>
     <string name="backup_einlesen_hinweis">ersetzt den aktuellen Bestand</string>
+    <string name="optionen_version">Version %1$s</string>
     <string name="optionen_fusszeile">Läuft vollständig lokal · kein Konto, kein Server</string>
     <string name="theme_hell">Hell</string>
     <string name="theme_dunkel">Dunkel</string>

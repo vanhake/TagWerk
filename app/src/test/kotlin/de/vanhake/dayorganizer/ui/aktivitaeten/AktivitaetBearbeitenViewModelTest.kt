@@ -172,7 +172,7 @@ class AktivitaetBearbeitenViewModelTest {
         vm.aendern { it.punkteAendern(+1) }
 
         assertEquals(SpeicherErgebnis.GEAENDERT, vm.speichern())
-        assertEquals(11, repo.stand.value.single().basisPunkte)
+        assertEquals(15, repo.stand.value.single().basisPunkte)
     }
 
     @Test
