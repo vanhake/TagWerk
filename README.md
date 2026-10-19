@@ -1,4 +1,4 @@
-# DayOrganizer
+# Tagwerk
 
 Eine Android-App für wiederkehrende Alltagsaktivitäten, an die man erinnert
 werden möchte — Tabletten morgens und abends, Medizin zum Mittagessen, dreimal
@@ -8,6 +8,11 @@ Belohnungen aus, die man sich selbst gesetzt hat.
 Die App läuft vollständig lokal: kein Server, kein Konto, keine
 Netzwerkberechtigung. Sie ist für den privaten Gebrauch gedacht und wird als
 APK verteilt, nicht über den Play Store.
+
+Bis Oktober 2026 hieß die App „DayOrganizer“. Intern trägt sie diesen Namen
+weiter: Die Paketkennung `de.vanhake.dayorganizer`, die Kotlin-Pakete und der
+Datenbankname bleiben unverändert, damit eine installierte App ihre Daten
+behält und alte Backups importierbar bleiben.
 
 ## Stand
 
