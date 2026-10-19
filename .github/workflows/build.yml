@@ -50,7 +50,7 @@ jobs:
       - name: APK als Artefakt ablegen
         uses: actions/upload-artifact@v4
         with:
-          name: dayorganizer-debug-${{ github.run_number }}-${{ github.sha }}
+          name: tagwerk-debug-${{ github.run_number }}-${{ github.sha }}
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 90

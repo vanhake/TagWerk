@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">DayOrganizer</string>
+    <string name="app_name">Tagwerk</string>
     <string name="kanal_erinnerungen_name">Erinnerungen</string>
     <string name="kanal_erinnerungen_beschreibung">Erinnerungen an deine täglichen Aktivitäten</string>
     <string name="aktion_erledigt">Erledigt</string>
@@ -13,7 +13,7 @@
     <string name="warnung_exakte_alarme_titel">Exakte Alarme sind nicht erlaubt</string>
     <string name="warnung_exakte_alarme_text">Erinnerungen können dadurch deutlich verspätet kommen.</string>
     <string name="warnung_akku_titel">Akkuoptimierung ist aktiv</string>
-    <string name="warnung_akku_text">Das System kann Erinnerungen unterdrücken. Nimm DayOrganizer von der Optimierung aus.</string>
+    <string name="warnung_akku_text">Das System kann Erinnerungen unterdrücken. Nimm Tagwerk von der Optimierung aus.</string>
     <string name="warnung_waechter_titel">Selbstheilung reagiert nicht</string>
     <string name="warnung_waechter_text">Die App konnte sich lange nicht selbst aktualisieren. Erinnerungen könnten bald ausbleiben.</string>
     <string name="warnung_beheben">Einstellung öffnen</string>
@@ -159,7 +159,7 @@
     <string name="theme_dunkel">Dunkel</string>
     <string name="backup_exportieren">Backup speichern</string>
     <string name="backup_importieren">Backup einlesen</string>
-    <string name="backup_dateiname">dayorganizer-backup-%1$s.json</string>
+    <string name="backup_dateiname">tagwerk-backup-%1$s.json</string>
     <string name="backup_export_fertig">Backup gespeichert</string>
     <string name="backup_export_fehlgeschlagen">Backup konnte nicht gespeichert werden</string>
     <string name="backup_import_fertig">Backup eingelesen</string>
