@@ -58,7 +58,7 @@ class AktivitaetenViewModelTest {
             aktivitaeten, faelligkeiten, erinnerungen, ZeitplanRechner(), uhr,
         )
         val neuPlanen = AktivitaetNeuPlanen(
-            faelligkeiten, erinnerungen, materialisieren, uhr,
+            faelligkeiten, erinnerungen, aktivitaeten, materialisieren, uhr,
             alarmNeuPlanen = {},
             widgetAnstossen = {},
         )

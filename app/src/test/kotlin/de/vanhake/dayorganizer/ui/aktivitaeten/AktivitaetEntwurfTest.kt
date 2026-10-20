@@ -321,4 +321,29 @@ class AktivitaetEntwurfTest {
         // Nachfassen nicht implizit auf 0 (aus) setzen.
         assertEquals(2, aktivitaet.nachfassAnzahl)
     }
+
+    @Test
+    fun `eine Einmalaufgabe ohne Deadline laesst sich nicht speichern`() {
+        val entwurf = gueltig.copy(typ = ZeitplanTyp.EINMALIG)
+
+        assertEquals(listOf(EntwurfFehler.DEADLINE_FEHLT), entwurf.pruefen())
+    }
+
+    @Test
+    fun `eine Einmalaufgabe uebersteht das Laden und Speichern`() {
+        val aktivitaet = Aktivitaet(
+            id = 3,
+            name = "Steuererklaerung",
+            farbe = 1,
+            basisPunkte = 20,
+            zeitplan = Zeitplan.Einmalig(LocalDate.of(2026, 5, 31), LocalTime.of(18, 0)),
+            erstelltAm = LocalDate.of(2026, 3, 1),
+        )
+
+        val entwurf = AktivitaetEntwurf.aus(aktivitaet)
+
+        assertEquals(ZeitplanTyp.EINMALIG, entwurf.typ)
+        assertEquals(emptyList(), entwurf.pruefen())
+        assertEquals(aktivitaet.zeitplan, entwurf.zuAktivitaet(LocalDate.of(2026, 4, 1)).zeitplan)
+    }
 }

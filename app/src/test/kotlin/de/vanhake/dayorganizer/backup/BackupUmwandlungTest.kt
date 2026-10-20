@@ -164,7 +164,7 @@ class BackupUmwandlungTest {
     }
 
     @Test
-    fun `alle vier Zeitplantypen ueberstehen den Rundlauf`() {
+    fun `alle Zeitplantypen ueberstehen den Rundlauf`() {
         val plaene = listOf(
             Zeitplan.FesteZeiten(listOf(LocalTime.of(7, 30)), setOf(DayOfWeek.FRIDAY)),
             Zeitplan.Intervall(3, LocalTime.of(8, 0), LocalTime.of(22, 0), setOf(DayOfWeek.MONDAY)),
@@ -173,6 +173,8 @@ class BackupUmwandlungTest {
                 3,
                 listOf(de.vanhake.dayorganizer.domain.model.Anstoss(DayOfWeek.TUESDAY, LocalTime.of(18, 0))),
             ),
+            Zeitplan.Einmalig(LocalDate.of(2026, 5, 31), LocalTime.of(9, 0)),
+            Zeitplan.Einmalig(LocalDate.of(2026, 5, 31), erinnerungsZeit = null),
         )
 
         plaene.forEach { plan ->
@@ -402,18 +404,6 @@ class BackupUmwandlungTest {
         storniertAm = LocalDateTime.of(2026, 3, 2, 19, 31),
     )
 
-    private fun beispielInhaltSchema3() = BackupUmwandlung.zuDatei(
-        erstelltAm = LocalDateTime.of(2026, 3, 2, 21, 0),
-        aktivitaeten = listOf(aktivitaet),
-        faelligkeiten = listOf(faelligkeit),
-        buchungen = listOf(buchung),
-        belohnungen = listOf(belohnung),
-        einloesungen = listOf(einloesung, stornierteEinloesung),
-        einstellungen = Einstellungen(
-            tagesbonusPunkte = 25, standardKulanzMinuten = 45, themeModus = ThemeModus.DUNKEL,
-        ),
-    )
-
     private val beispielDateiSchema3 = javaClass.classLoader
         ?.getResourceAsStream("backup/beispiel-schema-3.json")!!
         .bufferedReader()
@@ -434,11 +424,49 @@ class BackupUmwandlungTest {
         )
     }
 
-    @Test
-    fun `dieselben Domaenenobjekte erzeugen wieder genau die eingefrorene Beispieldatei fuer Schema 3`() {
-        val text = BackupUmwandlung.zuText(beispielInhaltSchema3())
+    // --- Schema 4: feste Beispieldatei als Vertrag ------------------------------------------
+    //
+    // Wie Schema 3, dazu eine Einmalaufgabe mit Deadline. Die Datei zu Schema 3 bleibt als
+    // Lesetest stehen; geschrieben wird nur noch Schema 4.
 
-        assertEquals(beispielDateiSchema3.trim(), text.trim())
+    private val einmalaufgabe = Aktivitaet(
+        id = 2, name = "Steuererklaerung", farbe = 7, basisPunkte = 20,
+        symbol = "menu_book",
+        zeitplan = Zeitplan.Einmalig(LocalDate.of(2026, 5, 31), LocalTime.of(9, 0)),
+        kulanzMinuten = 60, puenktlichkeitsBonus = 0,
+        erstelltAm = LocalDate.of(2026, 3, 1),
+    )
+
+    private fun beispielInhaltSchema4() = BackupUmwandlung.zuDatei(
+        erstelltAm = LocalDateTime.of(2026, 3, 2, 21, 0),
+        aktivitaeten = listOf(aktivitaet, einmalaufgabe),
+        faelligkeiten = listOf(faelligkeit),
+        buchungen = listOf(buchung),
+        belohnungen = listOf(belohnung),
+        einloesungen = listOf(einloesung, stornierteEinloesung),
+        einstellungen = Einstellungen(
+            tagesbonusPunkte = 25, standardKulanzMinuten = 45, themeModus = ThemeModus.DUNKEL,
+        ),
+    )
+
+    private val beispielDateiSchema4 = javaClass.classLoader
+        ?.getResourceAsStream("backup/beispiel-schema-4.json")!!
+        .bufferedReader()
+        .readText()
+
+    @Test
+    fun `die eingefrorene Beispieldatei fuer Schema 4 wird mit der Einmalaufgabe gelesen`() {
+        val inhalt = BackupUmwandlung.ausText(beispielDateiSchema4)
+
+        assertEquals(listOf(aktivitaet, einmalaufgabe), inhalt.aktivitaeten)
+        assertEquals(listOf(einloesung, stornierteEinloesung), inhalt.einloesungen)
+    }
+
+    @Test
+    fun `dieselben Domaenenobjekte erzeugen wieder genau die eingefrorene Beispieldatei fuer Schema 4`() {
+        val text = BackupUmwandlung.zuText(beispielInhaltSchema4())
+
+        assertEquals(beispielDateiSchema4.trim(), text.trim())
     }
 
     @Test

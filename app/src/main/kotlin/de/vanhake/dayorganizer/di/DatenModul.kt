@@ -20,6 +20,7 @@ import de.vanhake.dayorganizer.data.db.MIGRATION_1_2
 import de.vanhake.dayorganizer.data.db.MIGRATION_2_3
 import de.vanhake.dayorganizer.data.db.MIGRATION_3_4
 import de.vanhake.dayorganizer.data.db.MIGRATION_4_5
+import de.vanhake.dayorganizer.data.db.MIGRATION_5_6
 import de.vanhake.dayorganizer.data.repository.AktivitaetRepository
 import de.vanhake.dayorganizer.data.repository.BelohnungRepository
 import de.vanhake.dayorganizer.data.repository.BuchungRepository
@@ -50,7 +51,7 @@ object DatenModul {
     @Singleton
     fun datenbank(@ApplicationContext kontext: Context): DayOrganizerDatenbank =
         Room.databaseBuilder(kontext, DayOrganizerDatenbank::class.java, "dayorganizer.db")
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
             .build()
 
     @Provides fun aktivitaetDao(db: DayOrganizerDatenbank): AktivitaetDao = db.aktivitaetDao()

@@ -2,6 +2,7 @@ package de.vanhake.dayorganizer.ui.aktivitaeten
 
 import de.vanhake.dayorganizer.domain.model.Zeitplan
 import java.time.DayOfWeek
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
@@ -21,6 +22,7 @@ object PlanText {
     )
 
     private val UHRZEIT_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+    private val DATUM_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
 
     fun kuerzel(tag: DayOfWeek): String = WOCHENTAG_KUERZEL[tag.ordinal]
 
@@ -47,6 +49,15 @@ object PlanText {
             if (zeitplan.anstossZeiten.isNotEmpty()) append(" · Erinnerung ${uhrzeiten(zeitplan.anstossZeiten)}")
         }
         is Zeitplan.Wochenziel -> "${zeitplan.anzahl}× pro Woche"
+        is Zeitplan.Einmalig -> buildString {
+            // LocalDate.MAX steht fuer einen Entwurf, dem die Deadline noch fehlt.
+            if (zeitplan.deadline == LocalDate.MAX) {
+                append("Einmalig · ohne Deadline")
+            } else {
+                append("Einmalig · bis ${zeitplan.deadline.format(DATUM_FORMAT)}")
+            }
+            zeitplan.erinnerungsZeit?.let { append(" · Erinnerung ${uhrzeit(it)}") }
+        }
     }
 
     private fun uhrzeiten(zeiten: List<LocalTime>): String = zeiten.joinToString(", ") { uhrzeit(it) }

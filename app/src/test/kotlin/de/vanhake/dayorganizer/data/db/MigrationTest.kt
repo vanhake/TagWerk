@@ -115,6 +115,33 @@ class MigrationTest {
         db.close()
     }
 
+    @Test
+    fun `migration_5_auf_6 ergaenzt die Deadline-Spalte ohne bestehende Aktivitaeten zu aendern`() {
+        helfer.createDatabase(DB_NAME, 5).apply {
+            execSQL(
+                "INSERT INTO aktivitaet (id, name, notiz, farbe, basisPunkte, kulanzMinuten, " +
+                    "puenktlichkeitsBonus, symbol, serienSchwellen, nachfassAnzahl, nachfassAbstandMinuten, " +
+                    "aktiv, erstelltAm, archiviertAm, zeitplanTyp, zeitplanZeiten, " +
+                    "zeitplanWochentage, zeitplanIntervallStunden, zeitplanFensterVon, " +
+                    "zeitplanFensterBis, zeitplanZielAnzahl, zeitplanAnstoss) VALUES " +
+                    "(1, 'Tabletten', '', 0, 10, 60, 0, 'medication', '', 2, 15, 1, '2026-01-01', NULL, " +
+                    "'FESTE_ZEITEN', '08:00', 'MONDAY', NULL, NULL, NULL, NULL, '')",
+            )
+            close()
+        }
+
+        val db = helfer.runMigrationsAndValidate(
+            DB_NAME, 6, true, MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+        )
+
+        db.query("SELECT zeitplanDeadline, zeitplanTyp FROM aktivitaet WHERE id = 1").use {
+            it.moveToFirst()
+            assertEquals(true, it.isNull(0))
+            assertEquals("FESTE_ZEITEN", it.getString(1))
+        }
+        db.close()
+    }
+
     private companion object {
         const val DB_NAME = "migrationstest.db"
     }

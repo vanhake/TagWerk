@@ -31,6 +31,7 @@ fun AktivitaetEntity.zuDomaene(): Aktivitaet = Aktivitaet(
             fensterBis = zeitplanFensterBis,
             zielAnzahl = zeitplanZielAnzahl,
             anstoss = zeitplanAnstoss,
+            deadline = zeitplanDeadline,
         ),
     ),
     kulanzMinuten = kulanzMinuten,
@@ -68,6 +69,7 @@ fun Aktivitaet.zuEntity(): AktivitaetEntity {
         zeitplanFensterBis = felder.fensterBis,
         zeitplanZielAnzahl = felder.zielAnzahl,
         zeitplanAnstoss = felder.anstoss,
+        zeitplanDeadline = felder.deadline,
     )
 }
 
