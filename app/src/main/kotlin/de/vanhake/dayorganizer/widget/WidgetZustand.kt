@@ -5,7 +5,9 @@ import de.vanhake.dayorganizer.R
 import de.vanhake.dayorganizer.domain.model.Aktivitaet
 import de.vanhake.dayorganizer.domain.model.Faelligkeit
 import de.vanhake.dayorganizer.domain.model.FaelligkeitStatus
+import de.vanhake.dayorganizer.domain.model.Zeitplan
 import java.time.LocalDateTime
+import java.time.temporal.ChronoUnit
 import java.time.format.DateTimeFormatter
 
 data class WidgetEintrag(
@@ -19,6 +21,8 @@ data class WidgetEintrag(
     val sollAnzahl: Int,
     /** periodeBis > periodeVon: Wochenziel statt Tagesziel. */
     val wochenziel: Boolean,
+    /** Nur bei Einmalaufgaben: Tage bis zur Deadline. */
+    val deadlineInTagen: Long? = null,
 )
 
 /** Warum das Widget keine offenen Eintraege zeigt. */
@@ -41,6 +45,10 @@ object WidgetZusammenstellung {
 
     private val UHRZEIT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
+    /** Eine Einmalaufgabe erscheint erst, wenn ihre Deadline so nah ist -- vorher wuerde sie
+     * die wenigen Zeilen des Widgets wochenlang belegen. */
+    const val AUFGABE_VORLAUF_TAGE = 7L
+
     fun aus(
         faelligkeiten: List<Faelligkeit>,
         aktivitaeten: List<Aktivitaet>,
@@ -60,14 +68,28 @@ object WidgetZusammenstellung {
         // Ties zwischen mehreren Ziel-Eintraegen (gleiches MAX) behalten deshalb die Reihenfolge
         // der Eingabeliste -- und die kommt deterministisch aus der DB-Abfrage (ORDER BY
         // periodeVon, geplantFuer IS NULL, geplantFuer in FaelligkeitDao.fuerZeitraum).
-        val dieserTag = faelligkeiten.filter { nachId.containsKey(it.aktivitaetId) }
+        //
+        // Einmalaufgaben zaehlen wie auf "Heute" nicht zum Tagesfortschritt; offen erscheinen
+        // sie hinter den Tageseintraegen, sobald die Deadline hoechstens AUFGABE_VORLAUF_TAGE
+        // entfernt ist.
+        val heute = jetzt.toLocalDate()
+        val einmalig = aktivitaeten.filter { it.zeitplan is Zeitplan.Einmalig }.map { it.id }.toSet()
+        val bekannt = faelligkeiten.filter { nachId.containsKey(it.aktivitaetId) }
+        val dieserTag = bekannt.filter { it.aktivitaetId !in einmalig }
+        val aufgaben = bekannt
+            .filter {
+                it.aktivitaetId in einmalig &&
+                    it.status == FaelligkeitStatus.OFFEN &&
+                    ChronoUnit.DAYS.between(heute, it.periodeBis) <= AUFGABE_VORLAUF_TAGE
+            }
+            .sortedBy { it.periodeBis }
         val offen = dieserTag
             .filter { it.status == FaelligkeitStatus.OFFEN }
             .sortedWith(
                 compareByDescending<Faelligkeit> {
                     it.geplantFuer != null && it.geplantFuer!!.isBefore(jetzt)
                 }.thenBy { it.geplantFuer ?: LocalDateTime.MAX },
-            )
+            ) + aufgaben
 
         return WidgetZustand(
             kontostand = kontostand,
@@ -84,12 +106,17 @@ object WidgetZusammenstellung {
                     istAnzahl = f.istAnzahl,
                     sollAnzahl = f.sollAnzahl,
                     wochenziel = f.periodeBis.isAfter(f.periodeVon),
+                    deadlineInTagen = if (f.aktivitaetId in einmalig) {
+                        ChronoUnit.DAYS.between(heute, f.periodeBis)
+                    } else {
+                        null
+                    },
                 )
             },
             leer = when {
+                offen.isNotEmpty() -> null
                 dieserTag.isEmpty() -> WidgetLeer.NICHTS_GEPLANT
-                offen.isEmpty() -> WidgetLeer.ALLES_ERLEDIGT
-                else -> null
+                else -> WidgetLeer.ALLES_ERLEDIGT
             },
         )
     }
@@ -101,6 +128,13 @@ object WidgetZusammenstellung {
  * sichtbar, und ein zweiter Tipp aus Unsicherheit zaehlt doppelt.
  */
 fun widgetUntertitel(eintrag: WidgetEintrag, res: Resources): String {
+    eintrag.deadlineInTagen?.let { tage ->
+        return when (tage) {
+            0L -> res.getString(R.string.deadline_heute)
+            1L -> res.getString(R.string.deadline_morgen)
+            else -> res.getQuantityString(R.plurals.deadline_noch, tage.toInt(), tage.toInt())
+        }
+    }
     val zaehltext = res.getString(
         if (eintrag.wochenziel) R.string.widget_ziel_woche else R.string.widget_ziel_heute,
         eintrag.istAnzahl,

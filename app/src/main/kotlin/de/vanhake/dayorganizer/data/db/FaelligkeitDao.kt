@@ -45,6 +45,10 @@ interface FaelligkeitDao {
     )
     fun beobachteTag(tag: LocalDate): Flow<List<FaelligkeitEntity>>
 
+    /** Alle Faelligkeiten der genannten Aktivitaeten, unabhaengig vom Zeitraum (Einmalaufgaben). */
+    @Query("SELECT * FROM faelligkeit WHERE aktivitaetId IN (:aktivitaetIds) ORDER BY periodeBis")
+    fun beobachteFuerAktivitaeten(aktivitaetIds: List<Long>): Flow<List<FaelligkeitEntity>>
+
     @Query(
         "SELECT * FROM faelligkeit WHERE aktivitaetId = :aktivitaetId AND periodeVon = :periodeVon",
     )

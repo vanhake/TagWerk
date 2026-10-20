@@ -138,6 +138,10 @@ class FakeFaelligkeitRepository(start: List<Faelligkeit> = emptyList()) : Faelli
                 .sortedWith(tagOrdnung)
         }
 
+    /** Spiegelt "WHERE aktivitaetId IN (:aktivitaetIds) ORDER BY periodeBis". */
+    override fun beobachteFuerAktivitaeten(aktivitaetIds: Set<Long>): Flow<List<Faelligkeit>> =
+        stand.map { liste -> liste.filter { it.aktivitaetId in aktivitaetIds }.sortedBy { it.periodeBis } }
+
     /** Spiegelt exakt das Praedikat aus FaelligkeitDao.entfernenKuenftigeOffene. */
     override suspend fun entfernenKuenftigeOffene(aktivitaetId: Long, abTag: LocalDate) {
         stand.value = stand.value.filterNot {

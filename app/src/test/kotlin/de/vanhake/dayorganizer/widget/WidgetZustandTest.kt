@@ -176,4 +176,43 @@ class WidgetZustandTest {
         assertEquals(true, wochenEintrag.wochenziel)
         assertEquals(false, zustand.offen.single { it.faelligkeitId == 61L }.wochenziel)
     }
+
+    private val steuer = Aktivitaet(
+        id = 3, name = "Steuererklaerung", farbe = 1, basisPunkte = 20,
+        zeitplan = Zeitplan.Einmalig(LocalDate.of(2026, 3, 9)),
+        erstelltAm = LocalDate.of(2026, 2, 1),
+    )
+
+    private fun aufgabe(id: Long, deadline: LocalDate) = Faelligkeit(
+        id = id, aktivitaetId = 3, periodeVon = LocalDate.of(2026, 2, 1), periodeBis = deadline,
+        geplantFuer = null, sollAnzahl = 1,
+    )
+
+    @Test
+    fun `eine Einmalaufgabe erscheint erst eine Woche vor der Deadline und zaehlt nicht mit`() {
+        val zustand = WidgetZusammenstellung.aus(
+            faelligkeiten = listOf(aufgabe(40, LocalDate.of(2026, 3, 9)), aufgabe(41, LocalDate.of(2026, 3, 10)), termin(10, 18)),
+            aktivitaeten = listOf(tabletten, steuer),
+            kontostand = 0,
+            jetzt = jetzt,
+        )
+
+        assertEquals(listOf(10L, 40L), zustand.offen.map { it.faelligkeitId })
+        assertEquals(7L, zustand.offen.last().deadlineInTagen)
+        assertEquals(null, zustand.offen.first().deadlineInTagen)
+        assertEquals(1, zustand.gesamt)
+    }
+
+    @Test
+    fun `nur eine Einmalaufgabe offen heisst nicht nichts geplant`() {
+        val zustand = WidgetZusammenstellung.aus(
+            faelligkeiten = listOf(aufgabe(40, LocalDate.of(2026, 3, 5))),
+            aktivitaeten = listOf(steuer),
+            kontostand = 0,
+            jetzt = jetzt,
+        )
+
+        assertEquals(listOf(40L), zustand.offen.map { it.faelligkeitId })
+        assertEquals(null, zustand.leer)
+    }
 }
