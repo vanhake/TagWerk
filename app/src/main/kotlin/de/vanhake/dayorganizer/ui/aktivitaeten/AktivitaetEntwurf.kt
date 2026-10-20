@@ -19,6 +19,7 @@ enum class EntwurfFehler {
     ZIEL_NICHT_POSITIV,
     INTERVALL_UNGUELTIG,
     DEADLINE_FEHLT,
+    DEADLINE_ZU_FRUEH,
 }
 
 /**
@@ -38,7 +39,7 @@ data class AktivitaetEntwurf(
     val notiz: String = "",
     val farbe: Int = 0xFF4CAF50.toInt(),
     val symbol: String = AKTIVITAET_SYMBOL_STANDARD,
-    val basisPunkte: Int = 10,
+    val basisPunkte: Int = PUNKTE_STANDARD,
     val typ: ZeitplanTyp = ZeitplanTyp.FESTE_ZEITEN,
     // Prototyp openEdit(0): eine neue Aktivitaet startet mit 08:00, damit "Feste Zeiten"
     // ohne weiteren Schritt speicherbar ist.
@@ -51,7 +52,7 @@ data class AktivitaetEntwurf(
     val anstoss: List<Anstoss> = emptyList(),
     val deadline: LocalDate? = null,
     /** null = Einmalaufgabe ohne Erinnerungen. */
-    val erinnerungsZeit: LocalTime? = LocalTime.of(9, 0),
+    val erinnerungsZeit: LocalTime? = ERINNERUNG_STANDARD,
     val kulanzMinutenText: String = "60",
     val puenktlichkeitsBonusText: String = "5",
     val serienSchwellen: List<SerienSchwelle> = listOf(SerienSchwelle(7, 10)),
@@ -79,6 +80,20 @@ data class AktivitaetEntwurf(
     fun intervallAendern(schritt: Int): AktivitaetEntwurf =
         copy(intervallStunden = (intervallStunden + schritt).coerceIn(INTERVALL_MIN, INTERVALL_MAX))
 
+    /** Eine Einmalaufgabe ist meist mehr wert als ein taeglicher Handgriff: wer zu ihr
+     * wechselt, ohne die Punkte schon angefasst zu haben, bekommt deren eigenen Standard. */
+    fun typWaehlen(neu: ZeitplanTyp): AktivitaetEntwurf = copy(
+        typ = neu,
+        basisPunkte = if (neu == ZeitplanTyp.EINMALIG && basisPunkte == PUNKTE_STANDARD) {
+            PUNKTE_STANDARD_EINMALIG
+        } else {
+            basisPunkte
+        },
+    )
+
+    fun erinnernUmschalten(an: Boolean): AktivitaetEntwurf =
+        copy(erinnerungsZeit = if (an) erinnerungsZeit ?: ERINNERUNG_STANDARD else null)
+
     fun zielAendern(schritt: Int): AktivitaetEntwurf =
         copy(zielAnzahl = (zielAnzahl + schritt).coerceAtLeast(ZIEL_MIN))
 
@@ -92,7 +107,12 @@ data class AktivitaetEntwurf(
 
     fun zeitEntfernen(zeit: LocalTime): AktivitaetEntwurf = copy(zeiten = zeiten - zeit)
 
-    fun pruefen(): List<EntwurfFehler> = buildList {
+    /**
+     * [heute] prueft zusaetzlich, dass die Deadline einer Einmalaufgabe nicht vor ihrem
+     * Beginn liegt (Anlegetag, bei einem neuen Entwurf heute) -- sonst entstuende gar keine
+     * Faelligkeit. Ohne [heute] entfaellt nur diese eine Pruefung.
+     */
+    fun pruefen(heute: LocalDate? = null): List<EntwurfFehler> = buildList {
         if (name.isBlank()) add(EntwurfFehler.NAME_LEER)
         if (basisPunkte <= 0) add(EntwurfFehler.PUNKTE_NICHT_POSITIV)
 
@@ -119,7 +139,12 @@ data class AktivitaetEntwurf(
             }
 
             ZeitplanTyp.EINMALIG -> {
-                if (deadline == null) add(EntwurfFehler.DEADLINE_FEHLT)
+                val frist = deadline
+                val beginn = erstelltAm ?: heute
+                when {
+                    frist == null -> add(EntwurfFehler.DEADLINE_FEHLT)
+                    beginn != null && frist.isBefore(beginn) -> add(EntwurfFehler.DEADLINE_ZU_FRUEH)
+                }
             }
         }
     }
@@ -161,11 +186,27 @@ data class AktivitaetEntwurf(
     )
 
     companion object {
+        /** Muss zum Standardwert von [basisPunkte] passen. */
+        const val PUNKTE_STANDARD = 10
+        const val PUNKTE_STANDARD_EINMALIG = 20
+        val ERINNERUNG_STANDARD: LocalTime = LocalTime.of(9, 0)
         const val PUNKTE_SCHRITT = 5
         const val PUNKTE_MIN = 5
         const val INTERVALL_MIN = 1
         const val INTERVALL_MAX = 12
         const val ZIEL_MIN = 1
+
+        /**
+         * Zwischen Einmalaufgabe und wiederkehrendem Zeitplan laesst sich eine gespeicherte
+         * Aktivitaet nicht umstellen: ihre bisherigen Faelligkeiten passen nicht zur neuen
+         * Art (eine Einmalaufgabe beginnt am Anlegetag und haette denselben Schluessel wie
+         * eine alte Faelligkeit). [gespeichert] == null steht fuer eine neue Aktivitaet.
+         */
+        fun waehlbareTypen(gespeichert: ZeitplanTyp?): List<ZeitplanTyp> = when (gespeichert) {
+            null -> ZeitplanTyp.entries
+            ZeitplanTyp.EINMALIG -> listOf(ZeitplanTyp.EINMALIG)
+            else -> ZeitplanTyp.entries - ZeitplanTyp.EINMALIG
+        }
 
         fun aus(aktivitaet: Aktivitaet): AktivitaetEntwurf {
             val basis = AktivitaetEntwurf(

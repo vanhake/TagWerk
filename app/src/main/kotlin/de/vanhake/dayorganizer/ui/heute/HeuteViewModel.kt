@@ -10,6 +10,8 @@ import de.vanhake.dayorganizer.data.repository.BelohnungRepository
 import de.vanhake.dayorganizer.data.repository.BuchungRepository
 import de.vanhake.dayorganizer.data.repository.FaelligkeitRepository
 import de.vanhake.dayorganizer.domain.model.BuchungsArt
+import de.vanhake.dayorganizer.domain.model.Faelligkeit
+import de.vanhake.dayorganizer.domain.model.Zeitplan
 import de.vanhake.dayorganizer.domainuse.ErledigungsProtokoll
 import de.vanhake.dayorganizer.domainuse.FaelligkeitAuslassen
 import de.vanhake.dayorganizer.domainuse.FaelligkeitAuslassenRueckgaengig
@@ -30,7 +32,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Clock
@@ -100,16 +105,27 @@ class HeuteViewModel(
     private val stapel = ToastStapel(viewModelScope)
     val toast: StateFlow<Hinweistoast?> = stapel.sichtbar
 
+    // Einmalaufgaben ueber ihren ganzen Zeitraum, auch nach verstrichener Deadline -- das
+    // gibt beobachteTag nicht her. combine kennt nur fuenf Flows, darum reisen sie als Paar
+    // mit den selten wechselnden Hinweisen: so bleibt der Weg der Tages-Faelligkeiten ohne
+    // zusaetzliche Stufe, und Abhaken und Kontostand kommen weiter in einer Emission an.
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val aufgabenFaelligkeiten = aktivitaeten.beobachteAktive()
+        .map { liste -> liste.filter { it.zeitplan is Zeitplan.Einmalig }.map { it.id }.toSet() }
+        .distinctUntilChanged()
+        .flatMapLatest { ids -> if (ids.isEmpty()) flowOf(emptyList<Faelligkeit>()) else faelligkeiten.beobachteFuerAktivitaeten(ids) }
+
     @OptIn(ExperimentalCoroutinesApi::class)
     val zustand: StateFlow<HeuteZustand> = combine(
         tag.flatMapLatest { faelligkeiten.beobachteTag(it) },
         aktivitaeten.beobachteAktive(),
         belohnungen.beobachteAktive(),
         buchungen.beobachteKontostand(),
-        hinweise,
-    ) { faelligkeiten, aktivitaeten, belohnungen, kontostand, hinweise ->
-        HeuteZusammenstellung.aus(faelligkeiten, aktivitaeten, belohnungen, kontostand, LocalDateTime.now(uhr))
-            .copy(hinweise = hinweise)
+        combine(hinweise, aufgabenFaelligkeiten, ::Pair),
+    ) { faelligkeiten, aktivitaeten, belohnungen, kontostand, (hinweise, aufgaben) ->
+        HeuteZusammenstellung.aus(
+            faelligkeiten, aktivitaeten, belohnungen, kontostand, LocalDateTime.now(uhr), aufgaben,
+        ).copy(hinweise = hinweise)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HeuteZustand())
 
     /**
@@ -151,7 +167,11 @@ class HeuteViewModel(
                 folgeschritt { alarmNeuPlanen() }
                 widgetAnstossen()
                 val gesamt = protokoll.buchungen.sumOf { it.betrag }
-                val text = if (protokoll.buchungen.any { it.art == BuchungsArt.TAGESBONUS }) {
+                val text = if (protokoll.buchungen.isEmpty()) {
+                    // Jede Erledigung bucht ihre Basispunkte; ohne Buchung war es eine
+                    // Einmalaufgabe nach ihrer Deadline.
+                    HeuteToastTexte.zuSpaetToast(nameVon(protokoll.faelligkeitVorher.aktivitaetId))
+                } else if (protokoll.buchungen.any { it.art == BuchungsArt.TAGESBONUS }) {
                     HeuteToastTexte.tagesbonusToast(gesamt)
                 } else {
                     HeuteToastTexte.erledigtToast(gesamt, nameVon(protokoll.faelligkeitVorher.aktivitaetId))
@@ -220,6 +240,7 @@ private object HeuteToastTexte {
     fun erledigtToast(punkte: Int, name: String) = "+$punkte Punkte · $name"
     fun tagesbonusToast(punkte: Int) = "+$punkte Punkte · inkl. Tagesbonus"
     fun ausgelassenToast(name: String) = "$name ausgelassen"
+    fun zuSpaetToast(name: String) = "$name erledigt · nach der Deadline ohne Punkte"
     const val ERLEDIGEN_FEHLGESCHLAGEN = "Abhaken fehlgeschlagen"
     const val AUSLASSEN_FEHLGESCHLAGEN = "Auslassen fehlgeschlagen"
     const val RUECKGAENGIG_FEHLGESCHLAGEN = "Rückgängig fehlgeschlagen"

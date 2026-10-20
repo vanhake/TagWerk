@@ -129,4 +129,75 @@ class HeuteZusammenstellungTest {
 
         assertEquals(0, zustand.gesamtHeute)
     }
+
+    // --- Einmalaufgaben (Issue #14) ----------------------------------------------------------
+
+    private val steuer = Aktivitaet(
+        id = 3, name = "Steuererklaerung", farbe = 33, basisPunkte = 20,
+        zeitplan = Zeitplan.Einmalig(LocalDate.of(2026, 3, 13)),
+        erstelltAm = LocalDate.of(2026, 2, 1),
+    )
+
+    private fun aufgabe(id: Long, deadline: LocalDate, status: FaelligkeitStatus = FaelligkeitStatus.OFFEN) =
+        Faelligkeit(
+            id = id, aktivitaetId = 3, periodeVon = LocalDate.of(2026, 2, 1), periodeBis = deadline,
+            geplantFuer = null, sollAnzahl = 1, status = status,
+        )
+
+    @Test
+    fun `eine Einmalaufgabe steht unter Aufgaben statt im Tagesfortschritt`() {
+        val offen = aufgabe(40, LocalDate.of(2026, 3, 13))
+
+        val zustand = HeuteZusammenstellung.aus(
+            faelligkeiten = listOf(termin(10, 8, FaelligkeitStatus.ERLEDIGT), offen),
+            aktivitaeten = listOf(tabletten, steuer),
+            belohnungen = emptyList(),
+            kontostand = 0,
+            jetzt = jetzt,
+            aufgaben = listOf(offen),
+        )
+
+        assertEquals(listOf(40L), zustand.aufgaben.map { it.faelligkeitId })
+        assertEquals(11L, zustand.aufgaben.single().deadlineInTagen)
+        assertEquals(false, zustand.aufgaben.single().ueberfaellig)
+        assertEquals(1, zustand.gesamtHeute)
+        assertEquals(1, zustand.erledigtHeute)
+        assertEquals(emptyList(), zustand.anstehend)
+    }
+
+    @Test
+    fun `eine verpasste Einmalaufgabe bleibt bis zum Abhaken als ueberfaellig stehen`() {
+        val verpasst = aufgabe(41, LocalDate.of(2026, 2, 27), FaelligkeitStatus.VERPASST)
+        val nachgeholt = aufgabe(42, LocalDate.of(2026, 2, 26), FaelligkeitStatus.VERPASST)
+            .copy(erledigtAm = LocalDateTime.of(2026, 3, 1, 10, 0))
+        val erledigt = aufgabe(43, LocalDate.of(2026, 3, 20), FaelligkeitStatus.ERLEDIGT)
+        val spaeter = aufgabe(44, LocalDate.of(2026, 4, 1))
+
+        val zustand = HeuteZusammenstellung.aus(
+            faelligkeiten = emptyList(),
+            aktivitaeten = listOf(steuer),
+            belohnungen = emptyList(),
+            kontostand = 0,
+            jetzt = jetzt,
+            aufgaben = listOf(spaeter, erledigt, nachgeholt, verpasst),
+        )
+
+        assertEquals(listOf(41L, 44L), zustand.aufgaben.map { it.faelligkeitId })
+        assertEquals(true, zustand.aufgaben.first().ueberfaellig)
+        assertEquals(-3L, zustand.aufgaben.first().deadlineInTagen)
+    }
+
+    @Test
+    fun `Aufgaben archivierter Aktivitaeten erscheinen nicht`() {
+        val zustand = HeuteZusammenstellung.aus(
+            faelligkeiten = emptyList(),
+            aktivitaeten = listOf(tabletten),
+            belohnungen = emptyList(),
+            kontostand = 0,
+            jetzt = jetzt,
+            aufgaben = listOf(aufgabe(40, LocalDate.of(2026, 3, 13))),
+        )
+
+        assertEquals(emptyList(), zustand.aufgaben)
+    }
 }

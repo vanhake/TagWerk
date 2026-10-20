@@ -88,4 +88,20 @@ class AktivitaetenZusammenstellungTest {
 
         assertEquals(listOf("Sport", "Tabletten"), zeilen.map { it.name })
     }
+
+    @Test
+    fun `eine Einmalaufgabe wird als solche markiert`() {
+        val steuer = Aktivitaet(
+            id = 9, name = "Steuererklaerung", farbe = 1, basisPunkte = 20,
+            zeitplan = Zeitplan.Einmalig(LocalDate.of(2026, 5, 31)),
+            erstelltAm = LocalDate.of(2026, 3, 1),
+        )
+
+        val zeile = AktivitaetenZusammenstellung.zeilen(
+            listOf(steuer), emptyMap(), LocalDate.of(2026, 3, 2), SerienRechner(),
+        ).single()
+
+        assertEquals(true, zeile.einmalig)
+        assertEquals("Einmalig · bis 31.05.2026", zeile.planText)
+    }
 }

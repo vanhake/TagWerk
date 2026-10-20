@@ -14,6 +14,8 @@ data class HeuteEintrag(
     val istAnzahl: Int,
     val status: FaelligkeitStatus,
     val ueberfaellig: Boolean,
+    /** Nur bei Einmalaufgaben: Tage bis zur Deadline, negativ wenn sie verstrichen ist. */
+    val deadlineInTagen: Long? = null,
 )
 
 data class NaechsteBelohnung(
@@ -30,6 +32,8 @@ data class HeuteZustand(
     val anstehend: List<HeuteEintrag> = emptyList(),
     val spaeter: List<HeuteEintrag> = emptyList(),
     val abgeschlossen: List<HeuteEintrag> = emptyList(),
+    /** Offene und ueberfaellige Einmalaufgaben, die naechste Deadline zuerst. */
+    val aufgaben: List<HeuteEintrag> = emptyList(),
     val hinweise: List<Hinweis> = emptyList(),
     val naechsteBelohnung: NaechsteBelohnung? = null,
 )

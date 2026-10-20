@@ -97,8 +97,9 @@ class HeuteViewModelTest {
         widgetAnstossen: suspend () -> Unit = {},
         alarmNeuPlanen: suspend () -> Unit = {},
         einstellungenLesen: suspend () -> Einstellungen = { Einstellungen(tagesbonusPunkte = 0) },
+        aktivitaetenListe: List<Aktivitaet> = listOf(tabletten, sport),
     ): HeuteViewModel {
-        val aktivitaeten = FakeAktivitaetRepository(listOf(tabletten, sport))
+        val aktivitaeten = FakeAktivitaetRepository(aktivitaetenListe)
         val transaktionen = FakeTransaktionen()
         val erledigenUseCase = FaelligkeitErledigen(
             aktivitaeten, faelligkeiten, buchungen, PunkteRechner(), SerienRechner(),
@@ -421,5 +422,38 @@ class HeuteViewModelTest {
             dispatcher.scheduler.runCurrent()
 
             assertEquals(listOf(10L, 10L), anzeige.versteckt)
+        }
+
+    @Test
+    fun `eine verpasste Einmalaufgabe steht unter Aufgaben und verschwindet nach dem Abhaken ohne Punkte`() =
+        runTest(dispatcher) {
+            val steuer = Aktivitaet(
+                id = 3, name = "Steuererklaerung", farbe = 3, basisPunkte = 20,
+                zeitplan = Zeitplan.Einmalig(LocalDate.of(2026, 2, 27)),
+                erstelltAm = LocalDate.of(2026, 2, 1),
+            )
+            val verpasst = Faelligkeit(
+                id = 30, aktivitaetId = 3,
+                periodeVon = LocalDate.of(2026, 2, 1), periodeBis = LocalDate.of(2026, 2, 27),
+                geplantFuer = null, sollAnzahl = 1, status = FaelligkeitStatus.VERPASST,
+            )
+            val buchungen = FakeBuchungRepository()
+            val vm = viewModel(
+                FakeFaelligkeitRepository(listOf(morgens, verpasst)),
+                buchungen,
+                aktivitaetenListe = listOf(tabletten, steuer),
+            )
+
+            vm.zustand.test {
+                skipItems(1)
+                val vorher = awaitItem()
+                assertEquals(listOf(30L), vorher.aufgaben.map { it.faelligkeitId })
+                assertEquals(1, vorher.gesamtHeute)
+
+                vm.erledigen(30)
+                assertEquals(emptyList(), awaitItem().aufgaben)
+                cancelAndIgnoreRemainingEvents()
+            }
+            assertEquals(0, buchungen.stand.value.sumOf { it.betrag })
         }
 }

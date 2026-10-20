@@ -16,6 +16,8 @@ data class AktivitaetZeile(
     val serie: Int,
     /** Wochenziele zaehlen ihre Serie in Wochen, alle anderen Zeitplaene in Tagen. */
     val serieInWochen: Boolean,
+    /** Einmalaufgaben stehen in einem eigenen Abschnitt und haben keine Serie. */
+    val einmalig: Boolean = false,
 )
 
 /** Rein und zustandslos, damit die Zeilenbildung ohne ViewModel/Dispatcher testbar ist --
@@ -38,6 +40,7 @@ object AktivitaetenZusammenstellung {
             // Grenze; die laufende Periode zaehlt erst, wenn nichts mehr offen ist.
             serie = serienRechner.aktuelleSerie(historien[aktivitaet.id].orEmpty(), heute),
             serieInWochen = aktivitaet.zeitplan is Zeitplan.Wochenziel,
+            einmalig = aktivitaet.zeitplan is Zeitplan.Einmalig,
         )
     }
 }

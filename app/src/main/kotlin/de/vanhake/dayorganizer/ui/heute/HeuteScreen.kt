@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -115,6 +116,7 @@ fun HeuteScreen(viewModel: HeuteViewModel = hiltViewModel()) {
                 zustand.spaeter.filter { it.faelligkeitId != heldenEintrag?.faelligkeitId },
                 viewModel,
             )
+            abschnitt(R.string.abschnitt_aufgaben, zustand.aufgaben, viewModel)
             abschnitt(R.string.abschnitt_abgeschlossen, zustand.abgeschlossen, viewModel)
         }
 
@@ -340,18 +342,44 @@ private fun EintragZeile(eintrag: HeuteEintrag, erledigen: () -> Unit, auslassen
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                val untertitel = eintrag.zeitText
-                    ?: stringResource(R.string.ziel_fortschritt, eintrag.istAnzahl, eintrag.sollAnzahl)
-                Text(untertitel, color = if (eintrag.ueberfaellig) farben.coral else farben.ink2)
+                val tage = eintrag.deadlineInTagen
+                val untertitel = if (tage != null) {
+                    deadlineText(tage)
+                } else {
+                    eintrag.zeitText
+                        ?: stringResource(R.string.ziel_fortschritt, eintrag.istAnzahl, eintrag.sollAnzahl)
+                }
+                val untertitelFarbe = when {
+                    eintrag.ueberfaellig -> farben.coral
+                    tage != null && tage <= DEADLINE_BALD_TAGE -> farben.goldInk
+                    else -> farben.ink2
+                }
+                Text(untertitel, color = untertitelFarbe)
             }
-            if (eintrag.status == FaelligkeitStatus.OFFEN) {
+            // Eine Einmalaufgabe laesst sich nicht auslassen, nach der Deadline (VERPASST)
+            // aber noch ohne Punkte abhaken.
+            val aufgabe = eintrag.deadlineInTagen != null
+            if (eintrag.status == FaelligkeitStatus.OFFEN && !aufgabe) {
                 IconButton(onClick = auslassen) {
                     Icon(Icons.Filled.SkipNext, contentDescription = stringResource(R.string.aktion_ausgelassen), tint = farben.ink2)
                 }
+            }
+            if (eintrag.status == FaelligkeitStatus.OFFEN || aufgabe) {
                 OutlinedIconButton(onClick = erledigen) {
                     Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.aktion_erledigt), tint = farben.accent)
                 }
             }
         }
     }
+}
+
+/** Ab so vielen Tagen vor der Deadline wird der Hinweis hervorgehoben. */
+private const val DEADLINE_BALD_TAGE = 3L
+
+@Composable
+private fun deadlineText(tage: Long): String = when {
+    tage < 0 -> pluralStringResource(R.plurals.deadline_ueberfaellig, (-tage).toInt(), (-tage).toInt())
+    tage == 0L -> stringResource(R.string.deadline_heute)
+    tage == 1L -> stringResource(R.string.deadline_morgen)
+    else -> pluralStringResource(R.plurals.deadline_noch, tage.toInt(), tage.toInt())
 }

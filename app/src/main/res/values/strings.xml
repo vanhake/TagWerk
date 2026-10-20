@@ -27,6 +27,18 @@
     <string name="abschnitt_anstehend">Jetzt dran</string>
     <string name="abschnitt_spaeter">Später heute</string>
     <string name="abschnitt_abgeschlossen">Erledigt</string>
+    <string name="abschnitt_aufgaben">Aufgaben</string>
+    <string name="abschnitt_einmalaufgaben">Einmalaufgaben</string>
+    <string name="deadline_heute">heute fällig</string>
+    <string name="deadline_morgen">morgen fällig</string>
+    <plurals name="deadline_noch">
+        <item quantity="one">noch %1$d Tag</item>
+        <item quantity="other">noch %1$d Tage</item>
+    </plurals>
+    <plurals name="deadline_ueberfaellig">
+        <item quantity="one">seit %1$d Tag überfällig · ohne Punkte</item>
+        <item quantity="other">seit %1$d Tagen überfällig · ohne Punkte</item>
+    </plurals>
     <string name="tab_heute">Heute</string>
     <string name="tab_aktivitaeten">Aktivitäten</string>
     <string name="neue_aktivitaet">Neue Aktivität</string>
@@ -58,6 +70,7 @@
     <string name="typ_intervall">Intervall</string>
     <string name="typ_tagesziel">Mal pro Tag</string>
     <string name="typ_wochenziel">Mal pro Woche</string>
+    <string name="typ_einmalig">Einmalig</string>
     <string name="speichern">Speichern</string>
     <string name="speichern_fehlgeschlagen">Speichern fehlgeschlagen. Bitte noch einmal versuchen.</string>
     <string name="speichern_nicht_mehr_vorhanden">Diesen Eintrag gibt es nicht mehr – vielleicht wurde inzwischen ein Backup eingespielt.</string>
@@ -68,6 +81,12 @@
     <string name="typ_intervall_hinweis">alle paar Stunden</string>
     <string name="typ_tagesziel_hinweis">ohne feste Uhrzeit</string>
     <string name="typ_wochenziel_hinweis">z. B. 3× Sport</string>
+    <string name="typ_einmalig_hinweis">mit Deadline</string>
+    <string name="feld_deadline">Deadline</string>
+    <string name="feld_erinnern">Erinnern</string>
+    <string name="erinnern_hinweis">wöchentlich, in den letzten 4 Wochen zweimal</string>
+    <string name="fehler_deadline_fehlt">Bitte eine Deadline wählen</string>
+    <string name="fehler_deadline_zu_frueh">Die Deadline liegt vor dem Beginn der Aufgabe</string>
     <string name="feld_zeitfenster">Zeitfenster</string>
     <string name="zeitfenster_bis">bis</string>
     <string name="ziel_einheit_tag">mal pro Tag</string>

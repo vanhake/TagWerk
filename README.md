@@ -33,12 +33,20 @@ Farben, Formen und Schrift (Manrope, als Ressource gebündelt) leben in
 **Heute.** Heldenkarte mit Tagesfortschritt und Punktestand, darunter die
 fälligen Aktivitäten als Kacheln mit Symbol. Erledigen und Auslassen zeigen
 einen Toast mit *Rückgängig*; das Rückgängig bucht eine exakte Gegenbuchung
-und stellt die Fälligkeit wieder her, die Historie bleibt erklärbar.
+und stellt die Fälligkeit wieder her, die Historie bleibt erklärbar. Offene
+Einmalaufgaben stehen im Bereich „Aufgaben“ mit den Tagen bis zur Deadline.
+
+**Einmalaufgaben.** Eine Aufgabe wie „Steuererklärung“ hat eine Deadline und
+bringt nur Punkte, wenn sie bis dahin erledigt ist; danach lässt sie sich noch
+ohne Punkte abhaken. Optional erinnert sie wöchentlich am Wochentag der
+Deadline, in den letzten vier Wochen zweimal pro Woche. Sie zählt nicht zum
+Tagesfortschritt und erscheint im Widget erst eine Woche vor der Deadline.
 
 **Aktivitäten.** Liste mit Symbolkachel, Plantext („Täglich · 08:00, 20:00“),
-Punkten und Serie. Der Editor hat ein Symbolraster, Stepper, Typkarten für die
-vier Zeitplanarten, Wochentag-Kacheln, Uhrzeit-Chips mit Zeitwähler, ein
-editierbares Zeitfenster für Intervalle und eine Zusammenfassung des Plans.
+Punkten und Serie, Einmalaufgaben in einem eigenen Abschnitt. Der Editor hat ein
+Symbolraster, Stepper, Typkarten für die fünf Zeitplanarten, Wochentag-Kacheln,
+Uhrzeit-Chips mit Zeitwähler, ein editierbares Zeitfenster für Intervalle, für
+Einmalaufgaben Deadline und Erinnerung, und eine Zusammenfassung des Plans.
 
 **Belohnungen.** Heldenkarte mit dem Punktestand, Belohnungen mit Symbol und
 Bedingung (Mindestserie oder Startdatum), Verlauf der Einlösungen. Eine

@@ -51,6 +51,11 @@ class AktivitaetBearbeitenViewModel(
 
     private var geladeneId: Long? = null
 
+    /** Zeitplanart der gespeicherten Aktivitaet, null bei einer neuen; bestimmt die
+     * waehlbaren Typkarten (AktivitaetEntwurf.waehlbareTypen). */
+    private val _gespeicherterTyp = MutableStateFlow<ZeitplanTyp?>(null)
+    val gespeicherterTyp: StateFlow<ZeitplanTyp?> = _gespeicherterTyp.asStateFlow()
+
     // Wird in speichern() gesetzt; ab dann prueft aendern() bei jeder Aenderung neu.
     private var speicherVersucht = false
 
@@ -74,7 +79,10 @@ class AktivitaetBearbeitenViewModel(
             _entwurf.value = _entwurf.value.copy(kulanzMinutenText = standardKulanzLesen().toString())
             return@launch
         }
-        aktivitaeten.nachId(id)?.let { _entwurf.value = AktivitaetEntwurf.aus(it) }
+        aktivitaeten.nachId(id)?.let {
+            _entwurf.value = AktivitaetEntwurf.aus(it)
+            _gespeicherterTyp.value = _entwurf.value.typ
+        }
     }
 
     /** Fehler bleiben bis zum ersten Speicherversuch stumm. Danach wird jede Aenderung neu
@@ -82,7 +90,7 @@ class AktivitaetBearbeitenViewModel(
      * err) und ein neu entstandener sofort erscheint. */
     fun aendern(block: (AktivitaetEntwurf) -> AktivitaetEntwurf) {
         _entwurf.value = block(_entwurf.value)
-        if (speicherVersucht) _fehler.value = _entwurf.value.pruefen()
+        if (speicherVersucht) _fehler.value = _entwurf.value.pruefen(LocalDate.now(uhr))
     }
 
     /** Vom Screen aufgerufen, nachdem der Hinweis gezeigt wurde. */
@@ -98,7 +106,7 @@ class AktivitaetBearbeitenViewModel(
         speichertGerade = true
         try {
             speicherVersucht = true
-            val fehler = _entwurf.value.pruefen()
+            val fehler = _entwurf.value.pruefen(LocalDate.now(uhr))
             _fehler.value = fehler
             if (fehler.isNotEmpty()) return null
 

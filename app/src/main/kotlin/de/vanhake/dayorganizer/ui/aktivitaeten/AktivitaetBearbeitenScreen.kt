@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.EventRepeat
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -28,6 +29,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -49,6 +51,7 @@ import de.vanhake.dayorganizer.R
 import de.vanhake.dayorganizer.ui.gemeinsam.Abschnitt
 import de.vanhake.dayorganizer.ui.gemeinsam.AuswahlKarte
 import de.vanhake.dayorganizer.ui.gemeinsam.AuswahlKarten
+import de.vanhake.dayorganizer.ui.gemeinsam.DatumDialog
 import de.vanhake.dayorganizer.ui.gemeinsam.FehlerText
 import de.vanhake.dayorganizer.ui.gemeinsam.Kopfzeile
 import de.vanhake.dayorganizer.ui.gemeinsam.NamensFeld
@@ -69,17 +72,22 @@ import de.vanhake.dayorganizer.ui.theme.aktivitaetSymbol
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
+import java.time.LocalDate
 import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 
 private val TYP_KARTEN = listOf(
     AuswahlKarte(ZeitplanTyp.FESTE_ZEITEN, R.string.typ_feste_zeiten, R.string.typ_feste_zeiten_hinweis),
     AuswahlKarte(ZeitplanTyp.INTERVALL, R.string.typ_intervall, R.string.typ_intervall_hinweis),
     AuswahlKarte(ZeitplanTyp.TAGESZIEL, R.string.typ_tagesziel, R.string.typ_tagesziel_hinweis),
     AuswahlKarte(ZeitplanTyp.WOCHENZIEL, R.string.typ_wochenziel, R.string.typ_wochenziel_hinweis),
+    AuswahlKarte(ZeitplanTyp.EINMALIG, R.string.typ_einmalig, R.string.typ_einmalig_hinweis),
 )
 
+private val DATUM_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
+
 /** Wofuer der offene Zeitwaehler gerade waehlt. */
-private enum class UhrzeitZiel { NEU, VON, BIS }
+private enum class UhrzeitZiel { NEU, VON, BIS, ERINNERUNG }
 
 @Composable
 fun AktivitaetBearbeitenScreen(
@@ -91,9 +99,11 @@ fun AktivitaetBearbeitenScreen(
     val entwurf by viewModel.entwurf.collectAsStateWithLifecycle()
     val fehler by viewModel.fehler.collectAsStateWithLifecycle()
     val speicherFehler by viewModel.speicherFehler.collectAsStateWithLifecycle()
+    val gespeicherterTyp by viewModel.gespeicherterTyp.collectAsStateWithLifecycle()
     val bereich = rememberCoroutineScope()
     val farben = DayOrganizerTheme.farben
     var uhrzeitZiel by rememberSaveable { mutableStateOf<UhrzeitZiel?>(null) }
+    var datumOffen by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(id) { viewModel.laden(id) }
 
@@ -147,10 +157,26 @@ fun AktivitaetBearbeitenScreen(
             }
 
             Abschnitt(R.string.feld_zeitplan) {
-                AuswahlKarten(TYP_KARTEN, entwurf.typ) { typ -> viewModel.aendern { it.copy(typ = typ) } }
+                val waehlbar = AktivitaetEntwurf.waehlbareTypen(gespeicherterTyp)
+                AuswahlKarten(TYP_KARTEN.filter { it.wert in waehlbar }, entwurf.typ) { typ ->
+                    viewModel.aendern { it.typWaehlen(typ) }
+                }
             }
 
-            if (entwurf.typ != ZeitplanTyp.WOCHENZIEL) {
+            if (entwurf.typ == ZeitplanTyp.EINMALIG) {
+                Abschnitt(R.string.feld_deadline) {
+                    DeadlineFeld(entwurf.deadline) { datumOffen = true }
+                    FehlerText(EntwurfFehler.DEADLINE_FEHLT in fehler, R.string.fehler_deadline_fehlt)
+                    FehlerText(EntwurfFehler.DEADLINE_ZU_FRUEH in fehler, R.string.fehler_deadline_zu_frueh)
+                }
+                ErinnernZeile(
+                    zeit = entwurf.erinnerungsZeit,
+                    umschalten = { an -> viewModel.aendern { it.erinnernUmschalten(an) } },
+                    zeitWaehlen = { uhrzeitZiel = UhrzeitZiel.ERINNERUNG },
+                )
+            }
+
+            if (entwurf.typ != ZeitplanTyp.WOCHENZIEL && entwurf.typ != ZeitplanTyp.EINMALIG) {
                 Abschnitt(R.string.feld_wochentage) {
                     WochentagKacheln(entwurf.wochentage) { tag -> viewModel.aendern { it.wochentagUmschalten(tag) } }
                     FehlerText(EntwurfFehler.KEIN_WOCHENTAG in fehler, R.string.fehler_kein_wochentag)
@@ -235,6 +261,7 @@ fun AktivitaetBearbeitenScreen(
                 UhrzeitZiel.NEU -> entwurf.zeiten.lastOrNull() ?: LocalTime.of(8, 0)
                 UhrzeitZiel.VON -> entwurf.fensterVon
                 UhrzeitZiel.BIS -> entwurf.fensterBis
+                UhrzeitZiel.ERINNERUNG -> entwurf.erinnerungsZeit ?: AktivitaetEntwurf.ERINNERUNG_STANDARD
             },
             bestaetigen = { zeit ->
                 viewModel.aendern {
@@ -242,12 +269,57 @@ fun AktivitaetBearbeitenScreen(
                         UhrzeitZiel.NEU -> it.zeitHinzufuegen(zeit)
                         UhrzeitZiel.VON -> it.copy(fensterVon = zeit)
                         UhrzeitZiel.BIS -> it.copy(fensterBis = zeit)
+                        UhrzeitZiel.ERINNERUNG -> it.copy(erinnerungsZeit = zeit)
                     }
                 }
                 uhrzeitZiel = null
             },
             abbrechen = { uhrzeitZiel = null },
         )
+    }
+
+    if (datumOffen) {
+        DatumDialog(
+            start = entwurf.deadline ?: LocalDate.now(),
+            bestaetigen = { datum ->
+                viewModel.aendern { it.copy(deadline = datum) }
+                datumOffen = false
+            },
+            abbrechen = { datumOffen = false },
+        )
+    }
+}
+
+@Composable
+private fun DeadlineFeld(deadline: LocalDate?, waehlen: () -> Unit) {
+    val farben = DayOrganizerTheme.farben
+    Surface(onClick = waehlen, shape = DayOrganizerFormen.feld, color = farben.surface, contentColor = farben.ink) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(Icons.Filled.Event, contentDescription = null, tint = farben.ink2)
+            Text(
+                deadline?.format(DATUM_FORMAT) ?: stringResource(R.string.datum_waehlen),
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+    }
+}
+
+/** Erinnerungen einer Einmalaufgabe: an/aus und die Uhrzeit, der Rhythmus steht fest. */
+@Composable
+private fun ErinnernZeile(zeit: LocalTime?, umschalten: (Boolean) -> Unit, zeitWaehlen: () -> Unit) {
+    StepperZeile(
+        titel = stringResource(R.string.feld_erinnern),
+        untertitel = stringResource(R.string.erinnern_hinweis),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (zeit != null) ZeitKnopf(zeit, zeitWaehlen)
+            Switch(checked = zeit != null, onCheckedChange = umschalten)
+        }
     }
 }
 

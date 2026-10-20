@@ -35,6 +35,7 @@ interface FaelligkeitRepository {
     suspend fun offeneAbTag(abTag: LocalDate): List<Faelligkeit>
     suspend fun aktualisieren(faelligkeit: Faelligkeit)
     fun beobachteTag(tag: LocalDate): Flow<List<Faelligkeit>>
+    fun beobachteFuerAktivitaeten(aktivitaetIds: Set<Long>): Flow<List<Faelligkeit>>
     suspend fun entfernenKuenftigeOffene(aktivitaetId: Long, abTag: LocalDate)
 }
 

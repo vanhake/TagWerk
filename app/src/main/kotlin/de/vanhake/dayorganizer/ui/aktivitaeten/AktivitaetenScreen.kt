@@ -112,12 +112,32 @@ fun AktivitaetenScreen(
                 }
             }
 
-            items(zeilen, key = { it.id }) { zeile ->
+            val (einmalig, wiederkehrend) = zeilen.partition { it.einmalig }
+            items(wiederkehrend, key = { it.id }) { zeile ->
                 AktivitaetZeileKarte(
                     zeile = zeile,
                     bearbeiten = { bearbeiten(zeile.id) },
                     archivieren = { archivierenId = zeile.id },
                 )
+            }
+
+            if (einmalig.isNotEmpty()) {
+                item(key = "einmalaufgaben") {
+                    Text(
+                        stringResource(R.string.abschnitt_einmalaufgaben),
+                        modifier = Modifier.padding(start = 4.dp, top = 8.dp),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = farben.ink2,
+                    )
+                }
+                items(einmalig, key = { it.id }) { zeile ->
+                    AktivitaetZeileKarte(
+                        zeile = zeile,
+                        bearbeiten = { bearbeiten(zeile.id) },
+                        archivieren = { archivierenId = zeile.id },
+                    )
+                }
             }
 
             item(key = "archiv") {
@@ -203,16 +223,18 @@ private fun AktivitaetZeileKarte(zeile: AktivitaetZeile, bearbeiten: () -> Unit,
                         flaeche = farben.goldSoft,
                         farbe = farben.goldInk,
                     )
-                    Plakette(
-                        symbol = Icons.Filled.LocalFireDepartment,
-                        text = if (zeile.serieInWochen) {
-                            pluralStringResource(R.plurals.serie_wochen, zeile.serie, zeile.serie)
-                        } else {
-                            pluralStringResource(R.plurals.serie_tage, zeile.serie, zeile.serie)
-                        },
-                        flaeche = farben.coralSoft,
-                        farbe = farben.coral,
-                    )
+                    if (!zeile.einmalig) {
+                        Plakette(
+                            symbol = Icons.Filled.LocalFireDepartment,
+                            text = if (zeile.serieInWochen) {
+                                pluralStringResource(R.plurals.serie_wochen, zeile.serie, zeile.serie)
+                            } else {
+                                pluralStringResource(R.plurals.serie_tage, zeile.serie, zeile.serie)
+                            },
+                            flaeche = farben.coralSoft,
+                            farbe = farben.coral,
+                        )
+                    }
                 }
             }
             IconButton(onClick = archivieren) {

@@ -346,4 +346,55 @@ class AktivitaetEntwurfTest {
         assertEquals(emptyList(), entwurf.pruefen())
         assertEquals(aktivitaet.zeitplan, entwurf.zuAktivitaet(LocalDate.of(2026, 4, 1)).zeitplan)
     }
+
+    @Test
+    fun `eine Deadline vor dem Beginn wird mit Datum gemeldet`() {
+        val heute = LocalDate.of(2026, 3, 2)
+        val entwurf = gueltig.copy(typ = ZeitplanTyp.EINMALIG, deadline = heute.minusDays(1))
+
+        assertEquals(listOf(EntwurfFehler.DEADLINE_ZU_FRUEH), entwurf.pruefen(heute))
+        assertEquals(emptyList(), entwurf.copy(deadline = heute).pruefen(heute))
+        // Ohne Datum entfaellt nur diese Pruefung.
+        assertEquals(emptyList(), entwurf.pruefen())
+    }
+
+    @Test
+    fun `eine bestehende Einmalaufgabe misst die Deadline am Anlegetag`() {
+        val entwurf = gueltig.copy(
+            typ = ZeitplanTyp.EINMALIG,
+            erstelltAm = LocalDate.of(2026, 2, 1),
+            deadline = LocalDate.of(2026, 2, 20),
+        )
+
+        assertEquals(emptyList(), entwurf.pruefen(LocalDate.of(2026, 3, 2)))
+    }
+
+    @Test
+    fun `der Wechsel zur Einmalaufgabe hebt unberuehrte Punkte auf deren Standard`() {
+        assertEquals(20, AktivitaetEntwurf().typWaehlen(ZeitplanTyp.EINMALIG).basisPunkte)
+        assertEquals(15, AktivitaetEntwurf(basisPunkte = 15).typWaehlen(ZeitplanTyp.EINMALIG).basisPunkte)
+        assertEquals(10, AktivitaetEntwurf().typWaehlen(ZeitplanTyp.TAGESZIEL).basisPunkte)
+    }
+
+    @Test
+    fun `Erinnern laesst sich aus- und mit der Standardzeit wieder einschalten`() {
+        val aus = AktivitaetEntwurf(erinnerungsZeit = LocalTime.of(18, 0)).erinnernUmschalten(false)
+
+        assertEquals(null, aus.erinnerungsZeit)
+        assertEquals(LocalTime.of(9, 0), aus.erinnernUmschalten(true).erinnerungsZeit)
+        assertEquals(
+            LocalTime.of(18, 0),
+            AktivitaetEntwurf(erinnerungsZeit = LocalTime.of(18, 0)).erinnernUmschalten(true).erinnerungsZeit,
+        )
+    }
+
+    @Test
+    fun `Einmalaufgabe und wiederkehrender Zeitplan lassen sich nicht ineinander umstellen`() {
+        assertEquals(ZeitplanTyp.entries, AktivitaetEntwurf.waehlbareTypen(null))
+        assertEquals(listOf(ZeitplanTyp.EINMALIG), AktivitaetEntwurf.waehlbareTypen(ZeitplanTyp.EINMALIG))
+        assertEquals(
+            listOf(ZeitplanTyp.FESTE_ZEITEN, ZeitplanTyp.INTERVALL, ZeitplanTyp.TAGESZIEL, ZeitplanTyp.WOCHENZIEL),
+            AktivitaetEntwurf.waehlbareTypen(ZeitplanTyp.TAGESZIEL),
+        )
+    }
 }

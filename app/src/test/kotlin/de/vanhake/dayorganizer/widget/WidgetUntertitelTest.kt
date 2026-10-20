@@ -61,4 +61,13 @@ class WidgetUntertitelTest {
             widgetUntertitel(eintrag(null, ist = 2, soll = 3, wochenziel = true), res),
         )
     }
+
+    @Test
+    fun `eine Einmalaufgabe nennt die Tage bis zur Deadline`() {
+        val aufgabe = eintrag(null, wochenziel = true)
+
+        assertEquals("noch 3 Tage", widgetUntertitel(aufgabe.copy(deadlineInTagen = 3), res))
+        assertEquals("morgen fällig", widgetUntertitel(aufgabe.copy(deadlineInTagen = 1), res))
+        assertEquals("heute fällig", widgetUntertitel(aufgabe.copy(deadlineInTagen = 0), res))
+    }
 }
