@@ -168,16 +168,40 @@ Entwicklungsumgebung aufsetzen.
 
 ### Release veröffentlichen
 
-Ein Tag der Form `v<Version>` baut eine signierte Release-APK und legt damit
-ein GitHub-Release an (Workflow `release.yml`):
+Versionsnummern und Releases verwaltet
+[release-please](https://github.com/googleapis/release-please) im Workflow
+`release.yml`. Von Hand wird kein Tag gesetzt.
 
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
+1. Bei jedem Push auf `main` pflegt der Workflow einen Release-PR
+   („chore(main): release x.y.z“) mit der nächsten Version und dem
+   `CHANGELOG.md`. Weitere Commits auf `main` aktualisieren ihn.
+2. Wenn veröffentlicht werden soll: den Release-PR mergen.
+3. Der Workflow setzt den Tag `vx.y.z`, legt das GitHub-Release mit dem
+   Changelog an und hängt die signierte APK `tagwerk-vx.y.z.apk` an.
 
-Die App trägt dann die Version aus dem Tag, hier `1.0.0`. Release-Notizen
-stellt GitHub aus den PRs seit dem letzten Tag zusammen.
+Damit der Workflow den Release-PR anlegen darf, muss unter *Settings* →
+*Actions* → *General* → *Workflow permissions* „Allow GitHub Actions to create
+and approve pull requests“ aktiviert sein.
+
+Die App trägt dann genau diese Version. Scheitert der APK-Bau nach einem
+Release, lässt er sich unter *Actions* → *Release* → *Run workflow* mit dem Tag
+erneut starten.
+
+**Versionsschema.** Die Version folgt [Semantic Versioning](https://semver.org/lang/de/)
+(`MAJOR.MINOR.PATCH`). Welcher Teil steigt, ergibt sich aus den
+Commit-Präfixen ([Conventional Commits](https://www.conventionalcommits.org/de/))
+seit dem letzten Release; die höchste Stufe gewinnt:
+
+| Präfix | Bedeutung | Version |
+|---|---|---|
+| `fix:` | Fehler behoben | PATCH: `1.4.2` → `1.4.3` |
+| `feat:` | neue Funktion | MINOR: `1.4.2` → `1.5.0` |
+| `feat!:`, `fix!:` oder `BREAKING CHANGE:` im Text | inkompatible Änderung, etwa ein Backup-Format, das ältere Versionen nicht mehr lesen | MAJOR: `1.4.2` → `2.0.0` |
+| `perf:`, `revert:` | schneller, Änderung zurückgenommen | PATCH |
+| `docs:`, `refactor:`, `test:`, `ci:`, `chore:` | ohne Wirkung für Nutzer | kein Release |
+
+Da Pull Requests per Merge-Commit übernommen werden, zählen die Präfixe der
+einzelnen Commits, nicht der PR-Titel.
 
 Den Schlüssel legst du einmalig selbst an und hinterlegst ihn als Secrets
 unter *Settings* → *Secrets and variables* → *Actions*:

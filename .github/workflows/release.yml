@@ -1,24 +1,61 @@
 name: Release
 
-# Ein Tag wie "v1.2.0" erzeugt ein GitHub-Release mit signierter APK:
-#   git tag v1.2.0 && git push origin v1.2.0
-# Der Schluessel kommt aus den Secrets KEYSTORE_BASE64, KEYSTORE_PASSWORD,
-# KEY_ALIAS und KEY_PASSWORD.
+# Versionen zaehlt release-please anhand der Commit-Praefixe hoch (Schema im
+# README). Bei jedem Push auf main pflegt es einen Release-PR mit naechster
+# Version und CHANGELOG. Erst wenn dieser PR gemergt wird, entstehen Tag und
+# GitHub-Release, und der zweite Job haengt die signierte APK an.
+#
+# Bau und Upload stehen bewusst im selben Workflow: Ein Tag, den ein Workflow
+# mit dem GITHUB_TOKEN setzt, loest keine weiteren Workflows aus.
 on:
   push:
-    tags: ['v*']
+    branches: [main]
+  # Fuer den Fall, dass der APK-Bau nach einem Release scheitert: baut die
+  # APK fuer einen bestehenden Tag neu und ersetzt sie im Release.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Bestehender Release-Tag, z. B. v1.0.0'
+        required: true
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
-  release:
-    name: Signierte APK veroeffentlichen
+  release-please:
+    name: Release-PR und Release
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  apk:
+    name: Signierte APK anhaengen
+    needs: release-please
+    # always(): sonst wuerde der Job beim manuellen Start uebersprungen, weil
+    # release-please dann nicht laeuft.
+    if: >-
+      always() && (
+        (github.event_name == 'push' && needs.release-please.outputs.release_created == 'true') ||
+        github.event_name == 'workflow_dispatch'
+      )
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || needs.release-please.outputs.tag_name }}
 
     steps:
-      - name: Quellcode holen
+      - name: Quellcode zum Tag holen
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
 
       - name: JDK 17 einrichten
         uses: actions/setup-java@v5
@@ -46,6 +83,7 @@ jobs:
 
       - name: Release-APK bauen
         env:
+          TAGWERK_RELEASE_VERSION: ${{ env.TAG }}
           TAGWERK_KEYSTORE_PATH: ${{ runner.temp }}/release.jks
           TAGWERK_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           TAGWERK_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
@@ -56,19 +94,13 @@ jobs:
         run: |
           apksigner="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)/apksigner"
           "$apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk
-          cp app/build/outputs/apk/release/app-release.apk "tagwerk-${GITHUB_REF_NAME}.apk"
+          cp app/build/outputs/apk/release/app-release.apk "tagwerk-${TAG}.apk"
 
       - name: Keystore entfernen
         if: always()
         run: rm -f "$RUNNER_TEMP/release.jks"
 
-      # Die Release-Notizen stellt GitHub aus den PRs und Commits seit dem
-      # letzten Tag zusammen.
-      - name: GitHub-Release anlegen
+      - name: APK ans Release haengen
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "$GITHUB_REF_NAME" "tagwerk-${GITHUB_REF_NAME}.apk" \
-            --title "TagWerk ${GITHUB_REF_NAME}" \
-            --generate-notes \
-            --verify-tag
+        run: gh release upload "$TAG" "tagwerk-${TAG}.apk" --clobber
