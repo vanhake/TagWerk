@@ -34,12 +34,13 @@ data class BackupInhalt(
 
 object BackupUmwandlung {
 
-    const val SCHEMA_VERSION = 3
+    const val SCHEMA_VERSION = 4
 
-    /** Schema 2 bleibt lesbar: die mit Schema 3 neuen Felder haben DTO-Standardwerte, die
-     * genau dem Zustand vor Schema 3 entsprechen. Schema 1 kannte weder Aktivitaetensymbol
-     * noch Farbmodus ohne Standardwert und bleibt abgelehnt. */
-    val LESBARE_VERSIONEN: Set<Int> = setOf(2, SCHEMA_VERSION)
+    /** Schema 2 und 3 bleiben lesbar: die mit Schema 3 und 4 neuen Felder haben
+     * DTO-Standardwerte, die genau dem Zustand davor entsprechen (Schema 4 brachte nur die
+     * Deadline der Einmalaufgaben). Schema 1 kannte weder Aktivitaetensymbol noch Farbmodus
+     * ohne Standardwert und bleibt abgelehnt. */
+    val LESBARE_VERSIONEN: Set<Int> = setOf(2, 3, SCHEMA_VERSION)
 
     private val json = Json {
         prettyPrint = true
@@ -144,6 +145,7 @@ object BackupUmwandlung {
             zeitplanIntervallStunden = felder.intervallStunden,
             zeitplanFensterVon = felder.fensterVon, zeitplanFensterBis = felder.fensterBis,
             zeitplanZielAnzahl = felder.zielAnzahl, zeitplanAnstoss = felder.anstoss,
+            zeitplanDeadline = felder.deadline,
         )
     }
 
@@ -158,6 +160,7 @@ object BackupUmwandlung {
                     intervallStunden = zeitplanIntervallStunden,
                     fensterVon = zeitplanFensterVon, fensterBis = zeitplanFensterBis,
                     zielAnzahl = zeitplanZielAnzahl, anstoss = zeitplanAnstoss,
+                    deadline = zeitplanDeadline,
                 ),
             ),
             kulanzMinuten = kulanzMinuten, puenktlichkeitsBonus = puenktlichkeitsBonus,

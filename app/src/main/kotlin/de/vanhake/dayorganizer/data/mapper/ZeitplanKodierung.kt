@@ -4,6 +4,7 @@ import de.vanhake.dayorganizer.domain.model.Anstoss
 import de.vanhake.dayorganizer.domain.model.SerienSchwelle
 import de.vanhake.dayorganizer.domain.model.Zeitplan
 import java.time.DayOfWeek
+import java.time.LocalDate
 import java.time.LocalTime
 
 /** Flache Darstellung eines Zeitplans, wie sie in der Datenbank liegt. */
@@ -16,6 +17,8 @@ data class ZeitplanFelder(
     val fensterBis: String? = null,
     val zielAnzahl: Int? = null,
     val anstoss: String = "",
+    /** Nur bei EINMALIG, ISO-Datum. */
+    val deadline: String? = null,
 )
 
 /**
@@ -29,6 +32,7 @@ object ZeitplanKodierung {
     private const val INTERVALL = "INTERVALL"
     private const val TAGESZIEL = "TAGESZIEL"
     private const val WOCHENZIEL = "WOCHENZIEL"
+    private const val EINMALIG = "EINMALIG"
 
     fun kodiere(zeitplan: Zeitplan): ZeitplanFelder = when (zeitplan) {
         is Zeitplan.FesteZeiten -> ZeitplanFelder(
@@ -57,6 +61,13 @@ object ZeitplanKodierung {
             zielAnzahl = zeitplan.anzahl,
             anstoss = zeitplan.anstoss.joinToString(",") { "${it.tag}@${it.zeit}" },
         )
+
+        // Die Erinnerungszeit liegt in "zeiten"; leer heisst: keine Erinnerungen.
+        is Zeitplan.Einmalig -> ZeitplanFelder(
+            typ = EINMALIG,
+            zeiten = zeitplan.erinnerungsZeit?.toString().orEmpty(),
+            deadline = zeitplan.deadline.toString(),
+        )
     }
 
     fun dekodiere(felder: ZeitplanFelder): Zeitplan = when (felder.typ) {
@@ -83,6 +94,11 @@ object ZeitplanKodierung {
             anstoss = felder.anstoss.split(",")
                 .filter { it.isNotBlank() }
                 .map { dekodiereAnstoss(it) },
+        )
+
+        EINMALIG -> Zeitplan.Einmalig(
+            deadline = parseDatum(requireNotNull(felder.deadline) { "Einmalaufgabe ohne Deadline" }, "deadline"),
+            erinnerungsZeit = dekodiereZeiten(felder.zeiten, "zeiten").singleOrNull(),
         )
 
         else -> error("Unbekannter Zeitplantyp: ${felder.typ}")
@@ -133,6 +149,14 @@ object ZeitplanKodierung {
             LocalTime.parse(text)
         } catch (e: java.time.format.DateTimeParseException) {
             throw IllegalArgumentException("Ungueltige Uhrzeit \"$text\" in \"$quelle\"", e)
+        }
+
+    /** Wandelt [text] in ein [LocalDate], mit [quelle] (Feldname) in der Fehlermeldung. */
+    private fun parseDatum(text: String, quelle: String): LocalDate =
+        try {
+            LocalDate.parse(text)
+        } catch (e: java.time.format.DateTimeParseException) {
+            throw IllegalArgumentException("Ungueltiges Datum \"$text\" in \"$quelle\"", e)
         }
 
     /** Wandelt [text] in eine Zahl, mit [quelle] (der ganze Eintrag) in der Fehlermeldung. */

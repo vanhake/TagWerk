@@ -9,6 +9,7 @@ import java.time.DayOfWeek.SUNDAY
 import java.time.DayOfWeek.THURSDAY
 import java.time.DayOfWeek.TUESDAY
 import java.time.DayOfWeek.WEDNESDAY
+import java.time.LocalDate
 import java.time.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -68,6 +69,19 @@ class PlanTextTest {
     @Test
     fun `ein Wochenziel ist nur die Anzahl pro Woche`() {
         assertEquals("3× pro Woche", PlanText.aus(Zeitplan.Wochenziel(3)))
+    }
+
+    @Test
+    fun `eine Einmalaufgabe nennt Deadline und Erinnerung`() {
+        val plan = Zeitplan.Einmalig(LocalDate.of(2027, 3, 15), LocalTime.of(9, 0))
+
+        assertEquals("Einmalig · bis 15.03.2027 · Erinnerung 09:00", PlanText.aus(plan))
+        assertEquals("Einmalig · bis 15.03.2027", PlanText.aus(plan.copy(erinnerungsZeit = null)))
+    }
+
+    @Test
+    fun `ein Entwurf ohne Deadline zeigt das an`() {
+        assertEquals("Einmalig · ohne Deadline", PlanText.aus(Zeitplan.Einmalig(LocalDate.MAX)))
     }
 
     @Test

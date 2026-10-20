@@ -9,7 +9,7 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
 
-enum class ZeitplanTyp { FESTE_ZEITEN, INTERVALL, TAGESZIEL, WOCHENZIEL }
+enum class ZeitplanTyp { FESTE_ZEITEN, INTERVALL, TAGESZIEL, WOCHENZIEL, EINMALIG }
 
 enum class EntwurfFehler {
     NAME_LEER,
@@ -18,6 +18,7 @@ enum class EntwurfFehler {
     KEIN_WOCHENTAG,
     ZIEL_NICHT_POSITIV,
     INTERVALL_UNGUELTIG,
+    DEADLINE_FEHLT,
 }
 
 /**
@@ -48,6 +49,9 @@ data class AktivitaetEntwurf(
     val fensterBis: LocalTime = LocalTime.of(22, 0),
     val zielAnzahl: Int = 3,
     val anstoss: List<Anstoss> = emptyList(),
+    val deadline: LocalDate? = null,
+    /** null = Einmalaufgabe ohne Erinnerungen. */
+    val erinnerungsZeit: LocalTime? = LocalTime.of(9, 0),
     val kulanzMinutenText: String = "60",
     val puenktlichkeitsBonusText: String = "5",
     val serienSchwellen: List<SerienSchwelle> = listOf(SerienSchwelle(7, 10)),
@@ -113,6 +117,10 @@ data class AktivitaetEntwurf(
             ZeitplanTyp.WOCHENZIEL -> {
                 if (zielAnzahl <= 0) add(EntwurfFehler.ZIEL_NICHT_POSITIV)
             }
+
+            ZeitplanTyp.EINMALIG -> {
+                if (deadline == null) add(EntwurfFehler.DEADLINE_FEHLT)
+            }
         }
     }
 
@@ -125,6 +133,9 @@ data class AktivitaetEntwurf(
             ZeitplanTyp.INTERVALL -> Zeitplan.Intervall(intervallStunden, fensterVon, fensterBis, wochentage)
             ZeitplanTyp.TAGESZIEL -> Zeitplan.Tagesziel(zielAnzahl, wochentage, sortiert)
             ZeitplanTyp.WOCHENZIEL -> Zeitplan.Wochenziel(zielAnzahl, anstoss)
+            // Ohne gewaehlte Deadline zeigt die Zusammenfassung "ohne Deadline" (PlanText);
+            // speichern laesst sich der Entwurf so nicht (DEADLINE_FEHLT).
+            ZeitplanTyp.EINMALIG -> Zeitplan.Einmalig(deadline ?: LocalDate.MAX, erinnerungsZeit)
         }
     }
 
@@ -196,6 +207,11 @@ data class AktivitaetEntwurf(
                     typ = ZeitplanTyp.WOCHENZIEL,
                     zielAnzahl = plan.anzahl,
                     anstoss = plan.anstoss,
+                )
+                is Zeitplan.Einmalig -> basis.copy(
+                    typ = ZeitplanTyp.EINMALIG,
+                    deadline = plan.deadline,
+                    erinnerungsZeit = plan.erinnerungsZeit,
                 )
             }
         }

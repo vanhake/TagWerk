@@ -1,8 +1,10 @@
 package de.vanhake.dayorganizer.domainuse
 
+import de.vanhake.dayorganizer.data.repository.AktivitaetRepository
 import de.vanhake.dayorganizer.data.repository.ErinnerungRepository
 import de.vanhake.dayorganizer.data.repository.FaelligkeitRepository
 import de.vanhake.dayorganizer.domain.model.FaelligkeitStatus
+import de.vanhake.dayorganizer.domain.model.Zeitplan
 import de.vanhake.dayorganizer.platform.alarm.AlarmPlaner
 import de.vanhake.dayorganizer.widget.WidgetAktualisierung
 import java.time.Clock
@@ -26,6 +28,7 @@ import javax.inject.Inject
 class AktivitaetNeuPlanen(
     private val faelligkeiten: FaelligkeitRepository,
     private val erinnerungen: ErinnerungRepository,
+    private val aktivitaeten: AktivitaetRepository,
     private val materialisieren: FaelligkeitenMaterialisieren,
     private val uhr: Clock,
     private val alarmNeuPlanen: suspend () -> Unit,
@@ -36,6 +39,7 @@ class AktivitaetNeuPlanen(
     constructor(
         faelligkeiten: FaelligkeitRepository,
         erinnerungen: ErinnerungRepository,
+        aktivitaeten: AktivitaetRepository,
         materialisieren: FaelligkeitenMaterialisieren,
         uhr: Clock,
         alarmPlaner: AlarmPlaner,
@@ -43,6 +47,7 @@ class AktivitaetNeuPlanen(
     ) : this(
         faelligkeiten,
         erinnerungen,
+        aktivitaeten,
         materialisieren,
         uhr,
         { alarmPlaner.neuPlanen() },
@@ -52,11 +57,16 @@ class AktivitaetNeuPlanen(
     suspend operator fun invoke(aktivitaetId: Long) {
         val heute = LocalDate.now(uhr)
 
+        // Die offene Faelligkeit einer Einmalaufgabe hat schon begonnen und bleibt darum
+        // stehen; ihre Erinnerungen haengen aber an Deadline und Uhrzeit und muessen neu
+        // entstehen. Bereits Ausgeloestes geht dabei verloren, das Materialisieren legt nur
+        // kuenftige Termine wieder an.
+        val einmalig = aktivitaeten.nachId(aktivitaetId)?.zeitplan is Zeitplan.Einmalig
+
         faelligkeiten.historie(aktivitaetId)
             .filter {
                 it.status == FaelligkeitStatus.OFFEN &&
-                    it.istAnzahl == 0 &&
-                    !it.periodeVon.isBefore(heute)
+                    (einmalig || (it.istAnzahl == 0 && !it.periodeVon.isBefore(heute)))
             }
             .forEach { erinnerungen.entfernenFuerFaelligkeit(it.id) }
 

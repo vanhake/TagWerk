@@ -97,6 +97,7 @@ class AktivitaetNeuPlanenTest {
     ) = AktivitaetNeuPlanen(
         faelligkeiten = faelligkeiten,
         erinnerungen = erinnerungen,
+        aktivitaeten = aktivitaeten,
         materialisieren = FaelligkeitenMaterialisieren(
             aktivitaeten, faelligkeiten, erinnerungen, ZeitplanRechner(), uhr,
         ),

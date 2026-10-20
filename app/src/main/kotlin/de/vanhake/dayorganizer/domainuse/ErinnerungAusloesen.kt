@@ -5,6 +5,7 @@ import de.vanhake.dayorganizer.data.repository.ErinnerungRepository
 import de.vanhake.dayorganizer.data.repository.FaelligkeitRepository
 import de.vanhake.dayorganizer.domain.model.Erinnerung
 import de.vanhake.dayorganizer.domain.model.FaelligkeitStatus
+import de.vanhake.dayorganizer.domain.model.Zeitplan
 import de.vanhake.dayorganizer.platform.notification.Erinnerungsanzeige
 import java.time.Clock
 import java.time.LocalDateTime
@@ -36,7 +37,10 @@ class ErinnerungAusloesen @Inject constructor(
 
             anzeige.zeige(faelligkeit, aktivitaet)
 
-            if (erinnerung.versuch < aktivitaet.nachfassAnzahl) {
+            // Eine Einmalaufgabe erinnert ueber Wochen von selbst wieder; ein Nachfassen im
+            // Minutentakt waere dort aufdringlich.
+            val nachfassen = aktivitaet.zeitplan !is Zeitplan.Einmalig
+            if (nachfassen && erinnerung.versuch < aktivitaet.nachfassAnzahl) {
                 erinnerungen.anlegenFallsNeu(
                     listOf(
                         Erinnerung(

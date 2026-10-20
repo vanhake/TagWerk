@@ -43,6 +43,8 @@ data class AktivitaetDto(
     val zeitplanFensterBis: String?,
     val zeitplanZielAnzahl: Int?,
     val zeitplanAnstoss: String,
+    /** Seit Schema 4, nur bei Einmalaufgaben gesetzt. */
+    val zeitplanDeadline: String? = null,
 )
 
 @Serializable

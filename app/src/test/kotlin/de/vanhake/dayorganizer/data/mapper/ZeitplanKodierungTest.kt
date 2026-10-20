@@ -4,6 +4,7 @@ import de.vanhake.dayorganizer.domain.model.Anstoss
 import de.vanhake.dayorganizer.domain.model.SerienSchwelle
 import de.vanhake.dayorganizer.domain.model.Zeitplan
 import java.time.DayOfWeek
+import java.time.LocalDate
 import java.time.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -60,6 +61,19 @@ class ZeitplanKodierungTest {
                 ),
             ),
         )
+    }
+
+    @Test
+    fun `Einmalaufgabe mit und ohne Erinnerung uebersteht den Rundlauf`() {
+        rundlauf(Zeitplan.Einmalig(LocalDate.of(2026, 5, 31), LocalTime.of(9, 0)))
+        rundlauf(Zeitplan.Einmalig(LocalDate.of(2026, 5, 31), erinnerungsZeit = null))
+    }
+
+    @Test
+    fun `Einmalaufgabe ohne Deadline scheitert`() {
+        assertFailsWith<IllegalArgumentException> {
+            ZeitplanKodierung.dekodiere(ZeitplanFelder(typ = "EINMALIG", zeiten = "09:00"))
+        }
     }
 
     @Test

@@ -29,4 +29,6 @@ data class AktivitaetEntity(
     val zeitplanFensterBis: String?,
     val zeitplanZielAnzahl: Int?,
     val zeitplanAnstoss: String,
+    /** Nur bei Einmalaufgaben gesetzt (ISO-Datum), seit Schema 6. */
+    val zeitplanDeadline: String? = null,
 )

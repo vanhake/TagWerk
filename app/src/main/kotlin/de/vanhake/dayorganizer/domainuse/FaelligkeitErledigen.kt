@@ -9,6 +9,7 @@ import de.vanhake.dayorganizer.data.repository.Transaktionen
 import de.vanhake.dayorganizer.domain.model.Buchung
 import de.vanhake.dayorganizer.domain.model.Faelligkeit
 import de.vanhake.dayorganizer.domain.model.FaelligkeitStatus
+import de.vanhake.dayorganizer.domain.model.Zeitplan
 import de.vanhake.dayorganizer.domain.rechner.ErledigungsKontext
 import de.vanhake.dayorganizer.domain.rechner.PunkteRechner
 import de.vanhake.dayorganizer.domain.rechner.SerienRechner
@@ -21,7 +22,9 @@ import javax.inject.Inject
  * NICHT_OFFEN deckt alle drei geschlossenen Zustaende ab: ERLEDIGT (schon gebucht),
  * AUSGELASSEN (bewusst uebersprungen -- keine Punkte, aber die Serie ueberlebt) und
  * VERPASST (vom naechtlichen Watchdog geschlossen -- die Serie bricht). Keiner davon
- * darf nachtraeglich durch einen zweiten Aufruf gebucht werden.
+ * darf nachtraeglich durch einen zweiten Aufruf gebucht werden. Einzige Ausnahme ist die
+ * verpasste Einmalaufgabe: sie laesst sich einmal nachtraeglich abhaken, bucht dabei aber
+ * nichts (siehe nachtraeglichErledigen).
  */
 enum class ErledigungsErgebnis { GEBUCHT, NICHT_OFFEN, UNBEKANNT }
 
@@ -82,12 +85,21 @@ class FaelligkeitErledigen(
 
     private suspend fun erledige(faelligkeitId: Long): ErledigungsProtokoll {
         val vorher = faelligkeiten.nachId(faelligkeitId) ?: return ErledigungsProtokoll.Unbekannt
-        if (vorher.status != FaelligkeitStatus.OFFEN) return ErledigungsProtokoll.NichtOffen
+        val offen = vorher.status == FaelligkeitStatus.OFFEN
+        // VERPASST kommt nur bei einer Einmalaufgabe weiter, dafuer braucht es die Aktivitaet.
+        if (!offen && vorher.status != FaelligkeitStatus.VERPASST) return ErledigungsProtokoll.NichtOffen
         val aktivitaet = aktivitaeten.nachId(vorher.aktivitaetId)
-            ?: return ErledigungsProtokoll.Unbekannt
+            ?: return if (offen) ErledigungsProtokoll.Unbekannt else ErledigungsProtokoll.NichtOffen
 
         val jetzt = LocalDateTime.now(uhr)
         val heute = LocalDate.now(uhr)
+
+        // Eine Einmalaufgabe nach ihrer Deadline: der Waechter hat sie schon als verpasst
+        // geschlossen oder holt das beim naechsten Lauf nach. Punkte gibt es nicht mehr.
+        if (aktivitaet.zeitplan is Zeitplan.Einmalig && vorher.periodeBis.isBefore(heute)) {
+            return nachtraeglichErledigen(vorher, jetzt)
+        }
+        if (vorher.status != FaelligkeitStatus.OFFEN) return ErledigungsProtokoll.NichtOffen
         val istNeu = vorher.istAnzahl + 1
         val erfuellt = istNeu >= vorher.sollAnzahl
 
@@ -132,5 +144,29 @@ class FaelligkeitErledigen(
         )
         buchungen.buchen(gebuchteZeilen)
         return ErledigungsProtokoll.Gebucht(faelligkeitVorher = vorher, buchungen = gebuchteZeilen)
+    }
+
+    /**
+     * Haekt eine Einmalaufgabe nach ihrer Deadline ab. Sie bleibt VERPASST -- Quote und
+     * Statistik sollen die versaeumte Deadline weiter zeigen --, traegt aber Erledigungszeit
+     * und Ist-Anzahl, damit die Oberflaeche "zu spaet erledigt" anzeigen kann. Gebucht wird
+     * nichts; das leere Protokoll laesst sich trotzdem ruecknehmen.
+     */
+    private suspend fun nachtraeglichErledigen(
+        vorher: Faelligkeit,
+        jetzt: LocalDateTime,
+    ): ErledigungsProtokoll {
+        val offenOderVerpasst = vorher.status == FaelligkeitStatus.OFFEN ||
+            vorher.status == FaelligkeitStatus.VERPASST
+        if (!offenOderVerpasst || vorher.erledigtAm != null) return ErledigungsProtokoll.NichtOffen
+
+        faelligkeiten.aktualisieren(
+            vorher.copy(
+                istAnzahl = vorher.sollAnzahl,
+                status = FaelligkeitStatus.VERPASST,
+                erledigtAm = jetzt,
+            ),
+        )
+        return ErledigungsProtokoll.Gebucht(faelligkeitVorher = vorher, buchungen = emptyList())
     }
 }

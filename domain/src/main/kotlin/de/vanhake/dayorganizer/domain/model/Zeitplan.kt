@@ -1,6 +1,7 @@
 package de.vanhake.dayorganizer.domain.model
 
 import java.time.DayOfWeek
+import java.time.LocalDate
 import java.time.LocalTime
 
 /** Ein Anstoss ist eine Erinnerungszeit fuer Ziele ohne Soll-Zeitpunkt. */
@@ -33,5 +34,15 @@ sealed interface Zeitplan {
     data class Wochenziel(
         val anzahl: Int,
         val anstoss: List<Anstoss> = emptyList(),
+    ) : Zeitplan
+
+    /**
+     * Eine einmalige Aufgabe mit Deadline. Eine einzige Faelligkeit vom Anlegetag bis
+     * einschliesslich [deadline]; Punkte gibt es nur, wenn sie bis dahin erledigt ist.
+     * [erinnerungsZeit] == null heisst: keine Erinnerungen.
+     */
+    data class Einmalig(
+        val deadline: LocalDate,
+        val erinnerungsZeit: LocalTime? = null,
     ) : Zeitplan
 }
