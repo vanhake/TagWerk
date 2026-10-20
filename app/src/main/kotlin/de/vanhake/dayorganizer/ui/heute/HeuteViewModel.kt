@@ -106,8 +106,9 @@ class HeuteViewModel(
     val toast: StateFlow<Hinweistoast?> = stapel.sichtbar
 
     // Einmalaufgaben ueber ihren ganzen Zeitraum, auch nach verstrichener Deadline -- das
-    // gibt beobachteTag nicht her. combine kennt nur fuenf Flows, darum reisen Tages- und
-    // Aufgaben-Faelligkeiten als Paar.
+    // gibt beobachteTag nicht her. combine kennt nur fuenf Flows, darum reisen sie als Paar
+    // mit den selten wechselnden Hinweisen: so bleibt der Weg der Tages-Faelligkeiten ohne
+    // zusaetzliche Stufe, und Abhaken und Kontostand kommen weiter in einer Emission an.
     @OptIn(ExperimentalCoroutinesApi::class)
     private val aufgabenFaelligkeiten = aktivitaeten.beobachteAktive()
         .map { liste -> liste.filter { it.zeitplan is Zeitplan.Einmalig }.map { it.id }.toSet() }
@@ -116,12 +117,12 @@ class HeuteViewModel(
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val zustand: StateFlow<HeuteZustand> = combine(
-        combine(tag.flatMapLatest { faelligkeiten.beobachteTag(it) }, aufgabenFaelligkeiten, ::Pair),
+        tag.flatMapLatest { faelligkeiten.beobachteTag(it) },
         aktivitaeten.beobachteAktive(),
         belohnungen.beobachteAktive(),
         buchungen.beobachteKontostand(),
-        hinweise,
-    ) { (faelligkeiten, aufgaben), aktivitaeten, belohnungen, kontostand, hinweise ->
+        combine(hinweise, aufgabenFaelligkeiten, ::Pair),
+    ) { faelligkeiten, aktivitaeten, belohnungen, kontostand, (hinweise, aufgaben) ->
         HeuteZusammenstellung.aus(
             faelligkeiten, aktivitaeten, belohnungen, kontostand, LocalDateTime.now(uhr), aufgaben,
         ).copy(hinweise = hinweise)
