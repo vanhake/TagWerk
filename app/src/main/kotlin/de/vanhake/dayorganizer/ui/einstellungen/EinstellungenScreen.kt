@@ -45,14 +45,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.vanhake.dayorganizer.BuildConfig
 import de.vanhake.dayorganizer.R
 import de.vanhake.dayorganizer.data.ThemeModus
-import de.vanhake.dayorganizer.platform.permission.einstellungsIntent
+import de.vanhake.dayorganizer.platform.permission.einstellungOeffnen
 import de.vanhake.dayorganizer.ui.gemeinsam.Hinweistoast
 import de.vanhake.dayorganizer.ui.gemeinsam.HinweistoastLeiste
 import de.vanhake.dayorganizer.ui.gemeinsam.Segment
@@ -147,7 +146,7 @@ fun EinstellungenScreen(viewModel: EinstellungenViewModel = hiltViewModel()) {
                 WarnBanner(
                     hinweis = hinweis,
                     beheben = {
-                        ContextCompat.startActivity(kontext, hinweis.einstellungsIntent(kontext), null)
+                        hinweis.einstellungOeffnen(kontext)
                     },
                 )
             }
