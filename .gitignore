@@ -10,3 +10,6 @@ build/
 .cxx
 local.properties
 .superpowers/
+# Signierschluessel gehoeren nie ins Repo
+*.jks
+*.keystore

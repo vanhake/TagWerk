@@ -17,6 +17,19 @@ val buildNummer = ciBuildNummer ?: runCatching {
         .standardOutput.asText.get().trim().toInt()
 }.getOrDefault(1)
 
+// Ein Release-Build aus einem Tag wie "v1.2.0" traegt genau diese Version.
+// Alle anderen Builds behalten das Schema 0.1.<Build-Nummer>.
+val releaseVersion = providers.environmentVariable("GITHUB_REF_NAME").orNull
+    ?.takeIf { providers.environmentVariable("GITHUB_REF_TYPE").orNull == "tag" }
+    ?.removePrefix("v")
+
+// Der Release-Schluessel kommt nur ueber Umgebungsvariablen herein, in der CI
+// aus den GitHub-Secrets, und liegt nie im Repo. Fehlen sie, bleibt die
+// Release-APK wie bisher unsigniert.
+val releaseKeystore = providers.environmentVariable("TAGWERK_KEYSTORE_PATH").orNull
+fun signierwert(name: String) = providers.environmentVariable(name).orNull
+    ?: error("$name fehlt, obwohl TAGWERK_KEYSTORE_PATH gesetzt ist")
+
 android {
     namespace = "de.vanhake.dayorganizer"
     compileSdk = 35
@@ -26,14 +39,27 @@ android {
         minSdk = 33
         targetSdk = 35
         versionCode = buildNummer
-        versionName = "0.1.$buildNummer" + if (ciBuildNummer == null) "-lokal" else ""
+        versionName = releaseVersion
+            ?: ("0.1.$buildNummer" + if (ciBuildNummer == null) "-lokal" else "")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ksp { arg("room.schemaLocation", "$projectDir/schemas") }
+    }
+
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = signierwert("TAGWERK_KEYSTORE_PASSWORD")
+                keyAlias = signierwert("TAGWERK_KEY_ALIAS")
+                keyPassword = signierwert("TAGWERK_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (releaseKeystore != null) signingConfig = signingConfigs.getByName("release")
         }
     }
 

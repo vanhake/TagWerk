@@ -166,9 +166,40 @@ hängt sie als Artefakt an den Lauf. Zu finden unter *Actions* → letzter Lauf 
 *Artifacts*. Damit muss niemand, der die App nur benutzen will, eine
 Entwicklungsumgebung aufsetzen.
 
-Die Release-Variante wird bewusst nicht gebaut: sie wäre unsigniert und ließe
-sich nicht installieren. Für eine signierte Release-APK bräuchte es einen
-eigenen Schlüssel in den GitHub-Secrets.
+### Release veröffentlichen
+
+Ein Tag der Form `v<Version>` baut eine signierte Release-APK und legt damit
+ein GitHub-Release an (Workflow `release.yml`):
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+Die App trägt dann die Version aus dem Tag, hier `1.0.0`. Release-Notizen
+stellt GitHub aus den PRs seit dem letzten Tag zusammen.
+
+Den Schlüssel legst du einmalig selbst an und hinterlegst ihn als Secrets
+unter *Settings* → *Secrets and variables* → *Actions*:
+
+```bash
+keytool -genkeypair -v -keystore tagwerk-release.jks -alias tagwerk \
+  -keyalg RSA -keysize 4096 -validity 10000
+base64 -w0 tagwerk-release.jks   # Ausgabe ist der Wert für KEYSTORE_BASE64
+```
+
+| Secret | Inhalt |
+|---|---|
+| `KEYSTORE_BASE64` | Keystore als Base64 |
+| `KEYSTORE_PASSWORD` | Passwort des Keystores |
+| `KEY_ALIAS` | Alias des Schlüssels, z. B. `tagwerk` |
+| `KEY_PASSWORD` | Passwort des Schlüssels |
+
+Keystore und Passwort sicher aufbewahren: Ohne sie lassen sich keine Updates
+mehr ausliefern, Android lehnt eine APK mit anderem Schlüssel ab. Aus demselben
+Grund lässt sich eine Debug-APK nicht durch eine Release-APK ersetzen; beim
+Umstieg einmal ein Backup exportieren, deinstallieren, neu installieren und das
+Backup wieder einspielen.
 
 ## Tests
 
