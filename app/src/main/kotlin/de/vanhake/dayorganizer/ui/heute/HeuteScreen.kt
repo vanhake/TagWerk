@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Star
@@ -161,6 +162,7 @@ private fun LazyListScope.abschnitt(
                 eintrag = eintrag,
                 erledigen = { viewModel.erledigen(eintrag.faelligkeitId) },
                 auslassen = { viewModel.auslassen(eintrag.faelligkeitId) },
+                wiederOeffnen = { viewModel.wiederOeffnen(eintrag.faelligkeitId) },
             )
         }
     }
@@ -304,7 +306,12 @@ private fun FortschrittsKarte(zustand: HeuteZustand) {
 }
 
 @Composable
-private fun EintragZeile(eintrag: HeuteEintrag, erledigen: () -> Unit, auslassen: () -> Unit) {
+private fun EintragZeile(
+    eintrag: HeuteEintrag,
+    erledigen: () -> Unit,
+    auslassen: () -> Unit,
+    wiederOeffnen: () -> Unit,
+) {
     val farben = DayOrganizerTheme.farben
     val erledigt = eintrag.status == FaelligkeitStatus.ERLEDIGT
     val ausgelassen = eintrag.status == FaelligkeitStatus.AUSGELASSEN
@@ -366,6 +373,15 @@ private fun EintragZeile(eintrag: HeuteEintrag, erledigen: () -> Unit, auslassen
             if (eintrag.status == FaelligkeitStatus.OFFEN || aufgabe) {
                 OutlinedIconButton(onClick = erledigen) {
                     Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.aktion_erledigt), tint = farben.accent)
+                }
+            }
+            if (eintrag.wiederOeffenbar) {
+                IconButton(onClick = wiederOeffnen) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.Undo,
+                        contentDescription = stringResource(R.string.aktion_wieder_oeffnen),
+                        tint = farben.ink2,
+                    )
                 }
             }
         }

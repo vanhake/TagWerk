@@ -200,4 +200,46 @@ class HeuteZusammenstellungTest {
 
         assertEquals(emptyList(), zustand.aufgaben)
     }
+
+    @Test
+    fun `eine heute abgehakte Einmalaufgabe steht unter Erledigt und laesst sich wieder oeffnen`() {
+        val heuteErledigt = aufgabe(45, LocalDate.of(2026, 3, 13), FaelligkeitStatus.ERLEDIGT)
+            .copy(istAnzahl = 1, erledigtAm = jetzt.minusHours(1))
+        val gesternErledigt = aufgabe(46, LocalDate.of(2026, 3, 20), FaelligkeitStatus.ERLEDIGT)
+            .copy(istAnzahl = 1, erledigtAm = jetzt.minusDays(1))
+
+        val zustand = HeuteZusammenstellung.aus(
+            faelligkeiten = listOf(termin(10, 8, FaelligkeitStatus.ERLEDIGT)),
+            aktivitaeten = listOf(tabletten, steuer),
+            belohnungen = emptyList(),
+            kontostand = 0,
+            jetzt = jetzt,
+            aufgaben = listOf(heuteErledigt, gesternErledigt),
+        )
+
+        assertEquals(listOf(10L, 45L), zustand.abgeschlossen.map { it.faelligkeitId })
+        assertEquals(true, zustand.abgeschlossen.all { it.wiederOeffenbar })
+        // Einmalaufgaben zaehlen weiter nicht zum Tagesfortschritt.
+        assertEquals(1, zustand.gesamtHeute)
+        assertEquals(emptyList(), zustand.aufgaben)
+    }
+
+    @Test
+    fun `nur erledigte und ausgelassene Eintraege lassen sich wieder oeffnen`() {
+        val zustand = HeuteZusammenstellung.aus(
+            faelligkeiten = listOf(
+                termin(10, 8, FaelligkeitStatus.ERLEDIGT),
+                termin(11, 9, FaelligkeitStatus.AUSGELASSEN),
+                termin(12, 10, FaelligkeitStatus.VERPASST),
+                termin(13, 20, FaelligkeitStatus.OFFEN),
+            ),
+            aktivitaeten = listOf(tabletten),
+            belohnungen = emptyList(),
+            kontostand = 0,
+            jetzt = jetzt,
+        )
+
+        val oeffenbar = (zustand.abgeschlossen + zustand.spaeter).associate { it.faelligkeitId to it.wiederOeffenbar }
+        assertEquals(mapOf(10L to true, 11L to true, 12L to false, 13L to false), oeffenbar)
+    }
 }

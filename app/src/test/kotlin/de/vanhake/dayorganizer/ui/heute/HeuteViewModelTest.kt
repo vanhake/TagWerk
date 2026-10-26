@@ -17,6 +17,7 @@ import de.vanhake.dayorganizer.domainuse.FaelligkeitAuslassen
 import de.vanhake.dayorganizer.domainuse.FaelligkeitAuslassenRueckgaengig
 import de.vanhake.dayorganizer.domainuse.FaelligkeitErledigen
 import de.vanhake.dayorganizer.domainuse.FaelligkeitErledigenRueckgaengig
+import de.vanhake.dayorganizer.domainuse.FaelligkeitWiederOeffnen
 import de.vanhake.dayorganizer.platform.notification.Erinnerungsanzeige
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -114,6 +115,7 @@ class HeuteViewModelTest {
             auslassenUseCase = FaelligkeitAuslassen(faelligkeiten, uhr),
             erledigenRueckgaengig = FaelligkeitErledigenRueckgaengig(faelligkeiten, buchungen, transaktionen, uhr),
             auslassenRueckgaengig = FaelligkeitAuslassenRueckgaengig(faelligkeiten),
+            wiederOeffnenUseCase = FaelligkeitWiederOeffnen(faelligkeiten, buchungen, transaktionen, uhr),
             anzeige = anzeige,
             alarmNeuPlanen = alarmNeuPlanen,
             hinweiseLesen = { emptyList() },
@@ -456,4 +458,31 @@ class HeuteViewModelTest {
             }
             assertEquals(0, buchungen.stand.value.sumOf { it.betrag })
         }
+
+    @Test
+    fun `Wieder oeffnen nimmt eine Erledigung auch nach Ablauf des Toasts zurueck`() = runTest(dispatcher) {
+        val faelligkeiten = FakeFaelligkeitRepository(listOf(morgens))
+        val buchungen = FakeBuchungRepository()
+        var widgetAnstoesse = 0
+        var neuGeplant = 0
+        val vm = viewModel(
+            faelligkeiten, buchungen,
+            widgetAnstossen = { widgetAnstoesse++ },
+            alarmNeuPlanen = { neuGeplant++ },
+        )
+
+        vm.erledigen(10)
+        dispatcher.scheduler.advanceTimeBy(3_900)
+        dispatcher.scheduler.runCurrent()
+        assertEquals(null, vm.toast.value)
+
+        vm.wiederOeffnen(10)
+        dispatcher.scheduler.runCurrent()
+
+        assertEquals(FaelligkeitStatus.OFFEN, faelligkeiten.stand.value.single().status)
+        assertEquals(0, buchungen.stand.value.sumOf { it.betrag })
+        assertEquals("Tabletten wieder offen", vm.toast.value?.text)
+        assertEquals(2, widgetAnstoesse)
+        assertEquals(2, neuGeplant)
+    }
 }

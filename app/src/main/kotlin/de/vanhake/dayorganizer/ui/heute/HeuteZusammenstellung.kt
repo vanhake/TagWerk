@@ -5,6 +5,7 @@ import de.vanhake.dayorganizer.domain.model.Belohnung
 import de.vanhake.dayorganizer.domain.model.Faelligkeit
 import de.vanhake.dayorganizer.domain.model.FaelligkeitStatus
 import de.vanhake.dayorganizer.domain.model.Zeitplan
+import de.vanhake.dayorganizer.domainuse.FaelligkeitWiederOeffnen
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
 import java.time.format.DateTimeFormatter
@@ -40,6 +41,7 @@ object HeuteZusammenstellung {
                 status = f.status,
                 ueberfaellig = f.status == FaelligkeitStatus.OFFEN &&
                     f.geplantFuer != null && f.geplantFuer!!.isBefore(jetzt),
+                wiederOeffenbar = FaelligkeitWiederOeffnen.istWiederOeffenbar(f),
             )
         }
 
@@ -63,7 +65,7 @@ object HeuteZusammenstellung {
                 .map { it.second },
             abgeschlossen = eintraege
                 .filter { it.first.status != FaelligkeitStatus.OFFEN }
-                .map { it.second },
+                .map { it.second } + heuteErledigteAufgaben(aufgaben, nachId, einmalig, jetzt),
             aufgaben = aufgabenEintraege(aufgaben, nachId, einmalig, jetzt),
             naechsteBelohnung = NaechsteBelohnungWahl.aus(belohnungen, kontostand),
         )
@@ -101,6 +103,39 @@ object HeuteZusammenstellung {
                     status = f.status,
                     ueberfaellig = f.periodeBis.isBefore(heute),
                     deadlineInTagen = ChronoUnit.DAYS.between(heute, f.periodeBis),
+                )
+            }
+    }
+
+    /**
+     * Eine abgehakte Einmalaufgabe verschwaende sonst sofort aus "Aufgaben" und liesse sich
+     * nach einem Fehltipp nicht mehr finden. Am Tag des Abhakens steht sie deshalb unter
+     * "Erledigt" und laesst sich dort wieder oeffnen; zum Tagesfortschritt zaehlt sie nicht.
+     */
+    private fun heuteErledigteAufgaben(
+        aufgaben: List<Faelligkeit>,
+        nachId: Map<Long, Aktivitaet>,
+        einmalig: Set<Long>,
+        jetzt: LocalDateTime,
+    ): List<HeuteEintrag> {
+        val heute = jetzt.toLocalDate()
+        return aufgaben
+            .filter { it.aktivitaetId in einmalig && it.erledigtAm?.toLocalDate() == heute }
+            .filter { it.status == FaelligkeitStatus.ERLEDIGT || it.status == FaelligkeitStatus.VERPASST }
+            .sortedBy { it.erledigtAm }
+            .map { f ->
+                val aktivitaet = nachId.getValue(f.aktivitaetId)
+                HeuteEintrag(
+                    faelligkeitId = f.id,
+                    aktivitaetName = aktivitaet.name,
+                    farbe = aktivitaet.farbe,
+                    symbol = aktivitaet.symbol,
+                    zeitText = null,
+                    sollAnzahl = f.sollAnzahl,
+                    istAnzahl = f.istAnzahl,
+                    status = f.status,
+                    ueberfaellig = false,
+                    wiederOeffenbar = FaelligkeitWiederOeffnen.istWiederOeffenbar(f),
                 )
             }
     }
