@@ -17,6 +17,7 @@ import de.vanhake.dayorganizer.domainuse.FaelligkeitAuslassen
 import de.vanhake.dayorganizer.domainuse.FaelligkeitAuslassenRueckgaengig
 import de.vanhake.dayorganizer.domainuse.FaelligkeitErledigen
 import de.vanhake.dayorganizer.domainuse.FaelligkeitErledigenRueckgaengig
+import de.vanhake.dayorganizer.domainuse.FaelligkeitWiederOeffnen
 import de.vanhake.dayorganizer.platform.alarm.AlarmPlaner
 import de.vanhake.dayorganizer.platform.notification.Erinnerungsanzeige
 import de.vanhake.dayorganizer.platform.permission.BerechtigungsHinweise
@@ -54,6 +55,7 @@ class HeuteViewModel(
     private val auslassenUseCase: FaelligkeitAuslassen,
     private val erledigenRueckgaengig: FaelligkeitErledigenRueckgaengig,
     private val auslassenRueckgaengig: FaelligkeitAuslassenRueckgaengig,
+    private val wiederOeffnenUseCase: FaelligkeitWiederOeffnen,
     private val anzeige: Erinnerungsanzeige,
     private val alarmNeuPlanen: suspend () -> Unit,
     private val hinweiseLesen: suspend () -> List<Hinweis>,
@@ -71,6 +73,7 @@ class HeuteViewModel(
         auslassenUseCase: FaelligkeitAuslassen,
         erledigenRueckgaengig: FaelligkeitErledigenRueckgaengig,
         auslassenRueckgaengig: FaelligkeitAuslassenRueckgaengig,
+        wiederOeffnenUseCase: FaelligkeitWiederOeffnen,
         anzeige: Erinnerungsanzeige,
         alarmPlaner: AlarmPlaner,
         pruefer: BerechtigungsPruefer,
@@ -79,7 +82,7 @@ class HeuteViewModel(
         widgetAktualisierung: WidgetAktualisierung,
     ) : this(
         aktivitaeten, faelligkeiten, buchungen, belohnungen, erledigenUseCase, auslassenUseCase,
-        erledigenRueckgaengig, auslassenRueckgaengig, anzeige,
+        erledigenRueckgaengig, auslassenRueckgaengig, wiederOeffnenUseCase, anzeige,
         { alarmPlaner.neuPlanen() },
         {
             // BerechtigungsPruefer liest nur aus Context und kann DataStore nicht synchron
@@ -201,6 +204,24 @@ class HeuteViewModel(
         }
     }
 
+    /**
+     * Fuer den Fehltipp, den der Rueckgaengig-Toast nicht mehr abfaengt: der Toast ist weg,
+     * die Zeile steht unter "Erledigt". Kein eigener Rueckgaengig-Toast -- wer sich wieder
+     * umentscheidet, hakt einfach erneut ab.
+     */
+    fun wiederOeffnen(faelligkeitId: Long) = viewModelScope.launch {
+        val ergebnis = versuchen { wiederOeffnenUseCase(faelligkeitId) }
+            .onFailure { Log.w(TAG, "Wieder oeffnen fehlgeschlagen", it) }
+        if (ergebnis.isFailure) {
+            stapel.zeigen(HeuteToastTexte.WIEDER_OEFFNEN_FEHLGESCHLAGEN)
+            return@launch
+        }
+        val vorher = ergebnis.getOrNull() ?: return@launch
+        folgeschritt { alarmNeuPlanen() }
+        widgetAnstossen()
+        stapel.zeigen(HeuteToastTexte.wiederOffenToast(nameVon(vorher.aktivitaetId)))
+    }
+
     fun rueckgaengig() = viewModelScope.launch {
         val aktion = stapel.rueckgaengigNehmen() ?: return@launch
         val geklappt = versuchen { aktion() }
@@ -241,7 +262,9 @@ private object HeuteToastTexte {
     fun tagesbonusToast(punkte: Int) = "+$punkte Punkte · inkl. Tagesbonus"
     fun ausgelassenToast(name: String) = "$name ausgelassen"
     fun zuSpaetToast(name: String) = "$name erledigt · nach der Deadline ohne Punkte"
+    fun wiederOffenToast(name: String) = "$name wieder offen"
     const val ERLEDIGEN_FEHLGESCHLAGEN = "Abhaken fehlgeschlagen"
     const val AUSLASSEN_FEHLGESCHLAGEN = "Auslassen fehlgeschlagen"
     const val RUECKGAENGIG_FEHLGESCHLAGEN = "Rückgängig fehlgeschlagen"
+    const val WIEDER_OEFFNEN_FEHLGESCHLAGEN = "Wieder öffnen fehlgeschlagen"
 }

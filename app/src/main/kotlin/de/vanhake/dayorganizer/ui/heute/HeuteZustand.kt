@@ -16,6 +16,8 @@ data class HeuteEintrag(
     val ueberfaellig: Boolean,
     /** Nur bei Einmalaufgaben: Tage bis zur Deadline, negativ wenn sie verstrichen ist. */
     val deadlineInTagen: Long? = null,
+    /** Versehentlich abgeschlossen? Dann bietet die Zeile "Wieder öffnen" an. */
+    val wiederOeffenbar: Boolean = false,
 )
 
 data class NaechsteBelohnung(

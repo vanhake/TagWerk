@@ -35,6 +35,10 @@ fälligen Aktivitäten als Kacheln mit Symbol. Erledigen und Auslassen zeigen
 einen Toast mit *Rückgängig*; das Rückgängig bucht eine exakte Gegenbuchung
 und stellt die Fälligkeit wieder her, die Historie bleibt erklärbar. Offene
 Einmalaufgaben stehen im Bereich „Aufgaben“ mit den Tagen bis zur Deadline.
+Ist der Toast schon weg, lässt sich ein versehentlich erledigter oder
+ausgelassener Eintrag im Bereich „Erledigt“ über *Wieder öffnen* zurückholen;
+die Punkte dieses Abhakens werden gegengebucht. Eine Einmalaufgabe steht dafür
+am Tag des Abhakens ebenfalls unter „Erledigt“.
 
 **Einmalaufgaben.** Eine Aufgabe wie „Steuererklärung“ hat eine Deadline und
 bringt nur Punkte, wenn sie bis dahin erledigt ist; danach lässt sie sich noch
