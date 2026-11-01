@@ -9,6 +9,7 @@ import de.vanhake.dayorganizer.data.Einstellungen
 import de.vanhake.dayorganizer.data.ThemeModus
 import de.vanhake.dayorganizer.domain.model.Aktivitaet
 import de.vanhake.dayorganizer.domain.model.Belohnung
+import de.vanhake.dayorganizer.domain.model.VerspaetungsRegel
 import de.vanhake.dayorganizer.domain.model.Zeitplan
 import de.vanhake.dayorganizer.platform.permission.Hinweis
 import kotlinx.coroutines.CompletableDeferred
@@ -183,6 +184,19 @@ class EinstellungenViewModelTest {
 
         assertEquals(ThemeModus.DUNKEL, speicher.stand.value.themeModus)
         assertEquals(ThemeModus.DUNKEL, vm.zustand.value.themeModus)
+    }
+
+    @Test
+    fun `verspaetungAendern schreibt sofort und laesst die anderen Werte stehen`() = runTest(dispatcher) {
+        val speicher = FakeSpeicher()
+        val vm = viewModel(speicher)
+        advanceUntilIdle()
+
+        vm.verspaetungAendern(VerspaetungsRegel.HALBE_PUNKTE)
+        advanceUntilIdle()
+
+        assertEquals(Einstellungen(verspaetung = VerspaetungsRegel.HALBE_PUNKTE), speicher.stand.value)
+        assertEquals(VerspaetungsRegel.HALBE_PUNKTE, vm.zustand.value.verspaetung)
     }
 
     @Test

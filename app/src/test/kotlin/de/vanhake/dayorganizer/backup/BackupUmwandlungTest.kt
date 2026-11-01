@@ -11,6 +11,7 @@ import de.vanhake.dayorganizer.domain.model.Einloesung
 import de.vanhake.dayorganizer.domain.model.Faelligkeit
 import de.vanhake.dayorganizer.domain.model.FaelligkeitStatus
 import de.vanhake.dayorganizer.domain.model.SerienSchwelle
+import de.vanhake.dayorganizer.domain.model.VerspaetungsRegel
 import de.vanhake.dayorganizer.domain.model.Zeitplan
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -437,18 +438,6 @@ class BackupUmwandlungTest {
         erstelltAm = LocalDate.of(2026, 3, 1),
     )
 
-    private fun beispielInhaltSchema4() = BackupUmwandlung.zuDatei(
-        erstelltAm = LocalDateTime.of(2026, 3, 2, 21, 0),
-        aktivitaeten = listOf(aktivitaet, einmalaufgabe),
-        faelligkeiten = listOf(faelligkeit),
-        buchungen = listOf(buchung),
-        belohnungen = listOf(belohnung),
-        einloesungen = listOf(einloesung, stornierteEinloesung),
-        einstellungen = Einstellungen(
-            tagesbonusPunkte = 25, standardKulanzMinuten = 45, themeModus = ThemeModus.DUNKEL,
-        ),
-    )
-
     private val beispielDateiSchema4 = javaClass.classLoader
         ?.getResourceAsStream("backup/beispiel-schema-4.json")!!
         .bufferedReader()
@@ -463,10 +452,54 @@ class BackupUmwandlungTest {
     }
 
     @Test
-    fun `dieselben Domaenenobjekte erzeugen wieder genau die eingefrorene Beispieldatei fuer Schema 4`() {
-        val text = BackupUmwandlung.zuText(beispielInhaltSchema4())
+    fun `eine Datei aus Schema 4 bekommt die Vorgabe fuer verspaetete Erledigungen`() {
+        val inhalt = BackupUmwandlung.ausText(beispielDateiSchema4)
 
-        assertEquals(beispielDateiSchema4.trim(), text.trim())
+        assertEquals(VerspaetungsRegel.KEINE_PUNKTE, inhalt.einstellungen.verspaetung)
+    }
+
+    // --- Schema 5: feste Beispieldatei als Vertrag ------------------------------------------
+    //
+    // Wie Schema 4, dazu die Verspaetungsregel in den Einstellungen. Die Datei zu Schema 4
+    // bleibt als Lesetest stehen; geschrieben wird nur noch Schema 5.
+
+    private val beispielDateiSchema5 = javaClass.classLoader
+        ?.getResourceAsStream("backup/beispiel-schema-5.json")!!
+        .bufferedReader()
+        .readText()
+
+    @Test
+    fun `die eingefrorene Beispieldatei fuer Schema 5 wird mit der Verspaetungsregel gelesen`() {
+        val inhalt = BackupUmwandlung.ausText(beispielDateiSchema5)
+
+        assertEquals(listOf(aktivitaet, einmalaufgabe), inhalt.aktivitaeten)
+        assertEquals(
+            Einstellungen(
+                tagesbonusPunkte = 25, standardKulanzMinuten = 45, themeModus = ThemeModus.DUNKEL,
+                verspaetung = VerspaetungsRegel.HALBE_PUNKTE,
+            ),
+            inhalt.einstellungen,
+        )
+    }
+
+    @Test
+    fun `dieselben Domaenenobjekte erzeugen wieder genau die eingefrorene Beispieldatei fuer Schema 5`() {
+        val text = BackupUmwandlung.zuText(
+            BackupUmwandlung.zuDatei(
+                erstelltAm = LocalDateTime.of(2026, 3, 2, 21, 0),
+                aktivitaeten = listOf(aktivitaet, einmalaufgabe),
+                faelligkeiten = listOf(faelligkeit),
+                buchungen = listOf(buchung),
+                belohnungen = listOf(belohnung),
+                einloesungen = listOf(einloesung, stornierteEinloesung),
+                einstellungen = Einstellungen(
+                    tagesbonusPunkte = 25, standardKulanzMinuten = 45, themeModus = ThemeModus.DUNKEL,
+                    verspaetung = VerspaetungsRegel.HALBE_PUNKTE,
+                ),
+            ),
+        )
+
+        assertEquals(beispielDateiSchema5.trim(), text.trim())
     }
 
     @Test

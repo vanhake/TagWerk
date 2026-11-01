@@ -10,6 +10,7 @@ import de.vanhake.dayorganizer.domain.model.Aktivitaet
 import de.vanhake.dayorganizer.domain.model.BuchungsArt
 import de.vanhake.dayorganizer.domain.model.Faelligkeit
 import de.vanhake.dayorganizer.domain.model.FaelligkeitStatus
+import de.vanhake.dayorganizer.domain.model.VerspaetungsRegel
 import de.vanhake.dayorganizer.domain.model.Zeitplan
 import de.vanhake.dayorganizer.domain.rechner.PunkteRechner
 import de.vanhake.dayorganizer.domain.rechner.SerienRechner
@@ -75,7 +76,9 @@ class FaelligkeitErledigenTest {
         buchungen: FakeBuchungRepository,
         tagesbonus: Int = 0,
         transaktionen: FakeTransaktionen = FakeTransaktionen(),
-        einstellungen: suspend () -> Einstellungen = { Einstellungen(tagesbonusPunkte = tagesbonus) },
+        einstellungen: suspend () -> Einstellungen = {
+            Einstellungen(tagesbonusPunkte = tagesbonus, verspaetung = VerspaetungsRegel.VOLLE_PUNKTE)
+        },
     ) = FaelligkeitErledigen(
         aktivitaeten = aktivitaeten,
         faelligkeiten = faelligkeiten,
@@ -430,5 +433,35 @@ class FaelligkeitErledigenTest {
         assertEquals(emptyList(), b.stand.value)
         assertEquals(FaelligkeitStatus.VERPASST, f.stand.value.single().status)
         assertEquals(2, f.stand.value.single().istAnzahl)
+    }
+
+    @Test
+    fun `nach dem Kulanzfenster wird ohne Punkte erledigt, wenn die Einstellung es so will`() = runTest {
+        val f = FakeFaelligkeitRepository(listOf(morgens))
+        val b = FakeBuchungRepository()
+        val use = useCase(
+            uhrUm(9, 1), FakeAktivitaetRepository(listOf(tabletten)), f, b,
+            einstellungen = { Einstellungen(tagesbonusPunkte = 25, verspaetung = VerspaetungsRegel.KEINE_PUNKTE) },
+        )
+
+        assertEquals(ErledigungsProtokoll.Gebucht(morgens, emptyList()), use.mitProtokoll(10))
+
+        assertEquals(emptyList(), b.stand.value)
+        assertEquals(FaelligkeitStatus.ERLEDIGT, f.stand.value.single().status)
+        assertEquals(false, f.stand.value.single().warPuenktlich)
+    }
+
+    @Test
+    fun `nach dem Kulanzfenster gibt HALBE_PUNKTE die halbe Basis`() = runTest {
+        val f = FakeFaelligkeitRepository(listOf(morgens))
+        val b = FakeBuchungRepository()
+        val use = useCase(
+            uhrUm(12, 0), FakeAktivitaetRepository(listOf(tabletten)), f, b,
+            einstellungen = { Einstellungen(tagesbonusPunkte = 0, verspaetung = VerspaetungsRegel.HALBE_PUNKTE) },
+        )
+
+        use(10)
+
+        assertEquals(5, b.stand.value.sumOf { it.betrag })
     }
 }

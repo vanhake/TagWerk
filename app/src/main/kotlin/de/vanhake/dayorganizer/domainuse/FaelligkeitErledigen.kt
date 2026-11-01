@@ -147,6 +147,7 @@ class FaelligkeitErledigen(
             tagesFaelligkeitenNachher = tagesFaelligkeiten,
             tagesbonusPunkte = einstellungen.tagesbonusPunkte,
             tagesbonusBereitsGebucht = buchungen.tagesbonusGebuchtAm(heute),
+            verspaetungsRegel = einstellungen.verspaetung,
         )
 
         val gebuchteZeilen = punkteRechner.buchungen(kontext)

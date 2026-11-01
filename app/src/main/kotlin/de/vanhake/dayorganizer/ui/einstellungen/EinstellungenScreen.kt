@@ -17,9 +17,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Timelapse
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.Button
@@ -51,6 +54,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.vanhake.dayorganizer.BuildConfig
 import de.vanhake.dayorganizer.R
 import de.vanhake.dayorganizer.data.ThemeModus
+import de.vanhake.dayorganizer.domain.model.VerspaetungsRegel
 import de.vanhake.dayorganizer.platform.permission.einstellungOeffnen
 import de.vanhake.dayorganizer.ui.gemeinsam.Hinweistoast
 import de.vanhake.dayorganizer.ui.gemeinsam.HinweistoastLeiste
@@ -190,6 +194,30 @@ fun EinstellungenScreen(viewModel: EinstellungenViewModel = hiltViewModel()) {
                     }
                 }
             }
+
+            AbschnittsTitel(stringResource(R.string.verspaetung_titel))
+            Segmentschalter(
+                segmente = listOf(
+                    Segment(VerspaetungsRegel.VOLLE_PUNKTE, R.string.verspaetung_volle, Icons.Filled.Star),
+                    Segment(VerspaetungsRegel.HALBE_PUNKTE, R.string.verspaetung_halbe, Icons.Filled.Timelapse),
+                    Segment(VerspaetungsRegel.KEINE_PUNKTE, R.string.verspaetung_keine, Icons.Filled.Block),
+                ),
+                gewaehlt = zustand.verspaetung,
+                waehlen = { viewModel.verspaetungAendern(it) },
+                aktiv = zustand.geladen && !zustand.importLaeuft,
+            )
+            Text(
+                stringResource(
+                    when (zustand.verspaetung) {
+                        VerspaetungsRegel.VOLLE_PUNKTE -> R.string.verspaetung_volle_hinweis
+                        VerspaetungsRegel.HALBE_PUNKTE -> R.string.verspaetung_halbe_hinweis
+                        VerspaetungsRegel.KEINE_PUNKTE -> R.string.verspaetung_keine_hinweis
+                    },
+                ),
+                modifier = Modifier.padding(horizontal = 4.dp),
+                fontSize = 12.sp,
+                color = farben.ink2,
+            )
 
             AbschnittsTitel(stringResource(R.string.optionen_abschnitt_darstellung))
             Segmentschalter(

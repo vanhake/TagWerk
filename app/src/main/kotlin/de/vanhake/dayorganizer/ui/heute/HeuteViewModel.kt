@@ -171,9 +171,15 @@ class HeuteViewModel(
                 widgetAnstossen()
                 val gesamt = protokoll.buchungen.sumOf { it.betrag }
                 val text = if (protokoll.buchungen.isEmpty()) {
-                    // Jede Erledigung bucht ihre Basispunkte; ohne Buchung war es eine
-                    // Einmalaufgabe nach ihrer Deadline.
-                    HeuteToastTexte.zuSpaetToast(nameVon(protokoll.faelligkeitVorher.aktivitaetId))
+                    // Ohne Buchung war es entweder ein terminierter Eintrag nach dem
+                    // Kulanzfenster (Einstellung "keine Punkte") oder eine Einmalaufgabe nach
+                    // ihrer Deadline -- nur der terminierte Eintrag hat einen Soll-Zeitpunkt.
+                    val name = nameVon(protokoll.faelligkeitVorher.aktivitaetId)
+                    if (protokoll.faelligkeitVorher.geplantFuer != null) {
+                        HeuteToastTexte.nachKulanzToast(name)
+                    } else {
+                        HeuteToastTexte.zuSpaetToast(name)
+                    }
                 } else if (protokoll.buchungen.any { it.art == BuchungsArt.TAGESBONUS }) {
                     HeuteToastTexte.tagesbonusToast(gesamt)
                 } else {
@@ -268,6 +274,7 @@ private object HeuteToastTexte {
     fun tagesbonusToast(punkte: Int) = "+$punkte Punkte · inkl. Tagesbonus"
     fun ausgelassenToast(name: String) = "$name ausgelassen"
     fun zuSpaetToast(name: String) = "$name erledigt · nach der Deadline ohne Punkte"
+    fun nachKulanzToast(name: String) = "$name erledigt · zu spät, keine Punkte"
     fun abgelaufenToast(name: String) = "$name ist abgelaufen · keine Punkte"
     fun wiederOffenToast(name: String) = "$name wieder offen"
     const val ERLEDIGEN_FEHLGESCHLAGEN = "Abhaken fehlgeschlagen"
