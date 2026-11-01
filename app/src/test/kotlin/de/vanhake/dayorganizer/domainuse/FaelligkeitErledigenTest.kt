@@ -389,4 +389,46 @@ class FaelligkeitErledigenTest {
         assertEquals(FaelligkeitStatus.VERPASST, f.stand.value.first { it.id == 9L }.status)
         assertEquals(FaelligkeitStatus.OFFEN, f.stand.value.first { it.id == 10L }.status)
     }
+
+    @Test
+    fun `eine abgelaufene Faelligkeit bucht vor dem Waechterlauf keine Punkte und wird verpasst`() = runTest {
+        // Noch OFFEN, aber der Tag ist vorbei: z. B. die Benachrichtigung von gestern.
+        val gestern = morgens.copy(
+            periodeVon = LocalDate.of(2026, 3, 1),
+            periodeBis = LocalDate.of(2026, 3, 1),
+            geplantFuer = LocalDateTime.of(2026, 3, 1, 8, 0),
+        )
+        val f = FakeFaelligkeitRepository(listOf(gestern))
+        val b = FakeBuchungRepository()
+        val use = useCase(uhrUm(0, 30), FakeAktivitaetRepository(listOf(tabletten)), f, b, tagesbonus = 10)
+
+        assertEquals(ErledigungsProtokoll.Abgelaufen(gestern), use.mitProtokoll(10))
+
+        assertEquals(emptyList(), b.stand.value)
+        assertEquals(FaelligkeitStatus.VERPASST, f.stand.value.single().status)
+        assertEquals(ErledigungsErgebnis.NICHT_OFFEN, use(10))
+        assertEquals(emptyList(), b.stand.value)
+    }
+
+    @Test
+    fun `ein Wochenziel der Vorwoche bucht keine Punkte mehr`() = runTest {
+        val wochenziel = tabletten.copy(zeitplan = Zeitplan.Wochenziel(3), puenktlichkeitsBonus = 0)
+        val vorwoche = Faelligkeit(
+            id = 10,
+            aktivitaetId = 1,
+            periodeVon = LocalDate.of(2026, 2, 23),
+            periodeBis = LocalDate.of(2026, 3, 1),
+            geplantFuer = null,
+            sollAnzahl = 3,
+            istAnzahl = 2,
+        )
+        val f = FakeFaelligkeitRepository(listOf(vorwoche))
+        val b = FakeBuchungRepository()
+
+        assertEquals(ErledigungsErgebnis.NICHT_OFFEN, useCase(uhrUm(9, 0), FakeAktivitaetRepository(listOf(wochenziel)), f, b)(10))
+
+        assertEquals(emptyList(), b.stand.value)
+        assertEquals(FaelligkeitStatus.VERPASST, f.stand.value.single().status)
+        assertEquals(2, f.stand.value.single().istAnzahl)
+    }
 }

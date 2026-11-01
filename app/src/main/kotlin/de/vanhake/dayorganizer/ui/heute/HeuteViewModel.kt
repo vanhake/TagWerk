@@ -181,6 +181,12 @@ class HeuteViewModel(
                 }
                 stapel.zeigen(text) { erledigenRueckgaengig(protokoll) }
             }
+            is ErledigungsProtokoll.Abgelaufen -> {
+                // Der Eintrag stand noch als offen da, seine Periode war aber schon vorbei
+                // (z. B. Screen ueber Mitternacht offen): er ist jetzt verpasst, ohne Punkte.
+                widgetAnstossen()
+                stapel.zeigen(HeuteToastTexte.abgelaufenToast(nameVon(protokoll.faelligkeitVorher.aktivitaetId)))
+            }
             ErledigungsProtokoll.NichtOffen, ErledigungsProtokoll.Unbekannt -> Unit
         }
     }
@@ -262,6 +268,7 @@ private object HeuteToastTexte {
     fun tagesbonusToast(punkte: Int) = "+$punkte Punkte · inkl. Tagesbonus"
     fun ausgelassenToast(name: String) = "$name ausgelassen"
     fun zuSpaetToast(name: String) = "$name erledigt · nach der Deadline ohne Punkte"
+    fun abgelaufenToast(name: String) = "$name ist abgelaufen · keine Punkte"
     fun wiederOffenToast(name: String) = "$name wieder offen"
     const val ERLEDIGEN_FEHLGESCHLAGEN = "Abhaken fehlgeschlagen"
     const val AUSLASSEN_FEHLGESCHLAGEN = "Auslassen fehlgeschlagen"

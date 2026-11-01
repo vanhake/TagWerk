@@ -22,7 +22,9 @@ import javax.inject.Inject
  * NICHT_OFFEN deckt alle drei geschlossenen Zustaende ab: ERLEDIGT (schon gebucht),
  * AUSGELASSEN (bewusst uebersprungen -- keine Punkte, aber die Serie ueberlebt) und
  * VERPASST (vom naechtlichen Watchdog geschlossen -- die Serie bricht). Keiner davon
- * darf nachtraeglich durch einen zweiten Aufruf gebucht werden. Einzige Ausnahme ist die
+ * darf nachtraeglich durch einen zweiten Aufruf gebucht werden. Ebenso NICHT_OFFEN ist eine
+ * noch offene Faelligkeit, deren Periode schon abgelaufen ist: sie wird dabei als VERPASST
+ * geschlossen, ohne Punkte. Einzige Ausnahme ist die
  * verpasste Einmalaufgabe: sie laesst sich einmal nachtraeglich abhaken, bucht dabei aber
  * nichts (siehe nachtraeglichErledigen).
  */
@@ -37,6 +39,9 @@ enum class ErledigungsErgebnis { GEBUCHT, NICHT_OFFEN, UNBEKANNT }
 sealed interface ErledigungsProtokoll {
     data class Gebucht(val faelligkeitVorher: Faelligkeit, val buchungen: List<Buchung>) : ErledigungsProtokoll
     data object NichtOffen : ErledigungsProtokoll
+
+    /** Die Periode war schon vorbei: als VERPASST geschlossen, nichts gebucht. */
+    data class Abgelaufen(val faelligkeitVorher: Faelligkeit) : ErledigungsProtokoll
     data object Unbekannt : ErledigungsProtokoll
 }
 
@@ -76,7 +81,7 @@ class FaelligkeitErledigen(
     suspend operator fun invoke(faelligkeitId: Long): ErledigungsErgebnis =
         when (val protokoll = mitProtokoll(faelligkeitId)) {
             is ErledigungsProtokoll.Gebucht -> ErledigungsErgebnis.GEBUCHT
-            ErledigungsProtokoll.NichtOffen -> ErledigungsErgebnis.NICHT_OFFEN
+            ErledigungsProtokoll.NichtOffen, is ErledigungsProtokoll.Abgelaufen -> ErledigungsErgebnis.NICHT_OFFEN
             ErledigungsProtokoll.Unbekannt -> ErledigungsErgebnis.UNBEKANNT
         }
 
@@ -94,10 +99,17 @@ class FaelligkeitErledigen(
         val jetzt = LocalDateTime.now(uhr)
         val heute = LocalDate.now(uhr)
 
-        // Eine Einmalaufgabe nach ihrer Deadline: der Waechter hat sie schon als verpasst
-        // geschlossen oder holt das beim naechsten Lauf nach. Punkte gibt es nicht mehr.
-        if (aktivitaet.zeitplan is Zeitplan.Einmalig && vorher.periodeBis.isBefore(heute)) {
-            return nachtraeglichErledigen(vorher, jetzt)
+        // Abgelaufen ist eine Faelligkeit, sobald ihre Periode (bei Einmalaufgaben die
+        // Deadline) vor heute endet. Punkte gibt es dann in keinem Fall mehr -- auch nicht,
+        // wenn der Waechter sie noch nicht als verpasst geschlossen hat (er laeuft nur
+        // naechtlich und kann sich verspaeten; Benachrichtigung, Widget oder ein ueber
+        // Mitternacht offener Heute-Screen zeigen sie bis dahin weiter als offen an).
+        val plan = aktivitaet.zeitplan
+        val fristEnde = if (plan is Zeitplan.Einmalig) minOf(plan.deadline, vorher.periodeBis) else vorher.periodeBis
+        if (fristEnde.isBefore(heute)) {
+            // Eine Einmalaufgabe laesst sich einmal nachtraeglich abhaken, bucht aber nichts.
+            if (plan is Zeitplan.Einmalig) return nachtraeglichErledigen(vorher, jetzt)
+            return abgelaufenSchliessen(vorher)
         }
         if (vorher.status != FaelligkeitStatus.OFFEN) return ErledigungsProtokoll.NichtOffen
         val istNeu = vorher.istAnzahl + 1
@@ -144,6 +156,17 @@ class FaelligkeitErledigen(
         )
         buchungen.buchen(gebuchteZeilen)
         return ErledigungsProtokoll.Gebucht(faelligkeitVorher = vorher, buchungen = gebuchteZeilen)
+    }
+
+    /**
+     * Eine wiederkehrende Faelligkeit, deren Periode schon vorbei ist: sie wird sofort so
+     * geschlossen, wie es der Waechter beim naechsten Lauf ohnehin taete (VERPASST, die Serie
+     * bricht), und es wird nichts gebucht.
+     */
+    private suspend fun abgelaufenSchliessen(vorher: Faelligkeit): ErledigungsProtokoll {
+        if (vorher.status != FaelligkeitStatus.OFFEN) return ErledigungsProtokoll.NichtOffen
+        faelligkeiten.aktualisieren(vorher.copy(status = FaelligkeitStatus.VERPASST))
+        return ErledigungsProtokoll.Abgelaufen(vorher)
     }
 
     /**

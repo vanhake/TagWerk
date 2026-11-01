@@ -38,7 +38,10 @@ Einmalaufgaben stehen im Bereich „Aufgaben“ mit den Tagen bis zur Deadline.
 Ist der Toast schon weg, lässt sich ein versehentlich erledigter oder
 ausgelassener Eintrag im Bereich „Erledigt“ über *Wieder öffnen* zurückholen;
 die Punkte dieses Abhakens werden gegengebucht. Eine Einmalaufgabe steht dafür
-am Tag des Abhakens ebenfalls unter „Erledigt“.
+am Tag des Abhakens ebenfalls unter „Erledigt“. Punkte gibt es nur innerhalb
+der eigenen Periode (Tag, Woche bzw. bis zur Deadline): wird ein abgelaufener
+Eintrag noch abgehakt – etwa über die Benachrichtigung von gestern, bevor der
+nächtliche Wächter ihn geschlossen hat –, gilt er als verpasst und bucht nichts.
 
 **Einmalaufgaben.** Eine Aufgabe wie „Steuererklärung“ hat eine Deadline und
 bringt nur Punkte, wenn sie bis dahin erledigt ist; danach lässt sie sich noch
