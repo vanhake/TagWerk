@@ -105,4 +105,6 @@ data class EinstellungenDto(
     val tagesbonusPunkte: Int,
     val standardKulanzMinuten: Int,
     val themeModus: String,
+    /** Seit Schema 5. Aeltere Dateien bekommen die Vorgabe der App (keine Punkte). */
+    val verspaetung: String = "KEINE_PUNKTE",
 )

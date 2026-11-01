@@ -12,6 +12,7 @@ import de.vanhake.dayorganizer.backup.UnbekanntesSchema
 import de.vanhake.dayorganizer.data.Einstellungen
 import de.vanhake.dayorganizer.data.EinstellungenSpeicher
 import de.vanhake.dayorganizer.data.ThemeModus
+import de.vanhake.dayorganizer.domain.model.VerspaetungsRegel
 import de.vanhake.dayorganizer.platform.notification.Erinnerungsanzeige
 import de.vanhake.dayorganizer.platform.permission.BerechtigungsHinweise
 import de.vanhake.dayorganizer.platform.permission.BerechtigungsPruefer
@@ -44,6 +45,7 @@ data class EinstellungenZustand(
     val tagesbonusPunkte: Int = 15,
     val standardKulanzMinuten: Int = 60,
     val themeModus: ThemeModus = ThemeModus.HELL,
+    val verspaetung: VerspaetungsRegel = VerspaetungsRegel.KEINE_PUNKTE,
     val hinweise: List<Hinweis> = emptyList(),
     /** Erst nach dem ersten Laden zeigt der Zustand gespeicherte Werte statt Defaults. */
     val geladen: Boolean = false,
@@ -313,6 +315,13 @@ class EinstellungenViewModel(
         return uebernehmen()
     }
 
+    /** Wie der Farbmodus: ein Umschalter, der sofort gespeichert wird. */
+    fun verspaetungAendern(neu: VerspaetungsRegel): Job {
+        if (!_zustand.value.geladen || _zustand.value.importLaeuft) return ignoriert()
+        _zustand.value = _zustand.value.copy(verspaetung = neu)
+        return uebernehmen()
+    }
+
     /**
      * Wird bei jedem Sichtbarwerden des Screens aufgerufen, nicht nur einmal:
      * der Nutzer kommt aus den Systemeinstellungen zurueck, und dann muss der
@@ -357,6 +366,7 @@ class EinstellungenViewModel(
                             tagesbonusPunkte = z.tagesbonusPunkte,
                             standardKulanzMinuten = z.standardKulanzMinuten,
                             themeModus = z.themeModus,
+                            verspaetung = z.verspaetung,
                         ),
                     )
                     gespeichert.themeModus != z.themeModus
@@ -386,6 +396,7 @@ class EinstellungenViewModel(
                 tagesbonusPunkte = aktuell.tagesbonusPunkte,
                 standardKulanzMinuten = aktuell.standardKulanzMinuten,
                 themeModus = aktuell.themeModus,
+                verspaetung = aktuell.verspaetung,
                 hinweise = hinweise,
                 geladen = true,
             )

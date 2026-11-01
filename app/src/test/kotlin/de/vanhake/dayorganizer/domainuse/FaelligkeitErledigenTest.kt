@@ -10,6 +10,7 @@ import de.vanhake.dayorganizer.domain.model.Aktivitaet
 import de.vanhake.dayorganizer.domain.model.BuchungsArt
 import de.vanhake.dayorganizer.domain.model.Faelligkeit
 import de.vanhake.dayorganizer.domain.model.FaelligkeitStatus
+import de.vanhake.dayorganizer.domain.model.VerspaetungsRegel
 import de.vanhake.dayorganizer.domain.model.Zeitplan
 import de.vanhake.dayorganizer.domain.rechner.PunkteRechner
 import de.vanhake.dayorganizer.domain.rechner.SerienRechner
@@ -75,7 +76,9 @@ class FaelligkeitErledigenTest {
         buchungen: FakeBuchungRepository,
         tagesbonus: Int = 0,
         transaktionen: FakeTransaktionen = FakeTransaktionen(),
-        einstellungen: suspend () -> Einstellungen = { Einstellungen(tagesbonusPunkte = tagesbonus) },
+        einstellungen: suspend () -> Einstellungen = {
+            Einstellungen(tagesbonusPunkte = tagesbonus, verspaetung = VerspaetungsRegel.VOLLE_PUNKTE)
+        },
     ) = FaelligkeitErledigen(
         aktivitaeten = aktivitaeten,
         faelligkeiten = faelligkeiten,
@@ -388,5 +391,77 @@ class FaelligkeitErledigenTest {
 
         assertEquals(FaelligkeitStatus.VERPASST, f.stand.value.first { it.id == 9L }.status)
         assertEquals(FaelligkeitStatus.OFFEN, f.stand.value.first { it.id == 10L }.status)
+    }
+
+    @Test
+    fun `eine abgelaufene Faelligkeit bucht vor dem Waechterlauf keine Punkte und wird verpasst`() = runTest {
+        // Noch OFFEN, aber der Tag ist vorbei: z. B. die Benachrichtigung von gestern.
+        val gestern = morgens.copy(
+            periodeVon = LocalDate.of(2026, 3, 1),
+            periodeBis = LocalDate.of(2026, 3, 1),
+            geplantFuer = LocalDateTime.of(2026, 3, 1, 8, 0),
+        )
+        val f = FakeFaelligkeitRepository(listOf(gestern))
+        val b = FakeBuchungRepository()
+        val use = useCase(uhrUm(0, 30), FakeAktivitaetRepository(listOf(tabletten)), f, b, tagesbonus = 10)
+
+        assertEquals(ErledigungsProtokoll.Abgelaufen(gestern), use.mitProtokoll(10))
+
+        assertEquals(emptyList(), b.stand.value)
+        assertEquals(FaelligkeitStatus.VERPASST, f.stand.value.single().status)
+        assertEquals(ErledigungsErgebnis.NICHT_OFFEN, use(10))
+        assertEquals(emptyList(), b.stand.value)
+    }
+
+    @Test
+    fun `ein Wochenziel der Vorwoche bucht keine Punkte mehr`() = runTest {
+        val wochenziel = tabletten.copy(zeitplan = Zeitplan.Wochenziel(3), puenktlichkeitsBonus = 0)
+        val vorwoche = Faelligkeit(
+            id = 10,
+            aktivitaetId = 1,
+            periodeVon = LocalDate.of(2026, 2, 23),
+            periodeBis = LocalDate.of(2026, 3, 1),
+            geplantFuer = null,
+            sollAnzahl = 3,
+            istAnzahl = 2,
+        )
+        val f = FakeFaelligkeitRepository(listOf(vorwoche))
+        val b = FakeBuchungRepository()
+
+        assertEquals(ErledigungsErgebnis.NICHT_OFFEN, useCase(uhrUm(9, 0), FakeAktivitaetRepository(listOf(wochenziel)), f, b)(10))
+
+        assertEquals(emptyList(), b.stand.value)
+        assertEquals(FaelligkeitStatus.VERPASST, f.stand.value.single().status)
+        assertEquals(2, f.stand.value.single().istAnzahl)
+    }
+
+    @Test
+    fun `nach dem Kulanzfenster wird ohne Punkte erledigt, wenn die Einstellung es so will`() = runTest {
+        val f = FakeFaelligkeitRepository(listOf(morgens))
+        val b = FakeBuchungRepository()
+        val use = useCase(
+            uhrUm(9, 1), FakeAktivitaetRepository(listOf(tabletten)), f, b,
+            einstellungen = { Einstellungen(tagesbonusPunkte = 25, verspaetung = VerspaetungsRegel.KEINE_PUNKTE) },
+        )
+
+        assertEquals(ErledigungsProtokoll.Gebucht(morgens, emptyList()), use.mitProtokoll(10))
+
+        assertEquals(emptyList(), b.stand.value)
+        assertEquals(FaelligkeitStatus.ERLEDIGT, f.stand.value.single().status)
+        assertEquals(false, f.stand.value.single().warPuenktlich)
+    }
+
+    @Test
+    fun `nach dem Kulanzfenster gibt HALBE_PUNKTE die halbe Basis`() = runTest {
+        val f = FakeFaelligkeitRepository(listOf(morgens))
+        val b = FakeBuchungRepository()
+        val use = useCase(
+            uhrUm(12, 0), FakeAktivitaetRepository(listOf(tabletten)), f, b,
+            einstellungen = { Einstellungen(tagesbonusPunkte = 0, verspaetung = VerspaetungsRegel.HALBE_PUNKTE) },
+        )
+
+        use(10)
+
+        assertEquals(5, b.stand.value.sumOf { it.betrag })
     }
 }

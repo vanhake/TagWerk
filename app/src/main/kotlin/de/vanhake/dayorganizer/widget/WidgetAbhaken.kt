@@ -39,7 +39,8 @@ class WidgetAbhaken(
         val protokoll = versuchen { erledigen(faelligkeitId) }.getOrElse { return WidgetAbhakErgebnis.FEHLER }
         val ergebnis = when (protokoll) {
             is ErledigungsProtokoll.Gebucht -> WidgetAbhakErgebnis.GEBUCHT
-            ErledigungsProtokoll.NichtOffen, ErledigungsProtokoll.Unbekannt -> WidgetAbhakErgebnis.NICHT_OFFEN
+            ErledigungsProtokoll.NichtOffen, is ErledigungsProtokoll.Abgelaufen, ErledigungsProtokoll.Unbekannt ->
+                WidgetAbhakErgebnis.NICHT_OFFEN
         }
         // Wie die App: bei jedem Ausgang die Erinnerung verstecken und neu planen.
         versuchen { nachbereiten(faelligkeitId) }

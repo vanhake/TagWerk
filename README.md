@@ -38,7 +38,10 @@ Einmalaufgaben stehen im Bereich „Aufgaben“ mit den Tagen bis zur Deadline.
 Ist der Toast schon weg, lässt sich ein versehentlich erledigter oder
 ausgelassener Eintrag im Bereich „Erledigt“ über *Wieder öffnen* zurückholen;
 die Punkte dieses Abhakens werden gegengebucht. Eine Einmalaufgabe steht dafür
-am Tag des Abhakens ebenfalls unter „Erledigt“.
+am Tag des Abhakens ebenfalls unter „Erledigt“. Punkte gibt es nur innerhalb
+der eigenen Periode (Tag, Woche bzw. bis zur Deadline): wird ein abgelaufener
+Eintrag noch abgehakt – etwa über die Benachrichtigung von gestern, bevor der
+nächtliche Wächter ihn geschlossen hat –, gilt er als verpasst und bucht nichts.
 
 **Einmalaufgaben.** Eine Aufgabe wie „Steuererklärung“ hat eine Deadline und
 bringt nur Punkte, wenn sie bis dahin erledigt ist; danach lässt sie sich noch
@@ -61,7 +64,11 @@ Zeile stehen, eine Gegenbuchung stellt den Kontostand her.
 Flächendiagramm und eine Zeile je Aktivität mit Quote und Serie.
 
 **Optionen.** Tagesbonus und Kulanzfenster per Stepper, die sofort speichern
-(kein Speichern-Knopf). Umschalter Hell/Dunkel, Export und Import des Backups.
+(kein Speichern-Knopf). „Nach dem Kulanzfenster“ legt fest, was ein zu spät
+abgehakter Termin (feste Uhrzeit, Intervall) bringt: *Volle* Basispunkte, *Halbe*
+Basispunkte oder *Keine* Punkte (Vorgabe). Auch ohne Punkte zählt der Eintrag
+als erledigt und hält die Serie; Zähl- und Einmalaufgaben haben kein
+Kulanzfenster. Umschalter Hell/Dunkel, Export und Import des Backups.
 
 **Widget.** Das Homescreen-Widget „Heute“ zeigt eine Kopfzeile mit Fortschritt
 und Punktestand und darunter höchstens vier Kacheln mit Symbol, Name, Untertitel
@@ -135,8 +142,9 @@ DataStore, WorkManager, AlarmManager. Mindestens Android 13 (API 33), Ziel API 3
 
 **Daten.** Die Room-Datenbank steht auf Version 5 (Migrationen 1→2 bis 4→5,
 Schemata unter `app/schemas`). Das JSON-Backup trägt eine eigene Version, aktuell
-Schema 3; Backups mit Schema 2 bleiben lesbar, weil die neuen Felder
-Standardwerte haben. Ein Import lehnt fachlich ungültige Werte ab (Preis,
+Schema 5; Backups mit Schema 2 bis 4 bleiben lesbar, weil die neuen Felder
+Standardwerte haben (ältere Backups bekommen für verspätete Erledigungen die
+Vorgabe „keine Punkte“). Ein Import lehnt fachlich ungültige Werte ab (Preis,
 Serienperioden oder Punkte von 0).
 
 ## Bauen

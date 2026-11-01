@@ -259,4 +259,28 @@ class EinmalaufgabeTest {
         assertEquals(listOf(10L), gezeigt)
         assertEquals(1, erinnerungen.stand.value.size)
     }
+
+    @Test
+    fun `eine vorverlegte Deadline gilt auch vor dem Abgleich der Faelligkeit`() = runTest {
+        // Die Faelligkeit traegt noch die alte, spaetere Deadline; die Aktivitaet ist schon
+        // auf eine fruehere umgestellt, die inzwischen verstrichen ist.
+        val frueher = steuer.copy(zeitplan = Zeitplan.Einmalig(LocalDate.of(2026, 3, 6)))
+        val faelligkeiten = FakeFaelligkeitRepository(listOf(offen))
+        val buchungen = FakeBuchungRepository()
+        val use = FaelligkeitErledigen(
+            aktivitaeten = FakeAktivitaetRepository(listOf(frueher)),
+            faelligkeiten = faelligkeiten,
+            buchungen = buchungen,
+            punkteRechner = PunkteRechner(),
+            serienRechner = SerienRechner(),
+            transaktionen = FakeTransaktionen(),
+            einstellungenLesen = { Einstellungen() },
+            uhr = uhrAm(LocalDate.of(2026, 3, 9), 12),
+        )
+
+        use(10)
+
+        assertEquals(emptyList(), buchungen.stand.value)
+        assertEquals(FaelligkeitStatus.VERPASST, faelligkeiten.stand.value.single().status)
+    }
 }

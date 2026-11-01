@@ -10,6 +10,7 @@ import de.vanhake.dayorganizer.data.Einstellungen
 import de.vanhake.dayorganizer.domain.model.Aktivitaet
 import de.vanhake.dayorganizer.domain.model.Faelligkeit
 import de.vanhake.dayorganizer.domain.model.FaelligkeitStatus
+import de.vanhake.dayorganizer.domain.model.VerspaetungsRegel
 import de.vanhake.dayorganizer.domain.model.Zeitplan
 import de.vanhake.dayorganizer.domain.rechner.PunkteRechner
 import de.vanhake.dayorganizer.domain.rechner.SerienRechner
@@ -97,7 +98,10 @@ class HeuteViewModelTest {
         belohnungen: FakeBelohnungRepository = FakeBelohnungRepository(),
         widgetAnstossen: suspend () -> Unit = {},
         alarmNeuPlanen: suspend () -> Unit = {},
-        einstellungenLesen: suspend () -> Einstellungen = { Einstellungen(tagesbonusPunkte = 0) },
+        // Die meisten Tests erledigen mittags die 8-Uhr-Faelligkeit, also nach dem Kulanzfenster.
+        einstellungenLesen: suspend () -> Einstellungen = {
+            Einstellungen(tagesbonusPunkte = 0, verspaetung = VerspaetungsRegel.VOLLE_PUNKTE)
+        },
         aktivitaetenListe: List<Aktivitaet> = listOf(tabletten, sport),
     ): HeuteViewModel {
         val aktivitaeten = FakeAktivitaetRepository(aktivitaetenListe)
@@ -320,6 +324,22 @@ class HeuteViewModelTest {
         dispatcher.scheduler.runCurrent()
 
         assertEquals(null, vm.toast.value)
+    }
+
+    @Test
+    fun `zu spaet erledigt ohne Punkte zeigt den passenden Toast`() = runTest(dispatcher) {
+        val buchungen = FakeBuchungRepository()
+        val vm = viewModel(
+            FakeFaelligkeitRepository(listOf(morgens)), buchungen,
+            einstellungenLesen = { Einstellungen(verspaetung = VerspaetungsRegel.KEINE_PUNKTE) },
+        )
+
+        vm.erledigen(10)
+        dispatcher.scheduler.runCurrent()
+
+        assertEquals("Tabletten erledigt · zu spät, keine Punkte", vm.toast.value?.text)
+        assertEquals(true, vm.toast.value?.kannRueckgaengig)
+        assertEquals(emptyList(), buchungen.stand.value)
     }
 
     @Test

@@ -3,6 +3,7 @@ package de.vanhake.dayorganizer.data
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import de.vanhake.dayorganizer.domain.model.VerspaetungsRegel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.runTest
@@ -69,10 +70,10 @@ class EinstellungenSpeicherTest {
         )
         val speicher = EinstellungenSpeicher(datenStore)
 
-        speicher.schreiben(Einstellungen(tagesbonusPunkte = 25, standardKulanzMinuten = 45))
+        speicher.schreiben(Einstellungen(tagesbonusPunkte = 25, standardKulanzMinuten = 45, verspaetung = VerspaetungsRegel.HALBE_PUNKTE))
         speicher.waechterErfolgMerken(LocalDateTime.of(2026, 3, 2, 3, 0))
 
-        assertEquals(Einstellungen(tagesbonusPunkte = 25, standardKulanzMinuten = 45), speicher.lesen())
+        assertEquals(Einstellungen(tagesbonusPunkte = 25, standardKulanzMinuten = 45, verspaetung = VerspaetungsRegel.HALBE_PUNKTE), speicher.lesen())
         assertEquals(LocalDateTime.of(2026, 3, 2, 3, 0), speicher.letzterWaechterErfolg())
         verzeichnis.deleteRecursively()
     }

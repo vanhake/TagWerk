@@ -5,6 +5,7 @@ import de.vanhake.dayorganizer.domain.model.BuchungsArt
 import de.vanhake.dayorganizer.domain.model.Faelligkeit
 import de.vanhake.dayorganizer.domain.model.FaelligkeitStatus
 import de.vanhake.dayorganizer.domain.model.SerienSchwelle
+import de.vanhake.dayorganizer.domain.model.VerspaetungsRegel
 import de.vanhake.dayorganizer.domain.model.Zeitplan
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -43,6 +44,7 @@ class PunkteRechnerTest {
             listOf(faelligkeit.copy(status = FaelligkeitStatus.ERLEDIGT, istAnzahl = 1)),
         tagesbonusPunkte: Int = 0,
         tagesbonusBereitsGebucht: Boolean = false,
+        verspaetungsRegel: VerspaetungsRegel = VerspaetungsRegel.VOLLE_PUNKTE,
     ) = ErledigungsKontext(
         aktivitaet = aktivitaet,
         faelligkeitVorher = faelligkeit,
@@ -52,6 +54,7 @@ class PunkteRechnerTest {
         tagesFaelligkeitenNachher = tagesFaelligkeitenNachher,
         tagesbonusPunkte = tagesbonusPunkte,
         tagesbonusBereitsGebucht = tagesbonusBereitsGebucht,
+        verspaetungsRegel = verspaetungsRegel,
     )
 
     @Test
@@ -237,5 +240,68 @@ class PunkteRechnerTest {
 
         assertEquals(false, b.any { it.art == BuchungsArt.TAGESBONUS })
         assertEquals(setOf(BuchungsArt.ERLEDIGUNG, BuchungsArt.PUENKTLICHKEITSBONUS), b.map { it.art }.toSet())
+    }
+
+    // --- Verspaetung: Erledigung nach dem Kulanzfenster ------------------------------------
+
+    @Test
+    fun `nach dem Kulanzfenster bucht KEINE_PUNKTE nichts, auch keine Boni`() {
+        val b = rechner.buchungen(
+            kontext(
+                LocalDateTime.of(2026, 3, 2, 9, 1),
+                serieNachher = 3,
+                aktivitaet = tabletten.copy(serienSchwellen = listOf(SerienSchwelle(3, 30))),
+                tagesbonusPunkte = 15,
+                verspaetungsRegel = VerspaetungsRegel.KEINE_PUNKTE,
+            ),
+        )
+
+        assertEquals(emptyList(), b)
+    }
+
+    @Test
+    fun `genau am Ende des Kulanzfensters gibt es noch alle Punkte`() {
+        val b = rechner.buchungen(
+            kontext(LocalDateTime.of(2026, 3, 2, 9, 0), verspaetungsRegel = VerspaetungsRegel.KEINE_PUNKTE),
+        )
+
+        assertEquals(15, b.sumOf { it.betrag })
+    }
+
+    @Test
+    fun `zu frueh ist nicht verspaetet`() {
+        val b = rechner.buchungen(
+            kontext(LocalDateTime.of(2026, 3, 2, 6, 0), verspaetungsRegel = VerspaetungsRegel.KEINE_PUNKTE),
+        )
+
+        assertEquals(listOf(BuchungsArt.ERLEDIGUNG), b.map { it.art })
+        assertEquals(10, b.single().betrag)
+    }
+
+    @Test
+    fun `nach dem Kulanzfenster bucht HALBE_PUNKTE die halbe Basis und die Boni`() {
+        val b = rechner.buchungen(
+            kontext(
+                LocalDateTime.of(2026, 3, 2, 12, 0),
+                serieNachher = 3,
+                aktivitaet = tabletten.copy(basisPunkte = 15, serienSchwellen = listOf(SerienSchwelle(3, 30))),
+                tagesbonusPunkte = 20,
+                verspaetungsRegel = VerspaetungsRegel.HALBE_PUNKTE,
+            ),
+        )
+
+        assertEquals(
+            listOf(BuchungsArt.ERLEDIGUNG to 7, BuchungsArt.SERIENBONUS to 30, BuchungsArt.TAGESBONUS to 20),
+            b.map { it.art to it.betrag },
+        )
+    }
+
+    @Test
+    fun `Zaehlziele sind nie verspaetet`() {
+        val sport = aktivitaet(basisPunkte = 20, zeitplan = Zeitplan.Wochenziel(anzahl = 3))
+        val k = kontext(LocalDateTime.of(2026, 3, 2, 23, 0), aktivitaet = sport, verspaetungsRegel = VerspaetungsRegel.KEINE_PUNKTE)
+            .copy(faelligkeitVorher = faelligkeit.copy(geplantFuer = null, sollAnzahl = 3))
+
+        assertEquals(20, rechner.buchungen(k).single().betrag)
     }
 }

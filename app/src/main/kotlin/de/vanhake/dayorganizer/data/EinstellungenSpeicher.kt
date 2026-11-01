@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
+import de.vanhake.dayorganizer.domain.model.VerspaetungsRegel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
@@ -27,6 +28,8 @@ data class Einstellungen(
     val tagesbonusPunkte: Int = 15,
     val standardKulanzMinuten: Int = 60,
     val themeModus: ThemeModus = ThemeModus.HELL,
+    /** Was eine Erledigung nach dem Kulanzfenster bringt; Vorgabe: keine Punkte. */
+    val verspaetung: VerspaetungsRegel = VerspaetungsRegel.KEINE_PUNKTE,
 )
 
 /**
@@ -63,6 +66,7 @@ class EinstellungenSpeicher(
     private val tagesbonus = intPreferencesKey("tagesbonus_punkte")
     private val kulanz = intPreferencesKey("standard_kulanz_minuten")
     private val themeModus = stringPreferencesKey("theme_modus")
+    private val verspaetung = stringPreferencesKey("verspaetung")
 
     // Betriebszustand des Waechters, keine Nutzereinstellung -- deshalb ein eigener Key statt
     // eines Feldes auf Einstellungen, das eines Tages von einem JSON-Backup serialisiert wird.
@@ -81,6 +85,9 @@ class EinstellungenSpeicher(
         standardKulanzMinuten = this[kulanz] ?: 60,
         themeModus = this[themeModus]?.let { name -> runCatching { ThemeModus.valueOf(name) }.getOrNull() }
             ?: ThemeModus.HELL,
+        verspaetung = this[verspaetung]
+            ?.let { name -> runCatching { VerspaetungsRegel.valueOf(name) }.getOrNull() }
+            ?: VerspaetungsRegel.KEINE_PUNKTE,
     )
 
     fun beobachten(): Flow<Einstellungen> = gesicherterDatenstrom.map { it.zuEinstellungen() }
@@ -98,6 +105,7 @@ class EinstellungenSpeicher(
             it[tagesbonus] = einstellungen.tagesbonusPunkte
             it[kulanz] = einstellungen.standardKulanzMinuten
             it[themeModus] = einstellungen.themeModus.name
+            it[verspaetung] = einstellungen.verspaetung.name
         }
     }
 

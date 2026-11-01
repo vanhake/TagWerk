@@ -12,6 +12,7 @@ import de.vanhake.dayorganizer.domain.model.BuchungsArt
 import de.vanhake.dayorganizer.domain.model.Einloesung
 import de.vanhake.dayorganizer.domain.model.Faelligkeit
 import de.vanhake.dayorganizer.domain.model.FaelligkeitStatus
+import de.vanhake.dayorganizer.domain.model.VerspaetungsRegel
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -34,13 +35,15 @@ data class BackupInhalt(
 
 object BackupUmwandlung {
 
-    const val SCHEMA_VERSION = 4
+    const val SCHEMA_VERSION = 5
 
-    /** Schema 2 und 3 bleiben lesbar: die mit Schema 3 und 4 neuen Felder haben
+    /** Schema 2 bis 4 bleiben lesbar: die mit Schema 3 und 4 neuen Felder haben
      * DTO-Standardwerte, die genau dem Zustand davor entsprechen (Schema 4 brachte nur die
-     * Deadline der Einmalaufgaben). Schema 1 kannte weder Aktivitaetensymbol noch Farbmodus
-     * ohne Standardwert und bleibt abgelehnt. */
-    val LESBARE_VERSIONEN: Set<Int> = setOf(2, 3, SCHEMA_VERSION)
+     * Deadline der Einmalaufgaben). Schema 5 brachte die Verspaetungsregel; aeltere Dateien
+     * bekommen dafuer die Vorgabe der App (keine Punkte nach dem Kulanzfenster), nicht das
+     * fruehere Verhalten. Schema 1 kannte weder Aktivitaetensymbol noch Farbmodus ohne
+     * Standardwert und bleibt abgelehnt. */
+    val LESBARE_VERSIONEN: Set<Int> = setOf(2, 3, 4, SCHEMA_VERSION)
 
     private val json = Json {
         prettyPrint = true
@@ -95,6 +98,7 @@ object BackupUmwandlung {
             tagesbonusPunkte = einstellungen.tagesbonusPunkte,
             standardKulanzMinuten = einstellungen.standardKulanzMinuten,
             themeModus = einstellungen.themeModus.name,
+            verspaetung = einstellungen.verspaetung.name,
         ),
     )
 
@@ -126,6 +130,9 @@ object BackupUmwandlung {
                 // lassen -- anders als bei Belohnungsbedingungen ist das hier kein Vertragsbruch.
                 themeModus = runCatching { ThemeModus.valueOf(datei.einstellungen.themeModus) }
                     .getOrDefault(ThemeModus.HELL),
+                // Wie beim Farbmodus: ein unbekannter Wert faellt auf die Vorgabe zurueck.
+                verspaetung = runCatching { VerspaetungsRegel.valueOf(datei.einstellungen.verspaetung) }
+                    .getOrDefault(VerspaetungsRegel.KEINE_PUNKTE),
             ),
         )
     }
