@@ -9,6 +9,7 @@ import de.vanhake.dayorganizer.backup.BackupDienst
 import de.vanhake.dayorganizer.backup.BackupUmwandlung
 import de.vanhake.dayorganizer.backup.ImportErgebnis
 import de.vanhake.dayorganizer.backup.UnbekanntesSchema
+import de.vanhake.dayorganizer.backup.backupTextLesen
 import de.vanhake.dayorganizer.data.Einstellungen
 import de.vanhake.dayorganizer.data.EinstellungenSpeicher
 import de.vanhake.dayorganizer.data.ThemeModus
@@ -197,7 +198,7 @@ class EinstellungenViewModel(
     fun importVorschauAnfordern(oeffnen: () -> InputStream?) = viewModelScope.launch(ioDispatcher) {
         val ergebnis = versuchen {
             val strom = oeffnen() ?: error("Eingabestrom konnte nicht geoeffnet werden")
-            val text = strom.use { it.bufferedReader().readText() }
+            val text = strom.use { it.backupTextLesen() }
             text to BackupUmwandlung.ausText(text)
         }
         ergebnis.fold(

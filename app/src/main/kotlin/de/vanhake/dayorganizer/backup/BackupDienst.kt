@@ -74,7 +74,7 @@ class BackupDienst(
         // des Lesens/Parsens muss weiterfliegen statt als "Unlesbar" misszudeuten
         // (Review-Fund W1) -- sonst liesse sich ein Import nie sauber verlassen.
         val inhalt = versuchen {
-            BackupUmwandlung.ausText(quelle.bufferedReader().use { it.readText() })
+            BackupUmwandlung.ausText(quelle.use { it.backupTextLesen() })
         }.getOrElse { fehler ->
             return if (fehler is UnbekanntesSchema) {
                 ImportErgebnis.FalschesSchema(fehler.gefunden)
