@@ -12,23 +12,50 @@ Internet-Berechtigung.
 > Bis Oktober 2026 hieß die App „DayOrganizer“. Installierte Daten und alte Backups bleiben
 > mit Tagwerk nutzbar.
 
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/heute.png" width="240" alt="Heute mit der nächsten fälligen Aktivität"></td>
+    <td align="center"><img src="docs/screenshots/neue-aktivitaet.png" width="240" alt="Neue Aktivität anlegen"></td>
+    <td align="center"><img src="docs/screenshots/belohnungen.png" width="240" alt="Belohnungen mit Punktestand"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Heute</b><br>die nächste fällige Aktivität,<br>Tagesfortschritt und Erledigtes</td>
+    <td align="center"><b>Neue Aktivität</b><br>Symbol, Punkte, Zeitplan,<br>Wochentage und Uhrzeiten</td>
+    <td align="center"><b>Belohnungen</b><br>Punktestand und wie viel<br>bis zur nächsten Belohnung fehlt</td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/statistik.png" width="240" alt="Statistik mit Heatmap und Punkteverlauf"></td>
+    <td align="center"><img src="docs/screenshots/statistik-aktivitaeten.png" width="240" alt="Statistik je Aktivität"></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Statistik</b><br>Heatmap je Tag und<br>Punkteverlauf</td>
+    <td align="center"><b>Je Aktivität</b><br>Quote, geschafft und verpasst,<br>aktuelle und längste Serie</td>
+    <td></td>
+  </tr>
+</table>
+
 ## Die Bereiche
 
-**Heute.** Oben eine Karte mit dem Tagesfortschritt und dem Punktestand, darunter die fälligen
+**Heute.** Oben der Punktestand und groß die nächste fällige Aktivität mit *Erledigt* und
+*Auslassen*, darunter der Tagesfortschritt („Heute 1 von 2 erledigt“) und die übrigen
 Aktivitäten als Kacheln mit Symbol. Erledigen und Auslassen lässt sich direkt per Toast
 rückgängig machen, später auch noch über *Wieder öffnen* im Bereich „Erledigt“. Offene
 Einmalaufgaben stehen mit den Tagen bis zur Deadline im Bereich „Aufgaben“.
 
 **Aktivitäten.** Alle Aktivitäten mit Symbol, Plan („Täglich · 08:00, 20:00“), Punkten und
-aktueller Serie, Einmalaufgaben in einem eigenen Abschnitt. Im Editor wählst du Symbol, Punkte,
-die Art des Zeitplans, Wochentage und Uhrzeiten und siehst am Ende eine Zusammenfassung des Plans.
+aktueller Serie, Einmalaufgaben in einem eigenen Abschnitt. Im Editor wählst du Symbol, Name,
+Punkte je Erledigung, die Art des Zeitplans, Wochentage und Uhrzeiten und siehst am Ende eine
+Zusammenfassung des Plans.
 
-**Belohnungen.** Dein Punktestand und die Belohnungen, die du dir gesetzt hast, auf Wunsch mit
-Bedingung (z. B. erst ab einer Serie von 14 Tagen oder ab einem bestimmten Datum). Eingelöste
-Belohnungen erscheinen im Verlauf und lassen sich rückgängig machen.
+**Belohnungen.** Dein Punktestand und die Belohnungen, die du dir gesetzt hast. Ein Balken zeigt,
+wie viele Punkte noch fehlen. Auf Wunsch hat eine Belohnung eine Bedingung (eine Mindestserie
+oder ein Startdatum). Eingelöste Belohnungen erscheinen im Verlauf und lassen sich rückgängig
+machen.
 
-**Statistik.** Heatmap über die Tage, Gesamtquote, Punkteverlauf als Diagramm und pro Aktivität
-Quote und Serie.
+**Statistik.** Für die letzten 30, 90 oder 365 Tage: eine Heatmap, wie viel an jedem Tag erledigt
+wurde, die Gesamtquote, der Punkteverlauf als Diagramm und pro Aktivität Quote, Anzahl geschafft
+und verpasst sowie aktuelle und längste Serie.
 
 **Optionen.** Tagesbonus, Kulanzfenster für feste Uhrzeiten und was ein zu spät abgehakter Termin
 noch bringt (volle, halbe oder keine Punkte). Hell oder Dunkel, Export und Import eines Backups.
