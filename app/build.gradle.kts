@@ -17,11 +17,14 @@ val buildNummer = ciBuildNummer ?: runCatching {
         .standardOutput.asText.get().trim().toInt()
 }.getOrDefault(1)
 
-// Ein Release-Build aus einem Tag wie "v1.2.0" traegt genau diese Version.
+// Ein Release-Build traegt die Version, die der Release-Workflow in
+// TAGWERK_VERSION setzt, oder die aus einem Tag wie "v1.2.0".
 // Alle anderen Builds behalten das Schema 0.1.<Build-Nummer>.
-val releaseVersion = providers.environmentVariable("GITHUB_REF_NAME").orNull
-    ?.takeIf { providers.environmentVariable("GITHUB_REF_TYPE").orNull == "tag" }
-    ?.removePrefix("v")
+val releaseVersion = providers.environmentVariable("TAGWERK_VERSION").orNull
+    ?.takeIf { it.isNotBlank() }
+    ?: providers.environmentVariable("GITHUB_REF_NAME").orNull
+        ?.takeIf { providers.environmentVariable("GITHUB_REF_TYPE").orNull == "tag" }
+        ?.removePrefix("v")
 
 // Der Release-Schluessel kommt nur ueber Umgebungsvariablen herein, in der CI
 // aus den GitHub-Secrets, und liegt nie im Repo. Fehlen sie, bleibt die
