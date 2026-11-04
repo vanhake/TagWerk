@@ -9,9 +9,6 @@ Internet-Berechtigung.
 
 **Download:** Die aktuelle APK liegt unter [Releases](../../releases/latest).
 
-> Bis Oktober 2026 hieß die App „DayOrganizer“. Installierte Daten und alte Backups bleiben
-> mit Tagwerk nutzbar.
-
 <table>
   <tr>
     <td align="center"><img src="docs/screenshots/heute.png" width="240" alt="Heute mit der nächsten fälligen Aktivität"></td>
