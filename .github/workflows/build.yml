@@ -53,7 +53,7 @@ jobs:
           name: tagwerk-debug-${{ github.run_number }}-${{ github.sha }}
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 3
 
       - name: Testberichte bei Fehlschlag ablegen
         if: failure()
@@ -66,4 +66,4 @@ jobs:
           # Scheitert der Build vor den Tests, gibt es keine Berichte -- das
           # ist kein zusaetzlicher Fehler, sondern der Normalfall.
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 3
