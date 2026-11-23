@@ -118,6 +118,25 @@ gesamte Testbarkeit.
   Zeilenzahl mit `check(...)` aus. Neue Repositories genauso.
 - Conventional Commits, `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 
+## Neuigkeiten nach einem Update
+
+Nach einem Update zeigt die App einmal eine Karte „Neu in Version …“. Die Texte
+stehen in `app/src/main/assets/changelog.json`, Code in `neuigkeiten/`. Weil jeder
+Push auf `main` ein Release ist, gilt: **mit jeder Änderung, die Nutzer bemerken,
+oben einen Eintrag ergänzen.**
+
+```json
+{ "id": 2, "date": "2026-12-01", "changes": ["Was sich für Nutzer ändert, in einem Satz."] }
+```
+
+- `id` ist eine laufende Nummer und unabhängig von der Versionsnummer. Die App
+  merkt sich die höchste gesehene `id` (SharedPreferences `neuigkeiten`, nicht
+  im JSON-Backup) und zeigt beim nächsten Start alle neueren Einträge.
+- Ein Release ohne neuen Eintrag zeigt keine Karte. Nach einer Neuinstallation
+  erscheint sie nicht.
+- `NeuigkeitenTest` prüft die Datei (gültiges JSON, eindeutige ids, Datum
+  `JJJJ-MM-TT`).
+
 ## Vorgehen, das sich bewährt hat
 
 Alle Pläne liefen subagent-getrieben (`superpowers:subagent-driven-development`):

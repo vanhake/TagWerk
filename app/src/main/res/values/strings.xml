@@ -219,4 +219,7 @@
     <string name="widget_vorschau_untertitel_2">1 von 3 heute</string>
     <string name="widget_vorschau_weitere">+ 2 weitere</string>
     <string name="toast_rueckgaengig">Rückgängig</string>
+    <string name="neuigkeiten_titel">Neu in Version %1$s</string>
+    <string name="neuigkeiten_titel_ohne_version">Neu in dieser Version</string>
+    <string name="neuigkeiten_verstanden">Verstanden</string>
 </resources>
